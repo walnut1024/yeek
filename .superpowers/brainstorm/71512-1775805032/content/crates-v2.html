@@ -1,0 +1,83 @@
+<h2>项目结构 v2 — 精细 Crate 拆分</h2>
+<p class="subtitle">每个 adapter 独立 crate + trait crate 定义接口</p>
+
+<div class="section">
+  <div style="background: #0f172a; padding: 16px; border-radius: 8px; font-family: monospace; font-size: 13px; line-height: 1.8; color: #e2e8f0;">
+    <span style="color:#fbbf24;">yeek/</span><br>
+    <span style="color:#fbbf24;">├──</span> Cargo.toml &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># workspace root</span><br>
+    <span style="color:#fbbf24;">├──</span> crates/<br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; ├──</span> <span style="color:#c084fc;">yeek-adapter-trait/</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># AgentAdapter trait 定义</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; └──</span> src/lib.rs &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># trait + 通用类型 (DiscoveredSession, ParsedSession 等)</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; ├──</span> <span style="color:#a5b4fc;">yeek-adapter-claude-code/</span> &nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># Claude Code adapter</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; └──</span> src/lib.rs<br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; ├──</span> <span style="color:#86efac;">yeek-adapter-codex/</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># Codex CLI adapter</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; └──</span> src/lib.rs<br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; ├──</span> <span style="color:#22d3ee;">yeek-core/</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># 核心引擎</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; ├──</span> src/<br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; │&nbsp;&nbsp; ├──</span> lib.rs<br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; │&nbsp;&nbsp; ├──</span> model.rs &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># 统一数据模型</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; │&nbsp;&nbsp; ├──</span> db.rs &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># SQLite 操作</span><br>
+    <span style="color:#fbbf24;"> │&nbsp;&nbsp; │&nbsp;&nbsp; │&nbsp;&nbsp; ├──</span> manager.rs &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># SessionManager</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; │&nbsp;&nbsp; ├──</span> search.rs &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># FTS5 搜索</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; │&nbsp;&nbsp; ├──</span> registry.rs &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># AdapterRegistry（动态注册）</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; │&nbsp;&nbsp; └──</span> watcher.rs &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># File watcher</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; └──</span> Cargo.toml<br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; ├──</span> <span style="color:#fdba74;">yeek-cli/</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># CLI 入口</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; └──</span> src/<br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;├──</span> main.rs<br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;└──</span> commands/<span style="color:#64748b;">{sync,list,show,resume,share,delete}.rs</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; └──</span> <span style="color:#f472b6;">yeek-tui/</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># TUI 界面</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; &nbsp;&nbsp;&nbsp; └──</span> src/<br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; &nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;├──</span> main.rs<br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; &nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;├──</span> app.rs<br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; &nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;└──</span> ui/<span style="color:#64748b;">{mod,project_list,detail,status_bar}.rs</span><br>
+    <span style="color:#fbbf24;">│</span><br>
+    <span style="color:#fbbf24;">├──</span> db/migrations/<span style="color:#64748b;">{001_init,002_fts}.sql</span><br>
+    <span style="color:#fbbf24;">├──</span> tests/<br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; ├──</span> integration/<br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; └──</span> fixtures/<span style="color:#64748b;">{sample_claude,jsonl,sample_codex.jsonl}</span><br>
+    <span style="color:#fbbf24;">└──</span> .yeek/ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># 默认数据目录（可配置）</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── yeek.db
+  </div>
+</div>
+
+<div class="section" style="margin-top: 16px;">
+  <h3>Crate 依赖关系图</h3>
+  <div style="background: #0f172a; padding: 16px; border-radius: 8px; font-family: monospace; font-size: 13px; color: #e2e8f0; text-align: center; line-height: 2;">
+    <br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#c084fc;">yeek-adapter-trait</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↑ &nbsp;&nbsp;&nbsp;&nbsp;↑ &nbsp;&nbsp;&nbsp;&nbsp;↑ &nbsp;&nbsp;&nbsp;&nbsp;↑&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a5b4fc;">adapter-claude</span> &nbsp;&nbsp;<span style="color:#86efac;">adapter-codex</span> &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#22d3ee;">yeek-core</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↑ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#fdba74;">yeek-cli</span> &nbsp;&nbsp;&nbsp;<span style="color:#f472b6;">yeek-tui</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+    <br>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 12px;">
+  <div style="display: flex; gap: 12px;">
+    <div style="flex: 1; background: rgba(192,132,252,0.1); padding: 12px; border-radius: 8px;">
+      <h4 style="margin-top: 0; color: #c084fc; font-size: 14px;">yeek-adapter-trait</h4>
+      <p style="color: #94a3b8; font-size: 13px; margin: 0;">
+        只有 trait 定义和通用类型，零依赖。新增 adapter 只需依赖这个 crate。
+      </p>
+    </div>
+    <div style="flex: 1; background: rgba(165,180,252,0.1); padding: 12px; border-radius: 8px;">
+      <h4 style="margin-top: 0; color: #a5b4fc; font-size: 14px;">adapter-claude / adapter-codex</h4>
+      <p style="color: #94a3b8; font-size: 13px; margin: 0;">
+        各自独立。修改 Claude adapter 不会影响 Codex。可以独立发版和测试。
+      </p>
+    </div>
+    <div style="flex: 1; background: rgba(34,211,238,0.1); padding: 12px; border-radius: 8px;">
+      <h4 style="margin-top: 0; color: #22d3ee; font-size: 14px;">yeek-core</h4>
+      <p style="color: #94a3b8; font-size: 13px; margin: 0;">
+        依赖 adapter-trait（编译期）+ 各 adapter（运行时注册）。Registry 动态组装所有 adapter。
+      </p>
+    </div>
+  </div>
+</div>

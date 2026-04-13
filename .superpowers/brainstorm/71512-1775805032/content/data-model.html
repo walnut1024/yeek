@@ -1,0 +1,78 @@
+<h2>统一 Session 数据模型</h2>
+<p class="subtitle">Yeek 的中间格式 — 连接不同 agent 的通用语言</p>
+
+<div class="section">
+  <h3>SQLite 表结构</h3>
+  <div style="background: #0f172a; padding: 16px; border-radius: 8px; font-family: monospace; font-size: 13px; line-height: 1.7; color: #e2e8f0;">
+    <span style="color:#f472b6;">-- 会话元数据</span><br>
+    <span style="color:#22d3ee;">CREATE TABLE</span> sessions (<br>
+    &nbsp;&nbsp;id &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#94a3b8;">TEXT PRIMARY KEY</span>, &nbsp;<span style="color:#64748b;">-- yeek 统一 ID (UUIDv7)</span><br>
+    &nbsp;&nbsp;source_agent &nbsp;&nbsp;&nbsp;<span style="color:#94a3b8;">TEXT NOT NULL</span>, &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;">-- "claude_code" | "codex" | ...</span><br>
+    &nbsp;&nbsp;source_id &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#94a3b8;">TEXT NOT NULL</span>, &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;">-- 原始 agent 的 session ID</span><br>
+    &nbsp;&nbsp;title &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#94a3b8;">TEXT</span>, &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;">-- 首条用户消息 / 自动摘要</span><br>
+    &nbsp;&nbsp;project_path &nbsp;&nbsp;&nbsp;<span style="color:#94a3b8;">TEXT</span>, &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;">-- 工作目录</span><br>
+    &nbsp;&nbsp;git_branch &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#94a3b8;">TEXT</span>,<br>
+    &nbsp;&nbsp;model &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#94a3b8;">TEXT</span>, &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;">-- 使用的模型名</span><br>
+    &nbsp;&nbsp;status &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#94a3b8;">TEXT DEFAULT 'active'</span>, <span style="color:#64748b;">-- active | completed | archived</span><br>
+    &nbsp;&nbsp;import_offset &nbsp;&nbsp;<span style="color:#94a3b8;">INTEGER DEFAULT 0</span>, <span style="color:#64748b;">-- 已解析到的 JSONL 行号</span><br>
+    &nbsp;&nbsp;source_mtime &nbsp;&nbsp;&nbsp;<span style="color:#94a3b8;">REAL</span>, &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;">-- 原始文件 mtime，用于增量判断</span><br>
+    &nbsp;&nbsp;tags &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#94a3b8;">TEXT</span>, &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;">-- JSON array of tags</span><br>
+    &nbsp;&nbsp;token_count &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#94a3b8;">INTEGER DEFAULT 0</span>,<br>
+    &nbsp;&nbsp;msg_count &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#94a3b8;">INTEGER DEFAULT 0</span>,<br>
+    &nbsp;&nbsp;created_at &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#94a3b8;">TEXT NOT NULL</span>,<br>
+    &nbsp;&nbsp;updated_at &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#94a3b8;">TEXT NOT NULL</span><br>
+    );<br><br>
+
+    <span style="color:#f472b6;">-- 消息内容（压缩存储）</span><br>
+    <span style="color:#22d3ee;">CREATE TABLE</span> messages (<br>
+    &nbsp;&nbsp;id &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#94a3b8;">INTEGER PRIMARY KEY AUTOINCREMENT</span>,<br>
+    &nbsp;&nbsp;session_id &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#94a3b8;">TEXT NOT NULL REFERENCES sessions(id)</span>,<br>
+    &nbsp;&nbsp;seq &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#94a3b8;">INTEGER NOT NULL</span>, &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;">-- 消息在会话中的顺序</span><br>
+    &nbsp;&nbsp;role &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#94a3b8;">TEXT NOT NULL</span>, &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;">-- user | assistant | system | tool</span><br>
+    &nbsp;&nbsp;content &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#94a3b8;">BLOB</span>, &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;">-- zstd 压缩的 JSON 内容</span><br>
+    &nbsp;&nbsp;content_type &nbsp;&nbsp;&nbsp;<span style="color:#94a3b8;">TEXT DEFAULT 'text'</span>, <span style="color:#64748b;">-- text | tool_call | tool_result | thinking</span><br>
+    &nbsp;&nbsp;parent_id &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#94a3b8;">INTEGER</span>, &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;">-- 支持分支（Claude Code 的 parentUuid）</span><br>
+    &nbsp;&nbsp;source_type &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#94a3b8;">TEXT</span>, &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;">-- 原始事件类型（agent-specific）</span><br>
+    &nbsp;&nbsp;source_raw &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#94a3b8;">BLOB</span>, &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;">-- zstd 压缩的原始 JSON（保留 agent 特有字段）</span><br>
+    &nbsp;&nbsp;timestamp &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#94a3b8;">TEXT NOT NULL</span>,<br>
+    &nbsp;&nbsp;<span style="color:#22d3ee;">UNIQUE</span>(session_id, seq)<br>
+    );<br><br>
+
+    <span style="color:#f472b6;">-- 全文搜索索引</span><br>
+    <span style="color:#22d3ee;">CREATE VIRTUAL TABLE</span> messages_fts <span style="color:#22d3ee;">USING</span> fts5(<br>
+    &nbsp;&nbsp;content_text, &nbsp;<span style="color:#64748b;">-- 解压后的纯文本用于搜索</span><br>
+    &nbsp;&nbsp;session_id UNINDEXED,<br>
+    &nbsp;&nbsp;content='messages',<br>
+    &nbsp;&nbsp;content_rowid='id'<br>
+    &nbsp;&nbsp;<span style="color:#64748b;">-- 使用 triggers 同步</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;">-- 或在导入时批量写入</span><br>
+    );<br><br>
+
+    <span style="color:#f472b6;">-- Agent 适配器注册</span><br>
+    <span style="color:#22d3ee;">CREATE TABLE</span> adapters (<br>
+    &nbsp;&nbsp;name &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#94a3b8;">TEXT PRIMARY KEY</span>,<br>
+    &nbsp;&nbsp;version &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#94a3b8;">TEXT NOT NULL</span>,<br>
+    &nbsp;&nbsp;last_sync_at &nbsp;&nbsp;&nbsp;<span style="color:#94a3b8;">TEXT</span>,<br>
+    &nbsp;&nbsp;watch_paths &nbsp;&nbsp;&nbsp;<span style="color:#94a3b8;">TEXT</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;">-- JSON array of watched directories</span><br>
+    );
+  </div>
+</div>
+
+<div class="section" style="margin-top: 20px;">
+  <h3>关键设计决策</h3>
+
+  <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+    <div style="flex: 1; min-width: 200px; background: rgba(99,102,241,0.1); padding: 12px; border-radius: 8px;">
+      <h4 style="margin-top: 0; color: #a5b4fc;">双内容存储</h4>
+      <p style="color: #94a3b8; font-size: 14px;"><code>content</code> 是统一格式的消息体，<code>source_raw</code> 保留原始 agent 数据。转换时不丢信息，回写时可以还原 agent 特有字段。</p>
+    </div>
+    <div style="flex: 1; min-width: 200px; background: rgba(34,211,238,0.1); padding: 12px; border-radius: 8px;">
+      <h4 style="margin-top: 0; color: #22d3ee;">增量追踪</h4>
+      <p style="color: #94a3b8; font-size: 14px;"><code>import_offset</code> + <code>source_mtime</code> 支持增量导入。文件没变就跳过，变了只读新增行。</p>
+    </div>
+    <div style="flex: 1; min-width: 200px; background: rgba(74,222,128,0.1); padding: 12px; border-radius: 8px;">
+      <h4 style="margin-top: 0; color: #4ade80;">FTS5 外部内容</h4>
+      <p style="color: #94a3b8; font-size: 14px;">使用外部内容模式，搜索文本不重复存储，只建倒排索引。节省空间且查询高效。</p>
+    </div>
+  </div>
+</div>

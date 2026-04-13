@@ -1,0 +1,26 @@
+<h2>How should LLM providers be configured?</h2>
+<p class="subtitle">Both OpenAI and Anthropic will be supported</p>
+
+<div class="options">
+  <div class="option" data-choice="global" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Global Setting</h3>
+      <p>Configure API keys and default model once in app settings. Use same provider for all projects.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="per-project" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Per Project</h3>
+      <p>Each project has its own LLM config. Useful if you prefer different models for different projects.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="switchable" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Quick Switch</h3>
+      <p>Switch providers on the fly from the chat interface. Compare outputs from different models.</p>
+    </div>
+  </div>
+</div>

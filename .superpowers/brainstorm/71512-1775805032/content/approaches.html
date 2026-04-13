@@ -1,0 +1,47 @@
+<h2>三种架构方案</h2>
+<p class="subtitle">为 yeek session 管理器选择合适的架构</p>
+
+<div class="section">
+  <div class="options">
+    <div class="option" data-choice="a" onclick="toggleSelect(this)">
+      <div class="letter">A</div>
+      <div class="content">
+        <h3>Adapter 层 + 中央引擎</h3>
+        <p>核心引擎定义统一 Session 模型，每个 agent 一个 Adapter 负责解析/导出。SQLite 存储元数据，JSON 文件存储完整内容。Adapter 作为插件注册到引擎。</p>
+        <div class="pros-cons" style="margin-top: 12px;">
+          <div class="pros"><h4>优势</h4><ul><li>扩展性好，新增 agent 只需写 Adapter</li><li>关注点分离清晰</li><li>可以独立测试每个 Adapter</li></ul></div>
+          <div class="cons"><h4>劣势</h4><ul><li>初始开发量较大（需要先设计好通用模型）</li><li>不同 agent 能力差异大，统一模型可能有妥协</li></ul></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="option" data-choice="b" onclick="toggleSelect(this)">
+      <div class="letter">B</div>
+      <div class="content">
+        <h3>管道式转换器</h3>
+        <p>不定义"权威"格式，而是一组双向转换管道（Agent A → Common → Agent B）。每个 session 保留原始格式，转换时按需执行。类似 pandoc 的文档转换思路。</p>
+        <div class="pros-cons" style="margin-top: 12px;">
+          <div class="pros"><h4>优势</h4><ul><li>不丢失任何 agent 特有的数据</li><li>每个转换管道可以针对特定 agent 对优化</li><li>简单直接，容易理解</li></ul></div>
+          <div class="cons"><h4>劣势</h4><ul><li>N 个 agent 需要 N×(N-1) 个转换器（或 N 个 to/from common）</li><li>元数据管理分散</li><li>搜索/过滤功能实现复杂</li></ul></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="option" data-choice="c" onclick="toggleSelect(this)">
+      <div class="letter">C</div>
+      <div class="content">
+        <h3>仅索引 + 软链接</h3>
+        <p>不转换或存储 session 内容，只索引各 agent 的 session 元数据（时间、项目、标签等）。Resume 时通过启动原始 agent + 注入 session ID 实现。共享时才做格式转换。</p>
+        <div class="pros-cons" style="margin-top: 12px;">
+          <div class="pros"><h4>优势</h4><ul><li>最轻量，实现最快</li><li>不改变任何 agent 的数据</li><li>不存在格式转换的信息丢失问题</li></ul></div>
+          <div class="cons"><h4>劣势</h4><ul><li>依赖各 agent 的 session 存储位置不变</li><li>agent 升级可能破坏兼容性</li><li>跨 agent 分享需要额外步骤</li></ul></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 24px; padding: 16px; background: rgba(99,102,241,0.1); border-radius: 8px;">
+  <h3 style="margin-top: 0;">推荐：方案 A（Adapter 层 + 中央引擎）</h3>
+  <p>理由：你的核心需求是"跨 agent 分享"，这需要统一的 session 模型。方案 C 太轻量无法支持真正的分享，方案 B 的管道模式在 agent 数量增长时维护成本高。方案 A 的 Adapter 模式既能统一管理，又能保留扩展性。</p>
+</div>

@@ -1,0 +1,90 @@
+<h2>CLI & TUI 交互设计</h2>
+<p class="subtitle">两种交互模式共享同一套 Core API</p>
+
+<div class="section">
+  <h3>CLI 子命令</h3>
+  <div style="background: #0f172a; padding: 16px; border-radius: 8px; font-family: monospace; font-size: 13px; line-height: 1.7; color: #e2e8f0;">
+    <span style="color:#22d3ee;">yeek</span> <span style="color:#fbbf24;">sync</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># 扫描所有 agent，增量导入新 session</span><br>
+    <span style="color:#22d3ee;">yeek</span> <span style="color:#fbbf24;">sync</span> --agent claude_code &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># 只同步指定 agent</span><br>
+    <span style="color:#22d3ee;">yeek</span> <span style="color:#fbbf24;">sync</span> --watch &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># 启动 file watcher 持续同步</span><br><br>
+
+    <span style="color:#22d3ee;">yeek</span> <span style="color:#fbbf24;">list</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># 列出所有 session（默认当前项目）</span><br>
+    <span style="color:#22d3ee;">yeek</span> <span style="color:#fbbf24;">list</span> --all &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># 所有项目的 session</span><br>
+    <span style="color:#22d3ee;">yeek</span> <span style="color:#fbbf24;">list</span> --agent codex &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># 只看某个 agent 的</span><br>
+    <span style="color:#22d3ee;">yeek</span> <span style="color:#fbbf24;">list</span> --tag "debugging" &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># 按标签过滤</span><br><br>
+
+    <span style="color:#22d3ee;">yeek</span> <span style="color:#fbbf24;">show</span> &lt;session-id&gt; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># 显示 session 详情和对话内容</span><br>
+    <span style="color:#22d3ee;">yeek</span> <span style="color:#fbbf24;">resume</span> &lt;session-id&gt; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># 用原始 agent 恢复 session</span><br>
+    <span style="color:#22d3ee;">yeek</span> <span style="color:#fbbf24;">resume</span> &lt;id&gt; --agent codex &nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># 跨 agent 恢复（自动转换格式）</span><br><br>
+
+    <span style="color:#22d3ee;">yeek</span> <span style="color:#fbbf24;">share</span> &lt;session-id&gt; --to codex &nbsp;&nbsp;<span style="color:#64748b;"># 导出为指定 agent 格式</span><br>
+    <span style="color:#22d3ee;">yeek</span> <span style="color:#fbbf24;">delete</span> &lt;session-id&gt; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># 从 yeek 删除（可选同时删原始文件）</span><br>
+    <span style="color:#22d3ee;">yeek</span> <span style="color:#fbbf24;">tag</span> &lt;session-id&gt; "refactor" &nbsp;&nbsp;<span style="color:#64748b;"># 给 session 打标签</span><br>
+    <span style="color:#22d3ee;">yeek</span> <span style="color:#fbbf24;">search</span> "error handling" &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># FTS 全文搜索</span><br><br>
+
+    <span style="color:#22d3ee;">yeek</span> <span style="color:#fbbf24;">tui</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># 启动交互式 TUI</span>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 20px;">
+  <h3>TUI 界面布局</h3>
+  <div class="mockup">
+    <div class="mockup-header">Yeek TUI - Session Browser</div>
+    <div class="mockup-body" style="font-family: monospace; font-size: 12px; background: #0a0a0a;">
+      <div style="display: flex; height: 320px;">
+        <div style="flex: 1; border-right: 1px solid #333; overflow: hidden;">
+          <div style="background: #1a1a2e; padding: 4px 8px; color: #7c8aff; border-bottom: 1px solid #333;">
+            Sessions (42) &nbsp; <span style="color:#666;">[s]ync [d]elete [/]search</span>
+          </div>
+          <div style="padding: 4px;">
+            <div style="background: #1e3a5f; padding: 6px 8px; border-radius: 3px; margin-bottom: 2px;">
+              <span style="color:#4ade80;">●</span> <span style="color:#e2e8f0;">Fix auth middleware bug</span><br>
+              <span style="color:#64748b; font-size: 11px;">claude_code · 10min ago · 23 msgs</span>
+            </div>
+            <div style="padding: 6px 8px; margin-bottom: 2px;">
+              <span style="color:#94a3b8;">○</span> <span style="color:#cbd5e1;">Refactor database layer</span><br>
+              <span style="color:#64748b; font-size: 11px;">codex · 2hr ago · 45 msgs · #refactor</span>
+            </div>
+            <div style="padding: 6px 8px; margin-bottom: 2px;">
+              <span style="color:#94a3b8;">○</span> <span style="color:#cbd5e1;">Add pagination to API</span><br>
+              <span style="color:#64748b; font-size: 11px;">claude_code · yesterday · 12 msgs</span>
+            </div>
+            <div style="padding: 6px 8px; margin-bottom: 2px;">
+              <span style="color:#94a3b8;">○</span> <span style="color:#cbd5e1;">Setup CI pipeline</span><br>
+              <span style="color:#64748b; font-size: 11px;">codex · 2 days ago · 67 msgs · #ci</span>
+            </div>
+            <div style="padding: 6px 8px; color: #64748b;">
+              ○ Setup test fixtures<br>
+              <span style="font-size: 11px;">claude_code · 3 days ago · 8 msgs</span>
+            </div>
+          </div>
+        </div>
+        <div style="flex: 1.2; overflow: hidden;">
+          <div style="background: #1a1a2e; padding: 4px 8px; color: #7c8aff; border-bottom: 1px solid #333;">
+            Fix auth middleware bug &nbsp; <span style="color:#666;">[r]esume [e]xport [t]ag</span>
+          </div>
+          <div style="padding: 8px; font-size: 11px; line-height: 1.5;">
+            <div style="color: #64748b; border-bottom: 1px dashed #333; padding-bottom: 6px; margin-bottom: 6px;">
+              Agent: claude_code · Model: claude-sonnet-4-6 · Branch: feature/auth<br>
+              Project: ~/projects/myapp · 23 messages · 4,521 tokens
+            </div>
+            <div style="color: #86efac; margin-bottom: 4px;">▸ User:</div>
+            <div style="color: #e2e8f0; margin-bottom: 8px; padding-left: 8px;">
+              Fix the JWT token refresh logic in auth middleware. The current implementation doesn't handle expired refresh tokens correctly.
+            </div>
+            <div style="color: #fbbf24; margin-bottom: 4px;">▸ Assistant:</div>
+            <div style="color: #cbd5e1; padding-left: 8px;">
+              I'll analyze the auth middleware. Let me first check the current implementation...
+              <span style="color: #64748b;">[tool_call: read_file]</span>
+            </div>
+            <div style="color: #94a3b8; margin-top: 8px; font-style: italic;">...</div>
+          </div>
+        </div>
+      </div>
+      <div style="background: #111; border-top: 1px solid #333; padding: 4px 8px; display: flex; justify-content: space-between;">
+        <span style="color: #64748b;">1 of 42 | q:quit ↑↓:nav Enter:select</span>
+        <span style="color: #4ade80;">● watching</span>
+      </div>
+    </div>
+  </div>
+</div>

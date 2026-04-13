@@ -1,0 +1,61 @@
+<h2>整体架构</h2>
+<p class="subtitle">Yeek Session Manager - 三层架构</p>
+
+<div class="mockup">
+  <div class="mockup-header">系统架构图</div>
+  <div class="mockup-body" style="font-family: monospace; font-size: 14px; line-height: 1.6;">
+    <div style="display: flex; gap: 20px;">
+      <div style="flex: 1;">
+        <div style="background: #1e1b4b; color: #a5b4fc; padding: 12px; border-radius: 8px; margin-bottom: 8px;">
+          <strong>Interface Layer（界面层）</strong><br>
+          ┌─────────────┐ ┌──────────────┐<br>
+          │ CLI (Clap) &nbsp;&nbsp;│ │ TUI (Ratatui) │<br>
+          └──────┬──────┘ └──────┬───────┘<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│
+        </div>
+
+        <div style="background: #14532d; color: #86efac; padding: 12px; border-radius: 8px; margin-bottom: 8px;">
+          <strong>Core Engine（核心引擎）</strong><br>
+          ┌──────────────────────────────┐<br>
+          │ SessionManager &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│<br>
+          │ ├─ CRUD operations &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│<br>
+          │ ├─ Search (FTS5) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│<br>
+          │ ├─ Tag / Filter &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│<br>
+          │ └─ Conversion orchestrator &nbsp;&nbsp;│<br>
+          └──────────────┬───────────────┘
+        </div>
+
+        <div style="background: #7c2d12; color: #fdba74; padding: 12px; border-radius: 8px;">
+          <strong>Data & Adapter Layer（数据层）</strong><br>
+          ┌────────────┐ ┌─────────────────────┐<br>
+          │ SQLite &nbsp;&nbsp;&nbsp;│ │ Adapter Registry &nbsp;&nbsp;│<br>
+          │ (rusqlite) │ │ ├─ ClaudeCodeAdapter │<br>
+          │ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ │ ├─ CodexAdapter &nbsp;&nbsp;&nbsp;│<br>
+          │ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ │ └─ GenericAdapter &nbsp;&nbsp;│<br>
+          └────────────┘ └─────────────────────┘
+        </div>
+      </div>
+
+      <div style="flex: 0.8;">
+        <div style="background: #1e293b; color: #94a3b8; padding: 12px; border-radius: 8px; margin-bottom: 8px;">
+          <strong>数据流</strong><br><br>
+          <strong style="color:#22d3ee;">Import 流程：</strong><br>
+          Agent 原始文件<br>
+          → Adapter.parse()<br>
+          → 统一 Session 模型<br>
+          → SQLite 存储<br><br>
+          <strong style="color:#22d3ee;">Export 流程：</strong><br>
+          SQLite 查询<br>
+          → 统一 Session 模型<br>
+          → Adapter.export()<br>
+          → 目标 Agent 格式<br><br>
+          <strong style="color:#22d3ee;">Resume 流程：</strong><br>
+          SQLite 查询<br>
+          → Adapter.resume()<br>
+          → 启动目标 Agent 进程<br>
+          → 注入 session 上下文
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

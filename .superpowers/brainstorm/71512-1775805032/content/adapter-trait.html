@@ -1,0 +1,88 @@
+<h2>Adapter Trait 设计</h2>
+<p class="subtitle">每个 agent 实现这套接口 — 新增 agent 只需实现一个 struct</p>
+
+<div class="section">
+  <h3>Rust Trait 定义</h3>
+  <div style="background: #0f172a; padding: 16px; border-radius: 8px; font-family: monospace; font-size: 13px; line-height: 1.7; color: #e2e8f0;">
+    <span style="color:#f472b6;">/// Agent 适配器 trait — 所有 agent 必须实现</span><br>
+    <span style="color:#22d3ee;">pub trait</span> <span style="color:#fbbf24;">AgentAdapter</span>: <span style="color:#22d3ee;">Send + Sync</span> {<br>
+    &nbsp;&nbsp;<span style="color:#f472b6;">/// 适配器名称（如 "claude_code", "codex"）</span><br>
+    &nbsp;&nbsp;<span style="color:#22d3ee;">fn</span> <span style="color:#fbbf24;">name</span>(&self) -> &str;<br><br>
+
+    &nbsp;&nbsp;<span style="color:#f472b6;">/// 扫描 agent 的 session 存储目录，返回发现的 session 列表</span><br>
+    &nbsp;&nbsp;<span style="color:#f472b6;">/// 返回 (source_id, file_path, mtime) 的列表</span><br>
+    &nbsp;&nbsp;<span style="color:#22d3ee;">async fn</span> <span style="color:#fbbf24;">discover_sessions</span>(&self) -> Result&lt;Vec&lt;DiscoveredSession&gt;&gt;;<br><br>
+
+    &nbsp;&nbsp;<span style="color:#f472b6;">/// 解析单个 session 文件</span><br>
+    &nbsp;&nbsp;<span style="color:#f472b6;">/// offset: 从第 N 行开始解析（支持增量）</span><br>
+    &nbsp;&nbsp;<span style="color:#f472b6;">/// 返回解析出的统一消息 + 新的 offset</span><br>
+    &nbsp;&nbsp;<span style="color:#22d3ee;">fn</span> <span style="color:#fbbf24;">parse_session</span>(<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&amp;self,<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;path: &amp;Path,<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;offset: <span style="color:#94a3b8;">u64</span>,<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;) -> Result&lt;ParsedSession&gt;;<br><br>
+
+    &nbsp;&nbsp;<span style="color:#f472b6;">/// 将统一格式导出为 agent 的原生格式</span><br>
+    &nbsp;&nbsp;<span style="color:#22d3ee;">fn</span> <span style="color:#fbbf24;">export_session</span>(<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&amp;self,<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;session: &amp;Session,<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;messages: &amp;[Message],<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;target_path: &amp;Path,<br>
+    &nbsp;&nbsp;) -> Result&lt;()&gt;;<br><br>
+
+    &nbsp;&nbsp;<span style="color:#f472b6;">/// 将 session 上下文注入到 agent 并启动 resume</span><br>
+    &nbsp;&nbsp;<span style="color:#22d3ee;">async fn</span> <span style="color:#fbbf24;">resume_session</span>(<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&amp;self,<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;session: &amp;Session,<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;messages: &amp;[Message],<br>
+    &nbsp;&nbsp;) -> Result&lt;()&gt;;<br><br>
+
+    &nbsp;&nbsp;<span style="color:#f472b6;">/// 判断该 session 当前是否仍在活跃运行</span><br>
+    &nbsp;&nbsp;<span style="color:#22d3ee;">fn</span> <span style="color:#fbbf24;">is_active</span>(&self, source_id: &amp;str) -> <span style="color:#94a3b8;">bool</span>;<br>
+    }
+  </div>
+</div>
+
+<div class="section" style="margin-top: 20px;">
+  <h3>具体实现示例</h3>
+  <div style="display: flex; gap: 16px;">
+    <div style="flex: 1; background: rgba(165,180,252,0.1); padding: 12px; border-radius: 8px;">
+      <h4 style="margin-top: 0; color: #a5b4fc;">ClaudeCodeAdapter</h4>
+      <ul style="color: #cbd5e1; font-size: 14px;">
+        <li><code>discover_sessions</code> → 扫描 <code>~/.claude/projects/*/</code></li>
+        <li><code>parse_session</code> → 解析 JSONL，提取 parentUuid 链、role、content</li>
+        <li><code>export_session</code> → 重建 JSONL，还原 parentUuid 链结构</li>
+        <li><code>resume_session</code> → 写入 session 文件 + 执行 <code>claude --resume</code></li>
+        <li><code>is_active</code> → 检查 <code>~/.claude/sessions/&lt;PID&gt;.json</code></li>
+      </ul>
+    </div>
+    <div style="flex: 1; background: rgba(134,239,172,0.1); padding: 12px; border-radius: 8px;">
+      <h4 style="margin-top: 0; color: #86efac;">CodexAdapter</h4>
+      <ul style="color: #cbd5e1; font-size: 14px;">
+        <li><code>discover_sessions</code> → 读取 <code>state_5.sqlite</code> threads 表</li>
+        <li><code>parse_session</code> → 解析 rollout JSONL，转换 4 种事件类型</li>
+        <li><code>export_session</code> → 生成 rollout JSONL + 写入 threads 表</li>
+        <li><code>resume_session</code> → 执行 <code>codex resume --id</code></li>
+        <li><code>is_active</code> → 查询 <code>state_5.sqlite</code> 中未完成的 thread</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 20px;">
+  <h3>Adapter 注册与发现</h3>
+  <div style="background: #0f172a; padding: 16px; border-radius: 8px; font-family: monospace; font-size: 13px; line-height: 1.7; color: #e2e8f0;">
+    <span style="color:#22d3ee;">pub struct</span> <span style="color:#fbbf24;">AdapterRegistry</span> {<br>
+    &nbsp;&nbsp;adapters: HashMap&lt;String, Box&lt;<span style="color:#22d3ee;">dyn</span> AgentAdapter&gt;&gt;,<br>
+    }<br><br>
+    <span style="color:#22d3ee;">impl</span> AdapterRegistry {<br>
+    &nbsp;&nbsp;<span style="color:#22d3ee;">pub fn</span> <span style="color:#fbbf24;">new</span>() -> Self {<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#22d3ee;">let mut</span> registry = Self { adapters: HashMap::new() };<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;registry.register(ClaudeCodeAdapter::new());<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;registry.register(CodexAdapter::new());<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#f472b6;">// 未来: 自动发现 ~/.yeek/adapters/ 下的动态库</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;registry<br>
+    &nbsp;&nbsp;}<br>
+    }
+  </div>
+</div>

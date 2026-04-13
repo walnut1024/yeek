@@ -1,0 +1,83 @@
+<h2>项目结构与模块划分</h2>
+<p class="subtitle">Cargo workspace + 清晰的模块边界</p>
+
+<div class="section">
+  <div style="background: #0f172a; padding: 16px; border-radius: 8px; font-family: monospace; font-size: 13px; line-height: 1.8; color: #e2e8f0;">
+    <span style="color:#fbbf24;">yeek/</span><br>
+    <span style="color:#fbbf24;">├──</span> Cargo.toml &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># workspace root</span><br>
+    <span style="color:#fbbf24;">├──</span> crates/<br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; ├──</span> <span style="color:#22d3ee;">yeek-core/</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># 核心引擎（无 UI 依赖）</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; ├──</span> src/<br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; │&nbsp;&nbsp; ├──</span> lib.rs<br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; │&nbsp;&nbsp; ├──</span> model.rs &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># Session, Message 统一数据模型</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; │&nbsp;&nbsp; ├──</span> db.rs &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># SQLite 操作（rusqlite）</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; │&nbsp;&nbsp; ├──</span> manager.rs &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># SessionManager：CRUD + sync</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; │&nbsp;&nbsp; ├──</span> search.rs &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># FTS5 全文搜索封装</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; │&nbsp;&nbsp; ├──</span> adapter/<br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; │&nbsp;&nbsp; │&nbsp;&nbsp; ├──</span> mod.rs &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># AgentAdapter trait + Registry</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; │&nbsp;&nbsp; │&nbsp;&nbsp; ├──</span> claude_code.rs &nbsp;&nbsp;<span style="color:#64748b;"># Claude Code 解析/导出</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; │&nbsp;&nbsp; │&nbsp;&nbsp; └──</span> codex.rs &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># Codex CLI 解析/导出</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; │&nbsp;&nbsp; └──</span> watcher.rs &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># File watcher（notify crate）</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; └──</span> Cargo.toml<br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; ├──</span> <span style="color:#86efac;">yeek-cli/</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># CLI 入口（Clap）</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; ├──</span> src/<br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; │&nbsp;&nbsp; ├──</span> main.rs &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># Clap 命令定义 + dispatch</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; │&nbsp;&nbsp; └──</span> commands/<br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; │&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;├──</span> sync.rs<br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; │&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;├──</span> list.rs<br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; │&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;├──</span> show.rs<br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; │&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;├──</span> resume.rs<br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; │&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;├──</span> share.rs<br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; │&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;└──</span> delete.rs<br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │&nbsp;&nbsp; └──</span> Cargo.toml<br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; │</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; └──</span> <span style="color:#fdba74;">yeek-tui/</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># TUI 界面（Ratatui）</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; &nbsp;&nbsp;&nbsp; ├──</span> src/<br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; &nbsp;&nbsp;&nbsp; │&nbsp;&nbsp; ├──</span> main.rs &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># TUI 入口 + event loop</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; &nbsp;&nbsp;&nbsp; │&nbsp;&nbsp; ├──</span> app.rs &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># AppState + 事件处理</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; &nbsp;&nbsp;&nbsp; │&nbsp;&nbsp; └──</span> ui/<br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; &nbsp;&nbsp;&nbsp; │&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;├──</span> mod.rs &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># 整体布局渲染</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; &nbsp;&nbsp;&nbsp; │&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;├──</span> project_list.rs &nbsp;<span style="color:#64748b;"># 左侧项目/会话树</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; &nbsp;&nbsp;&nbsp; │&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;├──</span> detail.rs &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># 右侧详情面板</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; &nbsp;&nbsp;&nbsp; │&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;└──</span> status_bar.rs &nbsp;&nbsp;<span style="color:#64748b;"># 底部状态栏</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; &nbsp;&nbsp;&nbsp; └──</span> Cargo.toml<br>
+    <span style="color:#fbbf24;">│</span><br>
+    <span style="color:#fbbf24;">├──</span> db/<br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; └──</span> migrations/<br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;├──</span> 001_init.sql &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># 建表语句</span><br>
+    <span style="color:#fbbf24;">│&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;└──</span> 002_fts.sql &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b;"># FTS 索引 + triggers</span><br>
+    <span style="color:#fbbf24;">└──</span> tests/<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── integration/<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp; ├── claude_code_import.rs<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp; └── codex_import.rs<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── fixtures/<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;├── sample_claude_session.jsonl<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;└── sample_codex_rollout.jsonl
+  </div>
+</div>
+
+<div class="section" style="margin-top: 16px;">
+  <h3>Crate 依赖关系</h3>
+  <div style="background: #0f172a; padding: 16px; border-radius: 8px; font-family: monospace; font-size: 13px; color: #e2e8f0;">
+    <span style="color:#86efac;">yeek-cli</span>  ──→  <span style="color:#22d3ee;">yeek-core</span><br>
+    <span style="color:#fdba74;">yeek-tui</span>  ──→  <span style="color:#22d3ee;">yeek-core</span><br><br>
+    <span style="color:#64748b;"># yeek-core 的依赖：</span><br>
+    rusqlite (SQLite) · zstd (压缩) · serde/serde_json · uuid · notify (watcher)<br>
+    tokio (async runtime)<br><br>
+    <span style="color:#64748b;"># yeek-cli 额外依赖：</span><br>
+    clap (CLI 解析) · comfy-table (表格输出)<br><br>
+    <span style="color:#64748b;"># yeek-tui 额外依赖：</span><br>
+    ratatui (TUI) · crossterm (终端后端) · tui-tree-widget (项目树)
+  </div>
+</div>
+
+<div class="section" style="margin-top: 16px; background: rgba(34,211,238,0.1); padding: 12px; border-radius: 8px;">
+  <h3 style="margin-top: 0; color: #22d3ee;">设计要点</h3>
+  <ul style="color: #cbd5e1; font-size: 14px;">
+    <li><strong>yeek-core 独立于 UI</strong> — 可以作为库被其他项目引用</li>
+    <li><strong>CLI 和 TUI 共享 core</strong> — 所有逻辑只写一次</li>
+    <li><strong>Adapter 独立可测</strong> — 每个 adapter 可以用 fixture JSONL 做单元测试</li>
+    <li><strong>DB migration 独立管理</strong> — SQL 文件方便版本控制和 review</li>
+  </ul>
+</div>

@@ -1,0 +1,26 @@
+<h2>How should your writing data be stored?</h2>
+<p class="subtitle">This affects portability, backup, and future flexibility</p>
+
+<div class="options">
+  <div class="option" data-choice="local" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Local Files</h3>
+      <p>Each project is a folder on disk. Plain text/markdown files. Git-friendly.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="sqlite" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>SQLite Database</h3>
+      <p>Single .db file per project. Faster queries, easier relationships.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="hybrid" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Hybrid</h3>
+      <p>Writing content as files, metadata (characters, plot structure) in SQLite.</p>
+    </div>
+  </div>
+</div>

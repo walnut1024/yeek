@@ -1,0 +1,82 @@
+<h2>Session 数据何时入库？</h2>
+<p class="subtitle">两种 agent 都是实时写入 JSONL — 入库时机是核心设计决策</p>
+
+<div class="section" style="background: rgba(30,41,59,0.8); padding: 16px; border-radius: 8px; margin-bottom: 16px;">
+  <h3 style="margin-top: 0; color: #22d3ee;">Agent 存储特性对比</h3>
+  <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+    <tr style="border-bottom: 1px solid #334155;">
+      <th style="text-align: left; padding: 8px; color: #94a3b8;">特性</th>
+      <th style="text-align: left; padding: 8px; color: #a5b4fc;">Claude Code</th>
+      <th style="text-align: left; padding: 8px; color: #86efac;">Codex CLI</th>
+    </tr>
+    <tr style="border-bottom: 1px solid #1e293b;">
+      <td style="padding: 8px; color: #94a3b8;">写入时机</td>
+      <td style="padding: 8px; color: #e2e8f0;">实时（每条消息立即追加）</td>
+      <td style="padding: 8px; color: #e2e8f0;">实时（每条消息立即追加）</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #1e293b;">
+      <td style="padding: 8px; color: #94a3b8;">存储路径</td>
+      <td style="padding: 8px; color: #e2e8f0;">~/.claude/projects/&lt;path&gt;/&lt;uuid&gt;.jsonl</td>
+      <td style="padding: 8px; color: #e2e8f0;">~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #1e293b;">
+      <td style="padding: 8px; color: #94a3b8;">活跃检测</td>
+      <td style="padding: 8px; color: #e2e8f0;">~/.claude/sessions/&lt;PID&gt;.json</td>
+      <td style="padding: 8px; color: #e2e8f0;">~/.codex/state_5.sqlite threads 表</td>
+    </tr>
+    <tr>
+      <td style="padding: 8px; color: #94a3b8;">消息结构</td>
+      <td style="padding: 8px; color: #e2e8f0;">parentUuid 链表（支持分支）</td>
+      <td style="padding: 8px; color: #e2e8f0;">顺序追加（4种事件类型）</td>
+    </tr>
+  </table>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>按需导入（yeek import / yeek sync）</h3>
+      <p>用户手动或定期运行命令，扫描 agent 目录，增量导入新/变更的 session。</p>
+      <div class="pros-cons" style="margin-top: 12px;">
+        <div class="pros"><h4>优势</h4><ul><li>最简单可靠，用户可控</li><li>不需要后台进程</li><li>增量导入：只处理上次 sync 后新增的 session</li></ul></div>
+        <div class="cons"><h4>劣势</h4><ul><li>数据有延迟，不是实时的</li><li>需要用户记得同步</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>文件监听（File Watcher 守护进程）</h3>
+      <p>用 notify crate 监听 agent 目录变更，实时增量解析新写入的 JSONL 行。</p>
+      <div class="pros-cons" style="margin-top: 12px;">
+        <div class="pros"><h4>优势</h4><ul><li>数据始终最新</li><li>可在 TUI 中实时显示活跃 session</li><li>自动检测 session 开始和结束</li></ul></div>
+        <div class="cons"><h4>劣势</h4><ul><li>需要后台守护进程</li><li>实时解析 JSONL 增加复杂度</li><li>资源占用（虽然很小）</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>混合模式（推荐）</h3>
+      <p><strong>按需导入为基础 + 可选的文件监听增强。</strong>CLI 命令做全量/增量同步；TUI 模式下可选启动 file watcher 实时更新。两个模式共享同一套增量解析逻辑。</p>
+        <div class="pros-cons" style="margin-top: 12px;">
+        <div class="pros"><h4>优势</h4><ul><li>灵活：CLI 用户不需要守护进程</li><li>TUI 用户可享受实时更新</li><li>增量解析逻辑复用</li><li>渐进式实现：先做按需，再加 watcher</li></ul></div>
+        <div class="cons"><h4>劣势</h4><ul><li>两种模式需要保持一致</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 20px; padding: 16px; background: rgba(34,211,238,0.1); border-radius: 8px;">
+  <h3 style="margin-top: 0; color: #22d3ee;">增量导入策略</h3>
+  <p style="color: #94a3b8;">无论选哪种模式，核心的增量导入逻辑相同：</p>
+  <ol style="color: #e2e8f0;">
+    <li><strong>发现</strong> — 扫描 agent session 目录，与 yeek DB 中的记录对比</li>
+    <li><strong>判断变更</strong> — 比较文件 mtime 和已记录的 offset（已解析到第 N 行）</li>
+    <li><strong>增量解析</strong> — 只读取新增的 JSONL 行，更新 DB 中的 session 数据</li>
+    <li><strong>状态标记</strong> — 通过 agent 的活跃检测机制判断 session 是否仍在进行</li>
+  </ol>
+</div>
