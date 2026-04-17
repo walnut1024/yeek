@@ -4,6 +4,7 @@
 use serde::Serialize;
 
 #[derive(Debug, Serialize, Clone)]
+#[allow(dead_code)]
 pub struct SyncUpdatedPayload {
     pub changed_session_ids: Vec<String>,
     pub last_refresh_at: String,
@@ -28,6 +29,7 @@ pub struct SyncCompletedPayload {
 }
 
 #[derive(Debug, Serialize, Clone)]
+#[allow(dead_code)]
 pub struct ActionCompletedPayload {
     pub action: String,
     pub session_ids: Vec<String>,
@@ -35,6 +37,7 @@ pub struct ActionCompletedPayload {
 }
 
 #[derive(Debug, Serialize, Clone)]
+#[allow(dead_code)]
 pub struct SystemErrorPayload {
     pub kind: String,
     pub message: String,

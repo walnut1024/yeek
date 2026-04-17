@@ -8,6 +8,13 @@ pub fn upsert_source(
     source: &SourceDescriptor,
 ) -> Result<(), AppError> {
     let now = chrono::Utc::now().to_rfc3339();
+
+    // Remove old source rows for the same path but different fingerprint (stale entries)
+    conn.execute(
+        "DELETE FROM sources WHERE path = ? AND id != ?",
+        params![source.path, source.fingerprint],
+    )?;
+
     conn.execute(
         "INSERT INTO sources (id, agent, source_type, path, fingerprint, last_modified, last_seen_at, status)
          VALUES (?, ?, ?, ?, ?, ?, ?, 'active')
@@ -37,6 +44,12 @@ pub fn link_session_source(
     path: &str,
     delete_policy: &str,
 ) -> Result<(), AppError> {
+    // Remove stale links for the same session + path with old source_id (old fingerprint)
+    conn.execute(
+        "DELETE FROM session_sources WHERE session_id = ? AND path = ? AND source_id != ?",
+        params![session_id, path, source_id],
+    )?;
+
     conn.execute(
         "INSERT INTO session_sources (session_id, source_id, source_type, path, delete_policy)
          VALUES (?, ?, ?, ?, ?)

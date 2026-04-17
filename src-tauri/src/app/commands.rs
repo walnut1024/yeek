@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use tauri::{Emitter, State};
+use tauri::State;
 
 use crate::app::errors::AppError;
 use crate::app::state::AppState;
@@ -24,7 +24,11 @@ pub async fn get_system_status(state: State<'_, AppState>) -> Result<SystemStatu
     let db = state.db()?;
 
     let total_sessions: i64 = db
-        .query_row("SELECT COUNT(*) FROM sessions", [], |row| row.get(0))
+        .query_row(
+            "SELECT COUNT(*) FROM sessions WHERE parent_session_id IS NULL",
+            [],
+            |row| row.get(0),
+        )
         .unwrap_or(0);
 
     let total_sources: i64 = db
@@ -60,13 +64,8 @@ pub struct SessionListResponse {
 #[derive(Debug, Deserialize)]
 pub struct BrowseRequest {
     pub sort: Option<String>,
-    pub group: Option<String>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
-    pub visibility: Option<String>,
-    pub agent: Option<String>,
-    pub project_path: Option<String>,
-    pub pinned_only: Option<bool>,
 }
 
 #[tauri::command]
@@ -77,13 +76,8 @@ pub async fn browse_sessions(
     let db = state.db()?;
     let params = BrowseParams {
         sort: request.sort.unwrap_or_else(|| "updated_at".to_string()),
-        group: request.group,
         limit: request.limit.unwrap_or(50),
         offset: request.offset.unwrap_or(0),
-        visibility: request.visibility.or_else(|| Some("visible".to_string())),
-        agent: request.agent,
-        project_path: request.project_path,
-        pinned_only: request.pinned_only.unwrap_or(false),
     };
 
     let result = sessions::browse_sessions(&db, &params)?;
@@ -99,8 +93,6 @@ pub struct SearchRequest {
     pub query: String,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
-    pub visibility: Option<String>,
-    pub agent: Option<String>,
 }
 
 #[tauri::command]
@@ -113,8 +105,6 @@ pub async fn search_sessions(
         query: request.query,
         limit: request.limit.unwrap_or(50),
         offset: request.offset.unwrap_or(0),
-        visibility: request.visibility.or_else(|| Some("visible".to_string())),
-        agent: request.agent,
     };
 
     let result = sessions::search_sessions(&db, &params)?;
@@ -182,83 +172,150 @@ pub async fn get_session_detail(
     })
 }
 
+// --- Transcript (tree-aware) ---
+
+#[tauri::command]
+pub async fn get_session_transcript(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Result<messages::TranscriptPayload, AppError> {
+    let db = state.db()?;
+    Ok(messages::get_session_transcript(&db, &session_id)?)
+}
+
 // --- Session Actions ---
+
+#[tauri::command]
+pub async fn resume_session(
+    session_id: String,
+    agent: String,
+    cwd: Option<String>,
+) -> Result<(), AppError> {
+    let cmd = match agent.as_str() {
+        "claude_code" | "claude_code_subagent" => format!("claude --resume {}", session_id),
+        "codex" => format!("codex resume {}", session_id),
+        _ => return Err(AppError::Internal(format!("Unknown agent: {}", agent))),
+    };
+
+    let cwd_ref = cwd.as_deref().filter(|s| !s.is_empty());
+    launch_terminal(&cmd, cwd_ref).map_err(|e| AppError::Internal(e))
+}
+
+/// Detect the running terminal and launch command in it.
+/// Falls back to macOS default Terminal.app via osascript.
+fn launch_terminal(command: &str, cwd: Option<&str>) -> Result<(), String> {
+    if !cfg!(target_os = "macos") {
+        return Err("Terminal resume is only supported on macOS".to_string());
+    }
+
+    let terminals = ["Ghostty", "iTerm", "Warp", "WezTerm", "kitty", "Alacritty"];
+
+    // Try running terminal first, then installed
+    for &name in &terminals {
+        if is_app_running(name) || app_exists(name) {
+            return launch_with_open(command, name, cwd);
+        }
+    }
+
+    // Fallback: Terminal.app via osascript
+    launch_terminal_app(command, cwd)
+}
+
+fn is_app_running(bundle_id: &str) -> bool {
+    std::process::Command::new("pgrep")
+        .arg("-x")
+        .arg(bundle_id)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+fn app_exists(name: &str) -> bool {
+    std::path::Path::new(&format!("/Applications/{}.app", name)).exists()
+        || std::path::Path::new(&format!(
+            "{}/Applications/{}.app",
+            std::env::var("HOME").unwrap_or_default(),
+            name
+        ))
+        .exists()
+}
+
+fn launch_with_open(command: &str, app_name: &str, cwd: Option<&str>) -> Result<(), String> {
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+
+    match app_name {
+        "Ghostty" => {
+            let full_cmd = cwd
+                .map(|d| format!("cd \"{}\" && {}", d, command))
+                .unwrap_or_else(|| command.to_string());
+            std::process::Command::new("open")
+                .args(["-na", "Ghostty", "--args"])
+                .arg("-e")
+                .arg(&shell)
+                .arg("-c")
+                .arg(&full_cmd)
+                .spawn()
+                .map_err(|e| format!("Failed to launch Ghostty: {e}"))?;
+        }
+        "iTerm" => {
+            let escaped = command.replace('\\', "\\\\").replace('"', "\\\"");
+            let cd_cmd = cwd
+                .map(|d| format!("cd \"{}\" && ", d.replace('"', "\\\"")))
+                .unwrap_or_default();
+            let script = format!(
+                r#"tell application "iTerm"
+    activate
+    create window with default profile
+    tell current session of current window
+        write text "{cd_cmd}{escaped}"
+    end tell
+end tell"#
+            );
+            std::process::Command::new("osascript")
+                .arg("-e")
+                .arg(&script)
+                .spawn()
+                .map_err(|e| format!("Failed to launch iTerm: {e}"))?;
+        }
+        _ => {
+            // Generic: prepend cd if cwd given
+            let full_cmd = cwd
+                .map(|d| format!("cd \"{}\" && {}", d, command))
+                .unwrap_or_else(|| command.to_string());
+            std::process::Command::new("open")
+                .args(["-na", app_name, "--args", "-e", &shell, "-c", &full_cmd])
+                .spawn()
+                .map_err(|e| format!("Failed to launch {}: {e}", app_name))?;
+        }
+    }
+
+    Ok(())
+}
+
+fn launch_terminal_app(command: &str, cwd: Option<&str>) -> Result<(), String> {
+    let full_cmd = cwd
+        .map(|d| format!("cd \"{}\" && {}", d, command))
+        .unwrap_or_else(|| command.to_string());
+    let escaped = full_cmd.replace('\\', "\\\\").replace('"', "\\\"");
+    let script = format!(
+        r#"tell application "Terminal"
+    activate
+    do script "{escaped}"
+end tell"#
+    );
+    std::process::Command::new("osascript")
+        .arg("-e")
+        .arg(&script)
+        .spawn()
+        .map_err(|e| format!("Failed to launch Terminal: {e}"))?;
+
+    Ok(())
+}
 
 #[derive(Debug, Serialize)]
 pub struct ActionResult {
     pub success: bool,
     pub affected_count: i64,
-}
-
-#[tauri::command]
-pub async fn set_pinned(
-    state: State<'_, AppState>,
-    ids: Vec<String>,
-    value: bool,
-) -> Result<ActionResult, AppError> {
-    let db = state.db()?;
-    let val = if value { "1" } else { "0" };
-    sessions::set_session_field(&db, &ids, "pinned", val)?;
-    action_store::record_action(
-        &db,
-        None,
-        if value { "pin" } else { "unpin" },
-        Some(&format!("{} sessions", ids.len())),
-    )?;
-    Ok(ActionResult {
-        success: true,
-        affected_count: ids.len() as i64,
-    })
-}
-
-#[tauri::command]
-pub async fn set_archived(
-    state: State<'_, AppState>,
-    ids: Vec<String>,
-    value: bool,
-) -> Result<ActionResult, AppError> {
-    let db = state.db()?;
-    let vis = if value {
-        "archived"
-    } else {
-        "visible"
-    };
-    sessions::set_session_field(&db, &ids, "visibility", vis)?;
-    action_store::record_action(
-        &db,
-        None,
-        if value { "archive" } else { "unarchive" },
-        Some(&format!("{} sessions", ids.len())),
-    )?;
-    Ok(ActionResult {
-        success: true,
-        affected_count: ids.len() as i64,
-    })
-}
-
-#[tauri::command]
-pub async fn set_hidden(
-    state: State<'_, AppState>,
-    ids: Vec<String>,
-    value: bool,
-) -> Result<ActionResult, AppError> {
-    let db = state.db()?;
-    let vis = if value {
-        "hidden"
-    } else {
-        "visible"
-    };
-    sessions::set_session_field(&db, &ids, "visibility", vis)?;
-    action_store::record_action(
-        &db,
-        None,
-        if value { "hide" } else { "unhide" },
-        Some(&format!("{} sessions", ids.len())),
-    )?;
-    Ok(ActionResult {
-        success: true,
-        affected_count: ids.len() as i64,
-    })
 }
 
 #[tauri::command]
@@ -277,6 +334,25 @@ pub async fn soft_delete_sessions(
     Ok(ActionResult {
         success: true,
         affected_count: ids.len() as i64,
+    })
+}
+
+#[tauri::command]
+pub async fn soft_delete_project(
+    state: State<'_, AppState>,
+    project_path: String,
+) -> Result<ActionResult, AppError> {
+    let db = state.db()?;
+    let count = sessions::soft_delete_by_project(&db, &project_path)?;
+    action_store::record_action(
+        &db,
+        None,
+        "soft_delete_project",
+        Some(&format!("{} sessions in {}", count, project_path)),
+    )?;
+    Ok(ActionResult {
+        success: true,
+        affected_count: count,
     })
 }
 
@@ -338,27 +414,66 @@ pub async fn destructive_delete_session(
 
 #[tauri::command]
 pub async fn rescan_sources(state: State<'_, AppState>) -> Result<ActionResult, AppError> {
-    // Emit sync started event
-    if let Some(handle) = state.app_handle() {
-        let _ = handle.emit("sync-started", crate::app::events::SyncStartedPayload {
-            source_count: 0,
-        });
-    }
+    let app_handle = state
+        .app_handle()
+        .ok_or_else(|| AppError::Internal("No app handle".to_string()))?
+        .clone();
+    let db_path = state.db_path.clone();
+    let scan_guard = state.scan_guard.clone();
 
-    let db = state.db()?;
-    let result = crate::adapter::claudecode::index_all(&db)?;
+    let started = crate::sync::background::spawn_background_scan(
+        db_path,
+        app_handle,
+        scan_guard,
+    );
 
-    // Emit sync completed event
-    if let Some(handle) = state.app_handle() {
-        let _ = handle.emit("sync-completed", crate::app::events::SyncCompletedPayload {
-            sessions_indexed: result.indexed,
-            sessions_updated: result.updated,
-            errors: result.errors,
-        });
+    if !started {
+        return Err(AppError::Internal("Scan already in progress".to_string()));
     }
 
     Ok(ActionResult {
         success: true,
-        affected_count: result.indexed + result.updated,
+        affected_count: 0, // actual count arrives via sync-completed event
+    })
+}
+
+// --- Release & Resync ---
+
+#[tauri::command]
+pub async fn release_and_resync(state: State<'_, AppState>) -> Result<ActionResult, AppError> {
+    // 1. Clear all indexed data (keep schema and action_log for audit)
+    {
+        let db = state.db()?;
+        db.execute_batch(
+            "DELETE FROM messages_fts;
+             DELETE FROM messages;
+             DELETE FROM session_sources;
+             DELETE FROM sources;
+             DELETE FROM sessions;"
+        )?;
+        action_store::record_action(&db, None, "release", Some("Cleared all indexed data"))?;
+    }
+
+    // 2. Trigger full background rescan
+    let app_handle = state
+        .app_handle()
+        .ok_or_else(|| AppError::Internal("No app handle".to_string()))?
+        .clone();
+    let db_path = state.db_path.clone();
+    let scan_guard = state.scan_guard.clone();
+
+    let started = crate::sync::background::spawn_background_scan(
+        db_path,
+        app_handle,
+        scan_guard,
+    );
+
+    if !started {
+        return Err(AppError::Internal("Scan already in progress".to_string()));
+    }
+
+    Ok(ActionResult {
+        success: true,
+        affected_count: 0,
     })
 }

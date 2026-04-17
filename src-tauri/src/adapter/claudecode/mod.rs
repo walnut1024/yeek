@@ -2,6 +2,7 @@ use std::io::BufRead;
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
+use rusqlite::params;
 use crate::app::errors::AppError;
 use crate::domain::session::{DeleteMode, SessionRecord, SessionStatus, VisibilityStatus};
 use crate::domain::source::SourceDescriptor;
@@ -166,6 +167,11 @@ enum RawEntry {
     },
 }
 
+/// Resolve parent_id: prefer parentUuid, fall back to logicalParentUuid for compaction gaps.
+fn resolve_parent_id(parent_uuid: Option<String>, logical_parent_uuid: Option<String>) -> Option<String> {
+    parent_uuid.or(logical_parent_uuid)
+}
+
 /// Parse a Claude Code session JSONL file into a session record and messages.
 pub fn parse_session(
     path: &str,
@@ -222,6 +228,11 @@ pub fn parse_session(
             .get("parentUuid")
             .and_then(|p| p.as_str())
             .map(|s| s.to_string());
+        // logicalParentUuid bridges compaction gaps when parentUuid is null
+        let logical_parent_uuid = entry
+            .get("logicalParentUuid")
+            .and_then(|p| p.as_str())
+            .map(|s| s.to_string());
         let is_sidechain = entry
             .get("isSidechain")
             .and_then(|s| s.as_bool())
@@ -240,6 +251,8 @@ pub fn parse_session(
                 .and_then(|b| b.as_str())
                 .map(|s| s.to_string());
         }
+
+        let parent_uuid = resolve_parent_id(parent_uuid, logical_parent_uuid);
 
         match msg_type {
             "user" => {
@@ -278,24 +291,21 @@ pub fn parse_session(
                     let text_parts = extract_assistant_text(msg);
                     let (tool_names, tool_inputs) = extract_tool_info(msg);
 
-                    // Merge with previous assistant entry if consecutive
-                    if let Some(RawEntry::Assistant { text_parts: prev_text, tool_names: prev_tools, tool_inputs: prev_inputs, .. }) = raw_entries.last_mut() {
-                        prev_text.extend(text_parts);
-                        prev_tools.extend(tool_names);
-                        prev_inputs.extend(tool_inputs);
-                    } else {
-                        raw_entries.push(RawEntry::Assistant {
-                            uuid,
-                            parent_uuid,
-                            timestamp,
-                            session_id,
-                            text_parts,
-                            tool_names,
-                            tool_inputs,
-                            is_sidechain,
-                            model: msg.get("model").and_then(|m| m.as_str()).map(|s| s.to_string()),
-                        });
-                    }
+                    // Each assistant JSONL line is kept as an independent entry
+                    // to preserve uuid → parent_uuid chain integrity.
+                    // Previous merge logic was discarded because it lost UUIDs,
+                    // causing tool_result.parent_id to dangle.
+                    raw_entries.push(RawEntry::Assistant {
+                        uuid,
+                        parent_uuid,
+                        timestamp,
+                        session_id,
+                        text_parts,
+                        tool_names,
+                        tool_inputs,
+                        is_sidechain,
+                        model: msg.get("model").and_then(|m| m.as_str()).map(|s| s.to_string()),
+                    });
                 }
             }
             "attachment" => {
@@ -306,6 +316,16 @@ pub fn parse_session(
                     .and_then(|t| t.as_str())
                     .unwrap_or("unknown")
                     .to_string();
+
+                // Unconditionally skip hook noise — these are internal Claude Code
+                // confirmations (PreToolUse, SessionStart, Stop) with no user value.
+                if matches!(
+                    subtype.as_str(),
+                    "async_hook_response" | "hook_success" | "hook_additional_context"
+                ) {
+                    continue;
+                }
+
                 let content = extract_attachment_content(&entry, &subtype);
 
                 raw_entries.push(RawEntry::Attachment {
@@ -360,8 +380,68 @@ pub fn parse_session(
                     .and_then(|t| t.as_str())
                     .map(|s| s.to_string());
             }
-            // file-history-snapshot, last-prompt, queue-operation, agent-name: skip
+            "compact_boundary" => {
+                // Top-level compact_boundary type (some versions use type=system+subtype=compact_boundary instead)
+                raw_entries.push(RawEntry::System {
+                    uuid,
+                    parent_uuid,
+                    timestamp,
+                    session_id,
+                    subtype: "compact_boundary".to_string(),
+                    content: "Conversation compacted".to_string(),
+                    is_sidechain,
+                });
+            }
+            // file-history-snapshot, last-prompt, queue-operation, agent-name, permission-mode: skip
             _ => {}
+        }
+    }
+
+    // Phase 1.5: Fix dangling parent_ids from compaction
+    // Collect all known UUIDs and build ordered list
+    let all_ids: std::collections::HashSet<String> = raw_entries.iter().map(|e| match e {
+        RawEntry::User { uuid, .. } => uuid.clone(),
+        RawEntry::Assistant { uuid, .. } => uuid.clone(),
+        RawEntry::Attachment { uuid, .. } => uuid.clone(),
+        RawEntry::System { uuid, .. } => uuid.clone(),
+        RawEntry::Summary { uuid, .. } => uuid.clone(),
+    }).collect();
+
+    let ordered_ids: Vec<String> = raw_entries.iter().map(|e| match e {
+        RawEntry::User { uuid, .. } => uuid.clone(),
+        RawEntry::Assistant { uuid, .. } => uuid.clone(),
+        RawEntry::Attachment { uuid, .. } => uuid.clone(),
+        RawEntry::System { uuid, .. } => uuid.clone(),
+        RawEntry::Summary { uuid, .. } => uuid.clone(),
+    }).collect();
+
+    // Fix dangling parents: collect repairs first, then apply
+    let repairs: Vec<(usize, Option<String>)> = ordered_ids.iter().enumerate().filter_map(|(i, _id)| {
+        let entry = &raw_entries[i];
+        let parent_id = match entry {
+            RawEntry::User { parent_uuid, .. } => parent_uuid.as_ref(),
+            RawEntry::Assistant { parent_uuid, .. } => parent_uuid.as_ref(),
+            RawEntry::Attachment { parent_uuid, .. } => parent_uuid.as_ref(),
+            RawEntry::System { parent_uuid, .. } => parent_uuid.as_ref(),
+            RawEntry::Summary { parent_uuid, .. } => parent_uuid.as_ref(),
+        };
+        match parent_id {
+            Some(pid) if !all_ids.contains(pid) => {
+                // Dangling — re-parent to preceding entry
+                let new_parent = if i > 0 { Some(ordered_ids[i - 1].clone()) } else { None };
+                Some((i, new_parent))
+            }
+            _ => None,
+        }
+    }).collect();
+
+    for (idx, new_parent) in repairs {
+        match &mut raw_entries[idx] {
+            RawEntry::User { parent_uuid, .. } => *parent_uuid = new_parent,
+            RawEntry::Assistant { parent_uuid, .. } => *parent_uuid = new_parent,
+            RawEntry::Attachment { parent_uuid, .. } => *parent_uuid = new_parent,
+            RawEntry::System { parent_uuid, .. } => *parent_uuid = new_parent,
+            RawEntry::Summary { parent_uuid, .. } => *parent_uuid = new_parent,
         }
     }
 
@@ -458,14 +538,7 @@ pub fn parse_session(
                 });
             }
             RawEntry::Attachment { uuid, parent_uuid, timestamp, session_id, subtype, content, is_sidechain } => {
-                // Skip noisy hook responses by default, keep meaningful ones
-                let skip = matches!(
-                    subtype.as_str(),
-                    "async_hook_response" | "hook_success"
-                );
-                if skip && content.is_empty() {
-                    continue;
-                }
+                // Hook noise is already filtered in Phase 1; no skip needed here.
 
                 messages.push(MessageRecord {
                     id: uuid.clone(),
@@ -566,8 +639,9 @@ pub fn parse_subagent_session(
     path: &str,
     parent_session_id: &str,
     agent_id: &str,
+    project_path: Option<&str>,
 ) -> Result<(SessionRecord, Vec<MessageRecord>), AppError> {
-    let (mut record, messages) = parse_session(path, None)?;
+    let (mut record, messages) = parse_session(path, project_path)?;
 
     // Override session metadata for subagent
     let sub_session_id = format!("{}:{}", parent_session_id, agent_id);
@@ -743,21 +817,8 @@ fn extract_attachment_content(entry: &Value, subtype: &str) -> String {
                 .unwrap_or(subtype)
                 .to_string()
         }
-        "hook_success" | "async_hook_response" => {
-            let hook_name = att
-                .get("hookName")
-                .and_then(|n| n.as_str())
-                .unwrap_or("");
-            if hook_name.is_empty() {
-                String::new()
-            } else {
-                format!("Hook: {}", hook_name)
-            }
-        }
-        "hook_additional_context" => {
-            // These are just context injections, not useful to display
-            String::new()
-        }
+        // hook_success, async_hook_response, hook_additional_context are filtered
+        // in Phase 1 before this function is called; these branches are unreachable.
         _ => {
             att.get("content")
                 .and_then(|c| c.as_str())
@@ -835,7 +896,7 @@ fn decode_project_dir(name: &str) -> String {
 }
 
 /// Compute a simple fingerprint for change detection.
-fn compute_fingerprint(path: &Path) -> String {
+pub fn compute_fingerprint(path: &Path) -> String {
     let metadata = std::fs::metadata(path);
     match metadata {
         Ok(m) => {
@@ -852,11 +913,50 @@ fn compute_fingerprint(path: &Path) -> String {
     }
 }
 
+/// Construct a SourceDescriptor from a file path.
+/// Returns None if the path is not a .jsonl file or metadata can't be read.
+pub fn source_descriptor_from_path(path: &Path) -> Option<SourceDescriptor> {
+    if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
+        return None;
+    }
+
+    let path_str = path.to_string_lossy().to_string();
+    let source_type = if path_str.contains("/subagents/") {
+        "claude_subagent_transcript"
+    } else {
+        "claude_transcript"
+    };
+
+    let metadata = std::fs::metadata(path).ok()?;
+    let modified = metadata
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| {
+            DateTime::from_timestamp(d.as_secs() as i64, 0)
+                .unwrap_or_default()
+                .to_rfc3339()
+        })
+        .unwrap_or_default();
+
+    Some(SourceDescriptor {
+        source_type: source_type.to_string(),
+        path: path_str,
+        agent: "claude_code".to_string(),
+        fingerprint: compute_fingerprint(path),
+        last_modified: modified,
+    })
+}
+
 fn truncate_preview(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len {
+    // Use the larger of the caller's hint or 50_000 chars.
+    // This preserves essentially all real content while preventing
+    // pathological multi-MB tool outputs from stalling the indexer.
+    let limit = max_len.max(50_000);
+    if s.len() <= limit {
         s.to_string()
     } else {
-        let mut end = max_len.saturating_sub(3);
+        let mut end = limit.saturating_sub(3);
         while !s.is_char_boundary(end) && end > 0 {
             end -= 1;
         }
@@ -864,15 +964,21 @@ fn truncate_preview(s: &str, max_len: usize) -> String {
     }
 }
 
-/// Index all discovered Claude Code sources into the store.
-pub fn index_all(conn: &rusqlite::Connection) -> Result<IndexResult, AppError> {
-    let sources = discover_sources()?;
+/// Index a pre-discovered list of sources, committing per-source.
+/// The `on_progress` callback receives the count of sources processed so far.
+pub fn index_sources<F>(
+    conn: &rusqlite::Connection,
+    sources: &[SourceDescriptor],
+    on_progress: F,
+) -> Result<IndexResult, AppError>
+where
+    F: Fn(i64),
+{
     let mut indexed = 0i64;
     let mut updated = 0i64;
     let mut errors = 0i64;
-    let mut skipped = 0i64;
 
-    // Load existing fingerprints for incremental sync
+    // Load existing fingerprints for incremental skip
     let existing_fingerprints: std::collections::HashMap<String, String> = {
         let mut stmt = conn.prepare("SELECT path, fingerprint FROM sources WHERE status = 'active'")?;
         let rows = stmt.query_map([], |row| {
@@ -881,97 +987,62 @@ pub fn index_all(conn: &rusqlite::Connection) -> Result<IndexResult, AppError> {
         rows.filter_map(|r| r.ok()).collect()
     };
 
-    // Wrap entire sync in a single transaction for performance
-    conn.execute_batch("BEGIN")?;
-
-    let result = (|| -> Result<(), AppError> {
-        for source in &sources {
-            // Skip unchanged files (incremental sync)
-            if let Some(stored_fp) = existing_fingerprints.get(&source.path) {
-                if *stored_fp == source.fingerprint {
-                    skipped += 1;
-                    continue;
-                }
-            }
-
-            let project_path = extract_project_path_from_source(&source.path);
-
-            if source.source_type == "claude_subagent_transcript" {
-                let parent_session_id = extract_parent_session_id(&source.path);
-                let agent_id = extract_agent_id(&source.path);
-
-                if let (Some(parent_id), Some(agent_id)) = (&parent_session_id, &agent_id) {
-                    match parse_subagent_session(&source.path, parent_id, agent_id) {
-                        Ok((record, messages)) => {
-                            sessions::upsert_session(conn, &record)?;
-                            if existing_fingerprints.contains_key(&source.path) {
-                                updated += 1;
-                            } else {
-                                indexed += 1;
-                            }
-                            for msg in &messages {
-                                crate::store::messages::upsert_message(conn, msg)?;
-                            }
-                            crate::store::sources::upsert_source(conn, source)?;
-                            crate::store::sources::link_session_source(
-                                conn,
-                                &record.id,
-                                &source.fingerprint,
-                                &source.source_type,
-                                &source.path,
-                                "file_safe",
-                            )?;
-                        }
-                        Err(_) => {
-                            errors += 1;
-                        }
-                    }
-                }
-            } else {
-                match parse_session(&source.path, project_path.as_deref()) {
-                    Ok((record, messages)) => {
-                        sessions::upsert_session(conn, &record)?;
-                        if existing_fingerprints.contains_key(&source.path) {
-                            updated += 1;
-                        } else {
-                            indexed += 1;
-                        }
-                        for msg in &messages {
-                            crate::store::messages::upsert_message(conn, msg)?;
-                        }
-                        crate::store::sources::upsert_source(conn, source)?;
-                        crate::store::sources::link_session_source(
-                            conn,
-                            &record.id,
-                            &source.fingerprint,
-                            &source.source_type,
-                            &source.path,
-                            "file_safe",
-                        )?;
-                    }
-                    Err(_) => {
-                        errors += 1;
-                    }
-                }
+    for (i, source) in sources.iter().enumerate() {
+        // Skip unchanged files
+        if let Some(stored_fp) = existing_fingerprints.get(&source.path) {
+            if *stored_fp == source.fingerprint {
+                on_progress((i + 1) as i64);
+                continue;
             }
         }
-        Ok(())
-    })();
 
-    match result {
-        Ok(()) => conn.execute_batch("COMMIT")?,
-        Err(_) => {
-            conn.execute_batch("ROLLBACK")?;
+        // Per-source transaction
+        let tx_result = conn.execute_batch("BEGIN");
+        if tx_result.is_err() {
+            errors += 1;
+            on_progress((i + 1) as i64);
+            continue;
         }
-    };
+
+        match index_single_source(conn, source, &existing_fingerprints) {
+            Ok(is_update) => {
+                if let Err(e) = conn.execute_batch("COMMIT") {
+                    log::error!("Failed to commit source {}: {}", source.path, e);
+                    errors += 1;
+                } else if is_update {
+                    updated += 1;
+                } else {
+                    indexed += 1;
+                }
+            }
+            Err(e) => {
+                log::error!("Failed to index source {}: {}", source.path, e);
+                let _ = conn.execute_batch("ROLLBACK");
+                errors += 1;
+            }
+        }
+
+        on_progress((i + 1) as i64);
+    }
+
+    // Fix sessions with missing or incorrect project_path (e.g. subagent
+    // transcripts indexed by an older version of the extractor).
+    if let Err(e) = fix_project_paths(conn) {
+        log::warn!("project_path fix-up failed: {}", e);
+    }
+
+    // Clean up duplicate source links: keep only the latest fingerprint per (session_id, path)
+    if let Err(e) = dedup_session_sources(conn) {
+        log::warn!("session_sources dedup failed: {}", e);
+    }
 
     crate::store::actions::record_action(
         conn,
         None,
         "sync_completed",
         Some(&format!(
-            "indexed={}, updated={}, skipped={}, errors={}",
-            indexed, updated, skipped, errors
+            "indexed={}, updated={}, errors={}",
+            indexed, updated, errors
         )),
     )?;
 
@@ -982,10 +1053,124 @@ pub fn index_all(conn: &rusqlite::Connection) -> Result<IndexResult, AppError> {
     })
 }
 
+/// Repair project_path for every session that has NULL or the sentinel
+/// value "subagents" by looking up the source path from session_sources.
+fn fix_project_paths(conn: &rusqlite::Connection) -> Result<(), AppError> {
+    let mut stmt = conn.prepare(
+        "SELECT s.id, ss.path FROM sessions s
+         JOIN session_sources ss ON s.id = ss.session_id
+         WHERE s.project_path IS NULL OR s.project_path = 'subagents'",
+    )?;
+
+    let rows: Vec<(String, String)> = stmt
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    for (session_id, source_path) in &rows {
+        if let Some(correct_path) = extract_project_path_from_source(source_path) {
+            conn.execute(
+                "UPDATE sessions SET project_path = ?1 WHERE id = ?2",
+                params![correct_path, session_id],
+            )?;
+        }
+    }
+
+    if !rows.is_empty() {
+        log::info!("Fixed project_path for {} sessions", rows.len());
+    }
+
+    Ok(())
+}
+
+/// Remove duplicate session_sources entries caused by fingerprint changes.
+/// For each (session_id, path) pair, keep only the row with the latest source_id (fingerprint).
+fn dedup_session_sources(conn: &rusqlite::Connection) -> Result<(), AppError> {
+    let removed = conn.execute(
+        "DELETE FROM session_sources WHERE rowid NOT IN (
+            SELECT MAX(rowid) FROM session_sources GROUP BY session_id, path
+        )",
+        [],
+    )?;
+
+    // Also remove orphaned source rows (no session_sources reference)
+    conn.execute(
+        "DELETE FROM sources WHERE id NOT IN (SELECT DISTINCT source_id FROM session_sources)",
+        [],
+    )?;
+
+    if removed > 0 {
+        log::info!("Cleaned up {} duplicate session_sources entries", removed);
+    }
+
+    Ok(())
+}
+
+/// Index a single source file. Returns Ok(true) if update, Ok(false) if new.
+fn index_single_source(
+    conn: &rusqlite::Connection,
+    source: &SourceDescriptor,
+    existing_fingerprints: &std::collections::HashMap<String, String>,
+) -> Result<bool, AppError> {
+    let is_update = existing_fingerprints.contains_key(&source.path);
+    let project_path = extract_project_path_from_source(&source.path);
+
+    if source.source_type == "claude_subagent_transcript" {
+        let parent_session_id = extract_parent_session_id(&source.path);
+        let agent_id = extract_agent_id(&source.path);
+        let (parent_id, agent_id) = parent_session_id
+            .zip(agent_id)
+            .ok_or_else(|| AppError::Internal(format!("Invalid subagent path: {}", source.path)))?;
+
+        let (record, messages) = parse_subagent_session(&source.path, &parent_id, &agent_id, project_path.as_deref())?;
+        sessions::upsert_session(conn, &record)?;
+        for msg in &messages {
+            crate::store::messages::upsert_message(conn, msg)?;
+        }
+        crate::store::sources::upsert_source(conn, source)?;
+        crate::store::sources::link_session_source(
+            conn, &record.id, &source.fingerprint,
+            &source.source_type, &source.path, "file_safe",
+        )?;
+    } else {
+        let (record, messages) = parse_session(&source.path, project_path.as_deref())?;
+        sessions::upsert_session(conn, &record)?;
+        for msg in &messages {
+            crate::store::messages::upsert_message(conn, msg)?;
+        }
+        crate::store::sources::upsert_source(conn, source)?;
+        crate::store::sources::link_session_source(
+            conn, &record.id, &source.fingerprint,
+            &source.source_type, &source.path, "file_safe",
+        )?;
+    }
+
+    Ok(is_update)
+}
+
+/// Legacy entry point — discovers sources then indexes them (no progress callback).
+#[allow(dead_code)]
+pub fn index_all(conn: &rusqlite::Connection) -> Result<IndexResult, AppError> {
+    let sources = discover_sources()?;
+    index_sources(conn, &sources, |_| {})
+}
+
 fn extract_project_path_from_source(path: &str) -> Option<String> {
     let path_buf = PathBuf::from(path);
-    let project_dir_name = path_buf.parent()?.file_name()?.to_str()?;
-    Some(decode_project_dir(project_dir_name))
+    if path.contains("/subagents/") {
+        // Subagent: ~/.claude/projects/{project-dir}/{session}/subagents/agent-*.jsonl
+        // Navigate up: agent-*.jsonl → subagents/ → {session}/ → {project-dir}
+        let project_dir_name = path_buf.parent()?   // subagents/
+            .parent()?                                // {session}/
+            .parent()?                                // {project-dir}/
+            .file_name()?                             // {project-dir}
+            .to_str()?;
+        Some(decode_project_dir(project_dir_name))
+    } else {
+        // Main session: ~/.claude/projects/{project-dir}/{session}.jsonl
+        let project_dir_name = path_buf.parent()?.file_name()?.to_str()?;
+        Some(decode_project_dir(project_dir_name))
+    }
 }
 
 /// Extract parent session ID from subagent path.
@@ -1015,4 +1200,203 @@ pub struct IndexResult {
     pub indexed: i64,
     pub updated: i64,
     pub errors: i64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- decode_project_dir tests ---
+
+    #[test]
+    fn decode_simple_absolute_path() {
+        // -Users-hipnusleo-Documents-projects-apps-yeek → /Users/hipnusleo/Documents/projects/apps/yeek
+        assert_eq!(
+            decode_project_dir("-Users-hipnusleo-Documents-projects-apps-yeek"),
+            "/Users/hipnusleo/Documents/projects/apps/yeek"
+        );
+    }
+
+    #[test]
+    fn decode_path_with_hyphens_produces_wrong_result() {
+        // Known limitation: hyphens in real directory names are indistinguishable
+        // from path separators. This test documents the current behavior.
+        // -Users-hipnusleo-my-project → /Users/hipnusleo/my/project (wrong, but expected)
+        assert_eq!(
+            decode_project_dir("-Users-hipnusleo-my-project"),
+            "/Users/hipnusleo/my/project"
+        );
+    }
+
+    // --- extract_project_path_from_source tests ---
+
+    #[test]
+    fn extract_from_main_session() {
+        let path = "/Users/hipnusleo/.claude/projects/-Users-hipnusleo-Documents-projects-apps-yeek/abc123.jsonl";
+        assert_eq!(
+            extract_project_path_from_source(path),
+            Some("/Users/hipnusleo/Documents/projects/apps/yeek".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_from_subagent_transcript() {
+        let path = "/Users/hipnusleo/.claude/projects/-Users-hipnusleo-Documents-Projects-apps-ekuiper/37c33a39-03d8-461a-888e-03afb41969df/subagents/agent-ac7f34169d9a17adf.jsonl";
+        assert_eq!(
+            extract_project_path_from_source(path),
+            Some("/Users/hipnusleo/Documents/Projects/apps/ekuiper".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_from_nested_subagent() {
+        let path = "/Users/hipnusleo/.claude/projects/-Users-hipnusleo-Documents-projects-github-goose/bd45331c-6b31-4946-b550-06d1855c863d/subagents/agent-a9765a3c814d49053.jsonl";
+        assert_eq!(
+            extract_project_path_from_source(path),
+            Some("/Users/hipnusleo/Documents/projects/github/goose".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_from_external_volume() {
+        let path = "/Users/hipnusleo/.claude/projects/-Volumes-T9-aria2/session.jsonl";
+        assert_eq!(
+            extract_project_path_from_source(path),
+            Some("/Volumes/T9/aria2".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_returns_none_for_bare_filename() {
+        assert_eq!(extract_project_path_from_source("session.jsonl"), None);
+    }
+
+    // --- extract_parent_session_id tests ---
+
+    #[test]
+    fn extract_parent_session_from_subagent() {
+        let path = "/Users/hipnusleo/.claude/projects/-Users-hipnusleo-Documents-projects-apps-yeek/abc123/subagents/agent-xyz.jsonl";
+        assert_eq!(
+            extract_parent_session_id(path),
+            Some("abc123".to_string())
+        );
+    }
+
+    // --- extract_agent_id tests ---
+
+    #[test]
+    fn extract_agent_id_from_path() {
+        let path = "/Users/hipnusleo/.claude/projects/-proj/sess/subagents/agent-abc123def.jsonl";
+        assert_eq!(
+            extract_agent_id(path),
+            Some("abc123def".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_agent_id_returns_none_for_non_agent() {
+        let path = "/Users/hipnusleo/.claude/projects/-proj/sess/subagents/other.jsonl";
+        assert_eq!(extract_agent_id(path), None);
+    }
+
+    // --- Integration: verify real project dir names ---
+
+    #[test]
+    fn decode_real_dir_names() {
+        // These are actual directory names from the user's ~/.claude/projects/
+        let cases = vec![
+            ("-Users-hipnusleo-Documents-Projects-apps-yeek", "/Users/hipnusleo/Documents/Projects/apps/yeek"),
+            ("-Users-hipnusleo-Documents-projects-apps-efi-cli", "/Users/hipnusleo/Documents/projects/apps/efi/cli"),
+            ("-Users-hipnusleo-Documents-projects-fin-playground", "/Users/hipnusleo/Documents/projects/fin/playground"),
+            ("-Volumes-T9-aria2", "/Volumes/T9/aria2"),
+            ("-Users-hipnusleo-Documents-projects-officework", "/Users/hipnusleo/Documents/projects/officework"),
+        ];
+        for (dir_name, expected) in cases {
+            assert_eq!(decode_project_dir(dir_name), expected, "Failed for {}", dir_name);
+        }
+    }
+
+    // --- fix_project_paths integration test with in-memory DB ---
+
+    #[test]
+    fn fix_project_paths_repairs_null_entries() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        crate::store::schema::init_schema(&conn).unwrap();
+
+        // Insert a source with a known path
+        conn.execute(
+            "INSERT INTO sources (id, agent, source_type, path, fingerprint, last_modified, last_seen_at, status)
+             VALUES ('src1', 'claude_code', 'claude_subagent_transcript',
+                     '/Users/test/.claude/projects/-Users-test-myapp/session1/subagents/agent-abc.jsonl',
+                     'fp1', '2025-01-01T00:00:00Z', '2025-01-01T00:00:00Z', 'active')",
+            [],
+        ).unwrap();
+
+        // Insert a session with NULL project_path
+        conn.execute(
+            "INSERT INTO sessions (id, agent, project_path, status, visibility, delete_mode, message_count, updated_at)
+             VALUES ('session1:abc', 'claude_code_subagent', NULL, 'complete', 'visible', 'none', 5, '2025-01-01T00:00:00Z')",
+            [],
+        ).unwrap();
+
+        // Link them
+        conn.execute(
+            "INSERT INTO session_sources (session_id, source_id, source_type, path, delete_policy)
+             VALUES ('session1:abc', 'src1', 'claude_subagent_transcript',
+                     '/Users/test/.claude/projects/-Users-test-myapp/session1/subagents/agent-abc.jsonl', 'file_safe')",
+            [],
+        ).unwrap();
+
+        // Verify project_path is NULL before fix
+        let pp_before: Option<String> = conn.query_row(
+            "SELECT project_path FROM sessions WHERE id = 'session1:abc'",
+            [], |row| row.get(0),
+        ).unwrap();
+        assert!(pp_before.is_none(), "Expected NULL project_path before fix");
+
+        // Run fix
+        fix_project_paths(&conn).unwrap();
+
+        // Verify project_path was corrected
+        let pp_after: String = conn.query_row(
+            "SELECT project_path FROM sessions WHERE id = 'session1:abc'",
+            [], |row| row.get(0),
+        ).unwrap();
+        assert_eq!(pp_after, "/Users/test/myapp", "project_path should be corrected");
+    }
+
+    #[test]
+    fn fix_project_paths_repairs_subagents_sentinel() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        crate::store::schema::init_schema(&conn).unwrap();
+
+        conn.execute(
+            "INSERT INTO sources (id, agent, source_type, path, fingerprint, last_modified, last_seen_at, status)
+             VALUES ('src2', 'claude_code', 'claude_subagent_transcript',
+                     '/Users/test/.claude/projects/-Users-test-proj/sess2/subagents/agent-xyz.jsonl',
+                     'fp2', '2025-01-01T00:00:00Z', '2025-01-01T00:00:00Z', 'active')",
+            [],
+        ).unwrap();
+
+        conn.execute(
+            "INSERT INTO sessions (id, agent, project_path, status, visibility, delete_mode, message_count, updated_at)
+             VALUES ('sess2:xyz', 'claude_code_subagent', 'subagents', 'complete', 'visible', 'none', 3, '2025-01-01T00:00:00Z')",
+            [],
+        ).unwrap();
+
+        conn.execute(
+            "INSERT INTO session_sources (session_id, source_id, source_type, path, delete_policy)
+             VALUES ('sess2:xyz', 'src2', 'claude_subagent_transcript',
+                     '/Users/test/.claude/projects/-Users-test-proj/sess2/subagents/agent-xyz.jsonl', 'file_safe')",
+            [],
+        ).unwrap();
+
+        fix_project_paths(&conn).unwrap();
+
+        let pp: String = conn.query_row(
+            "SELECT project_path FROM sessions WHERE id = 'sess2:xyz'",
+            [], |row| row.get(0),
+        ).unwrap();
+        assert_eq!(pp, "/Users/test/proj");
+    }
 }

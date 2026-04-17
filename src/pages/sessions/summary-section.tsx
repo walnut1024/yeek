@@ -1,26 +1,35 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { MessageRecord } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { SummaryIcon } from "@/components/icons";
 
 export default function SummarySection({
   msg,
 }: {
   msg: MessageRecord;
-  indent?: number; // kept for compat, ignored
+  indent?: number;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const { t } = useTranslation();
   if (!msg.content_preview) return null;
 
   return (
-    <div className="py-1">
-      <button
+    <div className="-mx-1 rounded-md border border-border/60 bg-[var(--editor)] px-2.5 py-2">
+      <Button
+        variant="ghost"
+        size="sm"
         onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center gap-2 rounded px-2 py-1 text-left hover:bg-muted/20 transition-colors"
+        className="flex h-auto w-full items-center justify-start gap-1.5 rounded-md px-1 py-0.5 hover:bg-accent/40"
       >
-        <span className="text-[11px] text-muted-foreground/40">{expanded ? "▾" : "▸"}</span>
-        <span className="text-[11px] font-medium text-muted-foreground/50">Conversation Summary</span>
-      </button>
+        <SummaryIcon className="text-muted-foreground" />
+        <span className="text-[14px] font-medium text-muted-foreground">
+          {t("summary.label")}
+        </span>
+        <span className="text-[14px] text-muted-foreground">{expanded ? "▾" : "▸"}</span>
+      </Button>
       {expanded && (
-        <p className="ml-6 mt-0.5 text-[12px] leading-relaxed text-muted-foreground/70 whitespace-pre-wrap">
+        <p className="mt-1 text-[14px] leading-[1.50] text-muted-foreground whitespace-pre-wrap">
           {msg.content_preview}
         </p>
       )}

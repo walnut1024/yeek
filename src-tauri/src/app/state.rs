@@ -1,20 +1,34 @@
-use std::sync::Mutex;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 use rusqlite::Connection;
 use tauri::AppHandle;
 
 use crate::app::errors::AppError;
+use crate::sync::background::ScanGuard;
+use crate::sync::watcher::FileWatcher;
 
 pub struct AppState {
     pub db: Mutex<Connection>,
     pub app_handle: Option<AppHandle>,
+    pub scan_guard: Arc<ScanGuard>,
+    pub db_path: PathBuf,
+    pub watcher: Option<FileWatcher>,
 }
 
 impl AppState {
-    pub fn new(conn: Connection) -> Self {
+    pub fn new(conn: Connection, db_path: PathBuf) -> Self {
         Self {
             db: Mutex::new(conn),
             app_handle: None,
+            scan_guard: Arc::new(ScanGuard::new()),
+            db_path,
+            watcher: None,
         }
+    }
+
+    pub fn with_watcher(mut self, watcher: FileWatcher) -> Self {
+        self.watcher = Some(watcher);
+        self
     }
 
     pub fn with_handle(mut self, handle: AppHandle) -> Self {

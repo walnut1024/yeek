@@ -1,6 +1,7 @@
 use serde::Serialize;
 
 #[derive(Debug, thiserror::Error)]
+#[allow(dead_code)]
 pub enum AppError {
     #[error("Database error: {0}")]
     DbError(String),

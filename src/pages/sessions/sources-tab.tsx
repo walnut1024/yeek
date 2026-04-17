@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import {
   getSessionDetail,
   getDeletePlan,
@@ -23,6 +24,7 @@ import {
 
 export default function SourcesTab({ sessionId }: { sessionId: string }) {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
   const [planOpen, setPlanOpen] = useState(false);
 
   const { data: detail } = useQuery({
@@ -57,8 +59,8 @@ export default function SourcesTab({ sessionId }: { sessionId: string }) {
 
   if (detail.sources.length === 0) {
     return (
-      <p className="text-[10px] text-muted-foreground/50">
-        No source files recorded
+      <p className="text-[13px] text-muted-foreground/50">
+        {t("sources.empty")}
       </p>
     );
   }
@@ -72,7 +74,7 @@ export default function SourcesTab({ sessionId }: { sessionId: string }) {
             className="rounded border border-border p-2.5"
           >
             <div className="flex items-center gap-1.5">
-              <Badge variant="outline" className="px-1 py-0 text-[8px]">
+              <Badge variant="outline" className="px-1.5 py-0.5 text-[12px]">
                 {src.source_type}
               </Badge>
               <Badge
@@ -83,12 +85,12 @@ export default function SourcesTab({ sessionId }: { sessionId: string }) {
                       ? "outline"
                       : "outline"
                 }
-                className="px-1 py-0 text-[8px]"
+                className="px-1.5 py-0.5 text-[12px]"
               >
                 {src.delete_policy}
               </Badge>
             </div>
-            <p className="mt-1 break-all font-mono text-[10px] text-muted-foreground">
+            <p className="mt-1 break-all font-mono text-[13px] text-muted-foreground">
               {src.path}
             </p>
           </div>
@@ -103,22 +105,22 @@ export default function SourcesTab({ sessionId }: { sessionId: string }) {
           <Button
             variant="destructive"
             size="sm"
-            className="h-6 text-[10px]"
+            className="h-7 text-[13px]"
           >
-            Destructive Delete
+            {t("sources.destructiveDelete")}
           </Button>
         </AlertDialogTrigger>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Destructive Delete</AlertDialogTitle>
+            <AlertDialogTitle>{t("sources.deleteTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
               {planLoading ? (
-                "Analyzing sources..."
+                t("sources.analyzing")
               ) : deletePlan ? (
                 <span>
-                  This will permanently delete source files for this session.
+                  {t("sources.deleteDescription")}
                   <br /><br />
-                  <strong>Status:</strong> {deletePlan.allowed ? "Allowed" : "Blocked"} — {deletePlan.reason}
+                  <strong>{t("sources.statusLabel")}</strong> {deletePlan.allowed ? t("sources.allowed") : t("sources.blocked")} — {deletePlan.reason}
                   <br /><br />
                   {deletePlan.sources.map((sp, i) => (
                     <span key={i}>
@@ -129,18 +131,18 @@ export default function SourcesTab({ sessionId }: { sessionId: string }) {
                   ))}
                 </span>
               ) : (
-                "Loading plan..."
+                t("sources.loadingPlan")
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("sources.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               disabled={!deletePlan?.allowed || destructiveDelete.isPending}
               onClick={() => destructiveDelete.mutate()}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {destructiveDelete.isPending ? "Deleting..." : "Delete Files"}
+              {destructiveDelete.isPending ? t("sources.deleting") : t("sources.deleteFiles")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

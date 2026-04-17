@@ -93,21 +93,14 @@ export interface ActionLogEntry {
 
 export interface BrowseRequest {
   sort?: string;
-  group?: string;
   limit?: number;
   offset?: number;
-  visibility?: string;
-  agent?: string;
-  project_path?: string;
-  pinned_only?: boolean;
 }
 
 export interface SearchRequest {
   query: string;
   limit?: number;
   offset?: number;
-  visibility?: string;
-  agent?: string;
 }
 
 // API functions
@@ -140,35 +133,24 @@ export async function getSessionDetail(
   return invoke("get_session_detail", { sessionId });
 }
 
-export async function setPinned(
-  ids: string[],
-  value: boolean
-): Promise<ActionResult> {
-  return invoke("set_pinned", { ids, value });
-}
-
-export async function setArchived(
-  ids: string[],
-  value: boolean
-): Promise<ActionResult> {
-  return invoke("set_archived", { ids, value });
-}
-
-export async function setHidden(
-  ids: string[],
-  value: boolean
-): Promise<ActionResult> {
-  return invoke("set_hidden", { ids, value });
-}
-
 export async function softDeleteSessions(
   ids: string[]
 ): Promise<ActionResult> {
   return invoke("soft_delete_sessions", { ids });
 }
 
+export async function softDeleteProject(
+  projectPath: string
+): Promise<ActionResult> {
+  return invoke("soft_delete_project", { projectPath });
+}
+
 export async function rescanSources(): Promise<ActionResult> {
   return invoke("rescan_sources");
+}
+
+export async function releaseAndResync(): Promise<ActionResult> {
+  return invoke("release_and_resync");
 }
 
 export async function getActionLog(
@@ -217,4 +199,29 @@ export async function getSubagentMessages(
   subagentId: string
 ): Promise<MessageRecord[]> {
   return invoke("get_subagent_messages", { sessionId, subagentId });
+}
+
+// Transcript (tree-aware)
+
+export interface SiblingInfo {
+  message_id: string;
+  label: string;
+}
+
+export interface BranchPoint {
+  parent_id: string;
+  siblings: SiblingInfo[];
+  active_index: number;
+}
+
+export interface TranscriptPayload {
+  messages: MessageRecord[];
+  main_path: string[];
+  branches: BranchPoint[];
+}
+
+export async function getSessionTranscript(
+  sessionId: string
+): Promise<TranscriptPayload> {
+  return invoke("get_session_transcript", { sessionId });
 }

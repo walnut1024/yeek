@@ -15,26 +15,16 @@ pub struct SessionListResult {
 #[derive(Debug, Clone)]
 pub struct BrowseParams {
     pub sort: String,
-    pub group: Option<String>,
     pub limit: i64,
     pub offset: i64,
-    pub visibility: Option<String>,
-    pub agent: Option<String>,
-    pub project_path: Option<String>,
-    pub pinned_only: bool,
 }
 
 impl Default for BrowseParams {
     fn default() -> Self {
         Self {
             sort: "updated_at".to_string(),
-            group: None,
             limit: 50,
             offset: 0,
-            visibility: Some("visible".to_string()),
-            agent: None,
-            project_path: None,
-            pinned_only: false,
         }
     }
 }
@@ -44,8 +34,6 @@ pub struct SearchParams {
     pub query: String,
     pub limit: i64,
     pub offset: i64,
-    pub visibility: Option<String>,
-    pub agent: Option<String>,
 }
 
 impl Default for SearchParams {
@@ -54,8 +42,6 @@ impl Default for SearchParams {
             query: String::new(),
             limit: 50,
             offset: 0,
-            visibility: Some("visible".to_string()),
-            agent: None,
         }
     }
 }
@@ -98,58 +84,27 @@ pub fn browse_sessions(
     conn: &rusqlite::Connection,
     params: &BrowseParams,
 ) -> Result<SessionListResult, AppError> {
-    let mut where_clauses = vec!["1=1".to_string()];
-    let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
-
-    if let Some(ref vis) = params.visibility {
-        where_clauses.push("visibility = ?".to_string());
-        param_values.push(Box::new(vis.clone()));
-    }
-
-    if let Some(ref agent) = params.agent {
-        where_clauses.push("agent = ?".to_string());
-        param_values.push(Box::new(agent.clone()));
-    }
-
-    if let Some(ref project) = params.project_path {
-        where_clauses.push("project_path = ?".to_string());
-        param_values.push(Box::new(project.clone()));
-    }
-
-    if params.pinned_only {
-        where_clauses.push("pinned = 1".to_string());
-    }
-
-    let where_sql = where_clauses.join(" AND ");
-
     let order_by = match params.sort.as_str() {
+        "updated_at_asc" => "updated_at ASC",
         "started_at" => "started_at DESC",
-        "title" => "title ASC",
+        "started_at_asc" => "started_at ASC",
         _ => "updated_at DESC",
     };
 
-    let count_sql = format!("SELECT COUNT(*) FROM sessions WHERE {}", where_sql);
     let total: i64 = conn.query_row(
-        &count_sql,
-        rusqlite::params_from_iter(param_values.iter().map(|p| p.as_ref())),
+        "SELECT COUNT(*) FROM sessions WHERE parent_session_id IS NULL",
+        [],
         |row| row.get(0),
     )?;
 
     let query_sql = format!(
-        "SELECT * FROM sessions WHERE {} ORDER BY {} LIMIT ? OFFSET ?",
-        where_sql, order_by
+        "SELECT * FROM sessions WHERE parent_session_id IS NULL ORDER BY {} LIMIT ? OFFSET ?",
+        order_by
     );
-
-    let mut all_params: Vec<Box<dyn rusqlite::types::ToSql>> = param_values;
-    all_params.push(Box::new(params.limit));
-    all_params.push(Box::new(params.offset));
 
     let mut stmt = conn.prepare(&query_sql)?;
     let sessions = stmt
-        .query_map(
-            rusqlite::params_from_iter(all_params.iter().map(|p| p.as_ref())),
-            row_to_session,
-        )?
+        .query_map(params![params.limit, params.offset], row_to_session)?
         .filter_map(|r| r.ok())
         .collect();
 
@@ -164,23 +119,7 @@ pub fn search_sessions(
     conn: &rusqlite::Connection,
     params: &SearchParams,
 ) -> Result<SessionListResult, AppError> {
-    let vis = params.visibility.as_deref().unwrap_or("visible");
-    let has_agent = params.agent.is_some();
-
-    // Use FTS5 for message content search + LIKE for session metadata
-    let mut where_parts = vec![
-        "(s.title LIKE ?1 OR s.project_path LIKE ?1 OR s.id IN (SELECT fts.session_id FROM messages_fts fts WHERE messages_fts MATCH ?2))".to_string(),
-        "s.visibility = ?3".to_string(),
-    ];
-    let mut param_idx = 4;
-    if has_agent {
-        where_parts.push(format!("s.agent = ?{}", param_idx));
-        param_idx += 1;
-    }
-    let where_sql = where_parts.join(" AND ");
-
     let like_pattern = format!("%{}%", params.query);
-    // Escape FTS5 special characters for safe query
     let fts_query = params.query
         .split_whitespace()
         .filter(|w| !w.is_empty())
@@ -188,16 +127,13 @@ pub fn search_sessions(
         .collect::<Vec<_>>()
         .join(" OR ");
 
-    let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = vec![
+    let where_sql = "(s.title LIKE ?1 OR s.project_path LIKE ?1 OR s.id IN (SELECT fts.session_id FROM messages_fts fts WHERE messages_fts MATCH ?2)) AND s.parent_session_id IS NULL";
+
+    let param_values: Vec<Box<dyn rusqlite::types::ToSql>> = vec![
         Box::new(like_pattern),
         Box::new(fts_query),
-        Box::new(vis.to_string()),
     ];
-    if let Some(ref agent) = params.agent {
-        param_values.push(Box::new(agent.clone()));
-    }
 
-    // Count query
     let count_sql = format!("SELECT COUNT(DISTINCT s.id) FROM sessions s WHERE {}", where_sql);
     let total: i64 = conn
         .query_row(
@@ -207,10 +143,9 @@ pub fn search_sessions(
         )
         .unwrap_or(0);
 
-    // Main query
     let query_sql = format!(
-        "SELECT DISTINCT s.* FROM sessions s WHERE {} ORDER BY s.updated_at DESC LIMIT ?{} OFFSET ?{}",
-        where_sql, param_idx, param_idx + 1
+        "SELECT DISTINCT s.* FROM sessions s WHERE {} ORDER BY s.updated_at DESC LIMIT ?3 OFFSET ?4",
+        where_sql
     );
     let mut all_params = param_values;
     all_params.push(Box::new(params.limit));
@@ -320,6 +255,9 @@ pub fn soft_delete_sessions(
     conn: &rusqlite::Connection,
     ids: &[String],
 ) -> Result<(), AppError> {
+    if ids.is_empty() {
+        return Ok(());
+    }
     let now = Utc::now().to_rfc3339();
     let placeholders: Vec<String> = ids.iter().map(|_| "?".to_string()).collect();
     let sql = format!(
@@ -339,4 +277,17 @@ pub fn soft_delete_sessions(
         rusqlite::params_from_iter(params.iter().map(|p| p.as_ref())),
     )?;
     Ok(())
+}
+
+pub fn soft_delete_by_project(
+    conn: &rusqlite::Connection,
+    project_path: &str,
+) -> Result<i64, AppError> {
+    let now = Utc::now().to_rfc3339();
+    conn.execute(
+        "UPDATE sessions SET visibility = 'hidden', delete_mode = 'soft_deleted', \
+         deleted_at = ?, updated_at = ? WHERE project_path = ?",
+        params![now, now, project_path],
+    )?;
+    Ok(conn.changes() as i64)
 }
