@@ -20,7 +20,7 @@ pub struct SystemStatusPayload {
 }
 
 #[tauri::command]
-pub async fn get_system_status(state: State<'_, AppState>) -> Result<SystemStatusPayload, AppError> {
+pub fn get_system_status(state: State<'_, AppState>) -> Result<SystemStatusPayload, AppError> {
     let db = state.db()?;
 
     let total_sessions: i64 = db
@@ -69,7 +69,7 @@ pub struct BrowseRequest {
 }
 
 #[tauri::command]
-pub async fn browse_sessions(
+pub fn browse_sessions(
     state: State<'_, AppState>,
     request: BrowseRequest,
 ) -> Result<SessionListResponse, AppError> {
@@ -96,7 +96,7 @@ pub struct SearchRequest {
 }
 
 #[tauri::command]
-pub async fn search_sessions(
+pub fn search_sessions(
     state: State<'_, AppState>,
     request: SearchRequest,
 ) -> Result<SessionListResponse, AppError> {
@@ -125,7 +125,7 @@ pub struct SessionPreviewPayload {
 }
 
 #[tauri::command]
-pub async fn get_session_preview(
+pub fn get_session_preview(
     state: State<'_, AppState>,
     session_id: String,
 ) -> Result<SessionPreviewPayload, AppError> {
@@ -156,7 +156,7 @@ pub struct SessionDetailPayload {
 }
 
 #[tauri::command]
-pub async fn get_session_detail(
+pub fn get_session_detail(
     state: State<'_, AppState>,
     session_id: String,
 ) -> Result<SessionDetailPayload, AppError> {
@@ -175,7 +175,7 @@ pub async fn get_session_detail(
 // --- Transcript (tree-aware) ---
 
 #[tauri::command]
-pub async fn get_session_transcript(
+pub fn get_session_transcript(
     state: State<'_, AppState>,
     session_id: String,
 ) -> Result<messages::TranscriptPayload, AppError> {
@@ -185,15 +185,53 @@ pub async fn get_session_transcript(
 
 // --- Session Actions ---
 
+/// Validate that a string matches UUID format (8-4-4-4-12 lowercase hex).
+fn is_valid_uuid(s: &str) -> bool {
+    let b = s.as_bytes();
+    b.len() == 36
+        && b[8] == b'-'
+        && b[13] == b'-'
+        && b[18] == b'-'
+        && b[23] == b'-'
+        && b[..8].iter().all(|c| c.is_ascii_hexdigit())
+        && b[9..13].iter().all(|c| c.is_ascii_hexdigit())
+        && b[14..18].iter().all(|c| c.is_ascii_hexdigit())
+        && b[19..23].iter().all(|c| c.is_ascii_hexdigit())
+        && b[24..].iter().all(|c| c.is_ascii_hexdigit())
+}
+
+/// Quote a string for safe use as a shell argument (POSIX single-quote style).
+/// Nothing is interpreted inside single quotes except `'` itself.
+fn shell_quote(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "'\\''"))
+}
+
 #[tauri::command]
-pub async fn resume_session(
+pub fn resume_session(
     session_id: String,
     agent: String,
     cwd: Option<String>,
 ) -> Result<(), AppError> {
+    // Validate inputs before constructing any shell command
+    if !is_valid_uuid(&session_id) {
+        return Err(AppError::Validation(format!(
+            "Invalid session ID: {}",
+            session_id
+        )));
+    }
+    if let Some(ref d) = cwd {
+        if !d.is_empty() && !std::path::Path::new(d).is_dir() {
+            return Err(AppError::Validation(format!(
+                "Invalid working directory: {}",
+                d
+            )));
+        }
+    }
+
+    let sid = shell_quote(&session_id);
     let cmd = match agent.as_str() {
-        "claude_code" | "claude_code_subagent" => format!("claude --resume {}", session_id),
-        "codex" => format!("codex resume {}", session_id),
+        "claude_code" | "claude_code_subagent" => format!("claude --resume {}", sid),
+        "codex" => format!("codex resume {}", sid),
         _ => return Err(AppError::Internal(format!("Unknown agent: {}", agent))),
     };
 
@@ -242,12 +280,12 @@ fn app_exists(name: &str) -> bool {
 
 fn launch_with_open(command: &str, app_name: &str, cwd: Option<&str>) -> Result<(), String> {
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+    let full_cmd = cwd
+        .map(|d| format!("cd {} && {}", shell_quote(d), command))
+        .unwrap_or_else(|| command.to_string());
 
     match app_name {
         "Ghostty" => {
-            let full_cmd = cwd
-                .map(|d| format!("cd \"{}\" && {}", d, command))
-                .unwrap_or_else(|| command.to_string());
             std::process::Command::new("open")
                 .args(["-na", "Ghostty", "--args"])
                 .arg("-e")
@@ -258,16 +296,14 @@ fn launch_with_open(command: &str, app_name: &str, cwd: Option<&str>) -> Result<
                 .map_err(|e| format!("Failed to launch Ghostty: {e}"))?;
         }
         "iTerm" => {
-            let escaped = command.replace('\\', "\\\\").replace('"', "\\\"");
-            let cd_cmd = cwd
-                .map(|d| format!("cd \"{}\" && ", d.replace('"', "\\\"")))
-                .unwrap_or_default();
+            // Escape for AppleScript string literal
+            let escaped = full_cmd.replace('\\', "\\\\").replace('"', "\\\"");
             let script = format!(
                 r#"tell application "iTerm"
     activate
     create window with default profile
     tell current session of current window
-        write text "{cd_cmd}{escaped}"
+        write text "{escaped}"
     end tell
 end tell"#
             );
@@ -278,10 +314,6 @@ end tell"#
                 .map_err(|e| format!("Failed to launch iTerm: {e}"))?;
         }
         _ => {
-            // Generic: prepend cd if cwd given
-            let full_cmd = cwd
-                .map(|d| format!("cd \"{}\" && {}", d, command))
-                .unwrap_or_else(|| command.to_string());
             std::process::Command::new("open")
                 .args(["-na", app_name, "--args", "-e", &shell, "-c", &full_cmd])
                 .spawn()
@@ -294,8 +326,9 @@ end tell"#
 
 fn launch_terminal_app(command: &str, cwd: Option<&str>) -> Result<(), String> {
     let full_cmd = cwd
-        .map(|d| format!("cd \"{}\" && {}", d, command))
+        .map(|d| format!("cd {} && {}", shell_quote(d), command))
         .unwrap_or_else(|| command.to_string());
+    // Escape for AppleScript string literal
     let escaped = full_cmd.replace('\\', "\\\\").replace('"', "\\\"");
     let script = format!(
         r#"tell application "Terminal"
@@ -319,7 +352,7 @@ pub struct ActionResult {
 }
 
 #[tauri::command]
-pub async fn soft_delete_sessions(
+pub fn soft_delete_sessions(
     state: State<'_, AppState>,
     ids: Vec<String>,
 ) -> Result<ActionResult, AppError> {
@@ -338,7 +371,7 @@ pub async fn soft_delete_sessions(
 }
 
 #[tauri::command]
-pub async fn soft_delete_project(
+pub fn soft_delete_project(
     state: State<'_, AppState>,
     project_path: String,
 ) -> Result<ActionResult, AppError> {
@@ -359,7 +392,7 @@ pub async fn soft_delete_project(
 // --- Subagent Messages ---
 
 #[tauri::command]
-pub async fn get_subagent_messages(
+pub fn get_subagent_messages(
     state: State<'_, AppState>,
     session_id: String,
     subagent_id: String,
@@ -379,7 +412,7 @@ pub struct ActionLogResponse {
 }
 
 #[tauri::command]
-pub async fn get_action_log(
+pub fn get_action_log(
     state: State<'_, AppState>,
     limit: Option<i64>,
 ) -> Result<ActionLogResponse, AppError> {
@@ -391,7 +424,7 @@ pub async fn get_action_log(
 // --- Delete Planning ---
 
 #[tauri::command]
-pub async fn get_delete_plan(
+pub fn get_delete_plan(
     state: State<'_, AppState>,
     session_id: String,
 ) -> Result<crate::service::delete_planner::DeletePlan, AppError> {
@@ -401,7 +434,7 @@ pub async fn get_delete_plan(
 }
 
 #[tauri::command]
-pub async fn destructive_delete_session(
+pub fn destructive_delete_session(
     state: State<'_, AppState>,
     session_id: String,
 ) -> Result<crate::service::delete_planner::DestructiveDeleteResult, AppError> {
@@ -413,7 +446,7 @@ pub async fn destructive_delete_session(
 // --- Rescan ---
 
 #[tauri::command]
-pub async fn rescan_sources(state: State<'_, AppState>) -> Result<ActionResult, AppError> {
+pub fn rescan_sources(state: State<'_, AppState>) -> Result<ActionResult, AppError> {
     let app_handle = state
         .app_handle()
         .ok_or_else(|| AppError::Internal("No app handle".to_string()))?
@@ -440,7 +473,7 @@ pub async fn rescan_sources(state: State<'_, AppState>) -> Result<ActionResult, 
 // --- Release & Resync ---
 
 #[tauri::command]
-pub async fn release_and_resync(state: State<'_, AppState>) -> Result<ActionResult, AppError> {
+pub fn release_and_resync(state: State<'_, AppState>) -> Result<ActionResult, AppError> {
     // 1. Clear all indexed data (keep schema and action_log for audit)
     {
         let db = state.db()?;

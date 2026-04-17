@@ -30,6 +30,9 @@ pub enum AppError {
     #[error("Not found: {0}")]
     NotFound(String),
 
+    #[error("Validation error: {0}")]
+    Validation(String),
+
     #[error("{0}")]
     Internal(String),
 }
@@ -55,6 +58,7 @@ impl Serialize for AppError {
             AppError::HydrateFailed(_) => "hydrate_failed",
             AppError::SyncFailed(_) => "sync_failed",
             AppError::NotFound(_) => "not_found",
+            AppError::Validation(_) => "validation",
             AppError::Internal(_) => "internal",
         };
 
