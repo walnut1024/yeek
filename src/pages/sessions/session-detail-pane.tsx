@@ -8,8 +8,8 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,12 +23,14 @@ import {
 import { formatTime, formatRelativeTime } from "@/lib/formatters";
 import TranscriptView from "./transcript-view";
 import SourcesTab from "./sources-tab";
+import SessionGraph from "./session-graph";
+import { useLocalStorage } from "@/lib/hooks";
 
 export default function SessionDetailPane({ sessionId }: { sessionId: string }) {
   const queryClient = useQueryClient();
   const { t } = useTranslation();
-  const [tab, setTab] = useState("transcript");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [viewMode, setViewMode] = useLocalStorage<"feed" | "graph">("graph-view", "feed");
 
   const { data: preview, isLoading: previewLoading } = useQuery({
     queryKey: ["session-preview", sessionId],
@@ -58,7 +60,7 @@ export default function SessionDetailPane({ sessionId }: { sessionId: string }) 
     <ScrollArea className="h-full">
       <div className="space-y-3 p-3">
         {/* Header */}
-        <section className="surface-card p-3">
+        <section className="surface-card sticky top-0 z-20 bg-card/95 p-3 backdrop-blur-sm">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               {/* Meta pills */}
@@ -116,10 +118,9 @@ export default function SessionDetailPane({ sessionId }: { sessionId: string }) 
               </Button>
             </div>
           </div>
-
-
-
-
+          <Separator className="my-3" />
+          <p className="mb-2 zed-kicker">{t("detail.tabSources")}</p>
+          <SourcesTab sessionId={sessionId} />
         </section>
 
         <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
@@ -143,37 +144,31 @@ export default function SessionDetailPane({ sessionId }: { sessionId: string }) 
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* Tabs: Transcript & Sources */}
-        <section className="surface-card p-2">
-          <Tabs value={tab} onValueChange={setTab}>
-            <TabsList className="h-auto p-0.5">
-              <TabsTrigger
-                value="transcript"
-                className="rounded-md px-3 py-1.5 text-[13px]"
-              >
-                {t("detail.tabHistory")}
-              </TabsTrigger>
-              <TabsTrigger
-                value="sources"
-                className="rounded-md px-3 py-1.5 text-[13px]"
-              >
-                {t("detail.tabSources")}
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+        <section className="surface-card overflow-hidden p-1">
+          {/* Graph/Feed toggle */}
+          <div className="flex items-center gap-1 border-b border-border px-2 py-1">
+            <button
+              className={`pill-tab ${viewMode === "graph" ? "pill-tab-active" : "pill-tab-idle"}`}
+              onClick={() => setViewMode("graph")}
+            >
+              {t("graph.viewGraph")}
+            </button>
+            <button
+              className={`pill-tab ${viewMode === "feed" ? "pill-tab-active" : "pill-tab-idle"}`}
+              onClick={() => setViewMode("feed")}
+            >
+              {t("graph.viewFeed")}
+            </button>
+          </div>
+          {/* Conditional content */}
+          <div className={viewMode === "graph" ? "h-[600px]" : ""}>
+            {viewMode === "graph" ? (
+              <SessionGraph sessionId={sessionId} />
+            ) : (
+              <TranscriptView sessionId={sessionId} />
+            )}
+          </div>
         </section>
-
-        {tab === "transcript" && (
-          <section className="surface-card overflow-hidden p-1">
-            <TranscriptView sessionId={sessionId} />
-          </section>
-        )}
-
-        {tab === "sources" && (
-          <section className="surface-card overflow-hidden p-1">
-            <SourcesTab sessionId={sessionId} />
-          </section>
-        )}
       </div>
     </ScrollArea>
   );
