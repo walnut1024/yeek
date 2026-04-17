@@ -1,310 +1,359 @@
-# Design System Inspired by Vercel
+# Design System Inspired by Zed Editor
 
 ## 1. Visual Theme & Atmosphere
 
-Vercel's website is the visual thesis of developer infrastructure made invisible — a design system so restrained it borders on philosophical. The page is overwhelmingly white (`#ffffff`) with near-black (`#171717`) text, creating a gallery-like emptiness where every element earns its pixel. This isn't minimalism as decoration; it's minimalism as engineering principle. The Geist design system treats the interface like a compiler treats code — every unnecessary token is stripped away until only structure remains.
+Zed's editor UI is defined by restraint, density, and the philosophy that "your editor should disappear." Every pixel carries its weight — the UI chrome recedes entirely, letting content (code, file trees, terminal output) dominate the frame. There is no decoration for its own sake. The result is a product that feels like a precision instrument: engineered, not designed.
 
-The custom Geist font family is the crown jewel. Geist Sans uses aggressive negative letter-spacing (-2.4px to -2.88px at display sizes), creating headlines that feel compressed, urgent, and engineered — like code that's been minified for production. At body sizes, the tracking relaxes but the geometric precision persists. Geist Mono completes the system as the monospace companion for code, terminal output, and technical labels. Both fonts enable OpenType `"liga"` (ligatures) globally, adding a layer of typographic sophistication that rewards close reading.
+The default theme One Dark adopts a **cool blue-gray palette** — backgrounds built on `#282c33` (editor), `#2f343e` (panels), `#3b414d` (app frame) — with text climbing through muted blue-grays toward off-white `#dce0e5`. This cool temperature gives the interface a calm, focused feel without the sterility of pure neutral grays. One Light inverts the scheme with near-white `#fafafa` editor and `#dcdcdd` frame, while retaining the same structural logic.
 
-What distinguishes Vercel from other monochrome design systems is its shadow-as-border philosophy. Instead of traditional CSS borders, Vercel uses `box-shadow: 0px 0px 0px 1px rgba(0,0,0,0.08)` — a zero-offset, zero-blur, 1px-spread shadow that creates a border-like line without the box model implications. This technique allows borders to exist in the shadow layer, enabling smoother transitions, rounded corners without clipping, and a subtler visual weight than traditional borders. The entire depth system is built on layered, multi-value shadow stacks where each layer serves a specific purpose: one for the border, one for soft elevation, one for ambient depth.
+Color is used sparingly and deliberately. The **accent blue** (`#74ade8` in dark, `#5c78e2` in light) is the single saturated accent, reserved for focus borders, active indicators, cursor color, and link text. Semantic colors — red `#d07277` for errors, green `#a1c181` for success, amber `#dec184` for warnings — appear only where they carry meaning: diagnostics, version control status, lint markers. There is no decorative gradient, no rainbow of accents, no visual noise.
+
+What makes Zed distinctive is its GPU-native rendering via the custom GPUI framework: all UI elements (quads, text sprites, underlines, selections) are compiled into a Scene and drawn in one GPU pass at 120FPS. This performance-first architecture directly shapes the visual language — no drop shadows (expensive), no blurs, no gradients — just flat color steps and 1px borders.
 
 **Key Characteristics:**
-- Geist Sans with extreme negative letter-spacing (-2.4px to -2.88px at display) — text as compressed infrastructure
-- Geist Mono for code and technical labels with OpenType `"liga"` globally
-- Shadow-as-border technique: `box-shadow 0px 0px 0px 1px` replaces traditional borders throughout
-- Multi-layer shadow stacks for nuanced depth (border + elevation + ambient in single declarations)
-- Near-pure white canvas with `#171717` text — not quite black, creating micro-contrast softness
-- Workflow-specific accent colors: Ship Red (`#ff5b4f`), Preview Pink (`#de1d8d`), Develop Blue (`#0a72ef`)
-- Focus ring system using `hsla(212, 100%, 48%, 1)` — a saturated blue for accessibility
-- Pill badges (9999px) with tinted backgrounds for status indicators
+- Dark-first design with cool blue-gray neutrals (One Dark default)
+- Single accent color (`#74ade8` dark / `#5c78e2` light) used with surgical precision
+- Content-dominant layout: UI chrome minimized, code and data fill the frame
+- Dense information architecture: compact spacing, small type, high information density
+- Flat surfaces with no gradients, no shadows for decoration
+- 1px solid borders as the primary visual separator (not background shifts or shadows)
+- Monochrome iconography; color only for semantic state
+- GPU-native rendering at 120FPS — performance as visual identity
+- 8-player collaboration color system for multi-user cursors and selections
 
 ## 2. Color Palette & Roles
 
-### Primary
-- **Vercel Black** (`#171717`): Primary text, headings, dark surface backgrounds. Not pure black — the slight warmth prevents harshness.
-- **Pure White** (`#ffffff`): Page background, card surfaces, button text on dark.
-- **True Black** (`#000000`): Secondary use, `--geist-console-text-color-default`, used in specific console/code contexts.
+### Accent Blue (One Dark)
+- **Accent Text** (`#74ade8`): `text.accent`, links, active item labels, accent icons
+- **Accent Hover** (`#3b9eff`): Hovered accent elements (derived from blue scale)
+- **Focus Border** (`#47679e`): `border.focused`, keyboard focus rings
+- **Selected Border** (`#293b5b`): `border.selected`, selected item outlines
+- **Accent Highlight** (`#74ade81a`): 10% opacity tint for document read highlights
 
-### Workflow Accent Colors
-- **Ship Red** (`#ff5b4f`): `--ship-text`, the "ship to production" workflow step — warm, urgent coral-red.
-- **Preview Pink** (`#de1d8d`): `--preview-text`, the preview deployment workflow — vivid magenta-pink.
-- **Develop Blue** (`#0a72ef`): `--develop-text`, the development workflow — bright, focused blue.
+### Accent Blue (One Light)
+- **Accent Text** (`#5c78e2`): `text.accent`, links, active labels
+- **Focus Border** (`#7d82e8`): `border.focused`, focus rings (purple-blue shift)
+- **Selected Border** (`#cbcdf6`): `border.selected`, selection outlines
 
-### Console / Code Colors
-- **Console Blue** (`#0070f3`): `--geist-console-text-color-blue`, syntax highlighting blue.
-- **Console Purple** (`#7928ca`): `--geist-console-text-color-purple`, syntax highlighting purple.
-- **Console Pink** (`#eb367f`): `--geist-console-text-color-pink`, syntax highlighting pink.
+### Text Colors (One Dark)
+- **Primary** (`#dce0e5`): `text`, main body text, headings, default icons
+- **Muted** (`#a9afbc`): `text.muted`, secondary labels, inactive tabs, dimmed icons
+- **Placeholder** (`#878a98`): `text.placeholder`, input placeholders, disabled text
+- **Editor Foreground** (`#acb2be`): `editor.foreground`, code default color (slightly dimmer than `text`)
+- **Line Number** (`#4e5a5f`): `editor.line_number`, gutter line numbers
+- **Active Line Number** (`#d0d4da`): `editor.active_line_number`, current line number
 
-### Interactive
-- **Link Blue** (`#0072f5`): Primary link color with underline decoration.
-- **Focus Blue** (`hsla(212, 100%, 48%, 1)`): `--ds-focus-color`, focus ring on interactive elements.
-- **Ring Blue** (`rgba(147, 197, 253, 0.5)`): `--tw-ring-color`, Tailwind ring utility.
+### Text Colors (One Light)
+- **Primary** (`#242529`): `text`, near-black on white
+- **Muted** (`#58585a`): `text.muted`, secondary labels
+- **Placeholder** (`#7e8086`): `text.placeholder`, inputs, disabled items
 
-### Neutral Scale
-- **Gray 900** (`#171717`): Primary text, headings, nav text.
-- **Gray 600** (`#4d4d4d`): Secondary text, description copy.
-- **Gray 500** (`#666666`): Tertiary text, muted links.
-- **Gray 400** (`#808080`): Placeholder text, disabled states.
-- **Gray 100** (`#ebebeb`): Borders, card outlines, dividers.
-- **Gray 50** (`#fafafa`): Subtle surface tint, inner shadow highlight.
+### Surface & Background (One Dark)
+- **App Frame** (`#3b414d`): `background`, title bar, status bar — the outermost layer
+- **Surface** (`#2f343e`): `surface.background`, panels, sidebar, tab bar, elevated surfaces
+- **Editor** (`#282c33`): `editor.background`, toolbar, editor gutter — the content canvas
+- **Element Default** (`#2e343e`): `element.background`, buttons, inputs at rest
+- **Element Hover** (`#363c46`): `element.hover`, ghost element hover
+- **Element Active** (`#454a56`): `element.active`, pressed/selected state
+- **Ghost Default** (`transparent`): `ghost_element.background`, toolbar buttons at rest
+- **Active Line** (`#2f343ebf`): `editor.active_line.background`, 75% opacity current line
+- **Drop Target** (`#83899480`): `drop_target.background`, drag-and-drop indicator
 
-### Surface & Overlay
-- **Overlay Backdrop** (`hsla(0, 0%, 98%, 1)`): `--ds-overlay-backdrop-color`, modal/dialog backdrop.
-- **Selection Text** (`hsla(0, 0%, 95%, 1)`): `--geist-selection-text-color`, text selection highlight.
-- **Badge Blue Bg** (`#ebf5ff`): Pill badge background, tinted blue surface.
-- **Badge Blue Text** (`#0068d6`): Pill badge text, darker blue for readability.
+### Surface & Background (One Light)
+- **App Frame** (`#dcdcdd`): `background`, title bar, status bar
+- **Surface** (`#ebebec`): `surface.background`, panels, tab bar
+- **Editor** (`#fafafa`): `editor.background`, toolbar
+- **Element Default** (`#ebebec`): `element.background`
+- **Element Hover** (`#dfdfe0`): `element.hover`
+- **Element Active** (`#cacaca`): `element.active`
 
-### Shadows & Depth
-- **Border Shadow** (`rgba(0, 0, 0, 0.08) 0px 0px 0px 1px`): The signature — replaces traditional borders.
-- **Subtle Elevation** (`rgba(0, 0, 0, 0.04) 0px 2px 2px`): Minimal lift for cards.
-- **Card Stack** (`rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.04) 0px 2px 2px, rgba(0,0,0,0.04) 0px 8px 8px -8px, #fafafa 0px 0px 0px 1px`): Full multi-layer card shadow.
-- **Ring Border** (`rgb(235, 235, 235) 0px 0px 0px 1px`): Light gray ring-border for tabs and images.
+### Borders (One Dark)
+- **Standard** (`#464b57`): `border`, panel boundaries, dividers, component outlines
+- **Variant** (`#363c46`): `border.variant`, lighter/subtle borders
+- **Focused** (`#47679e`): `border.focused`, keyboard focus ring (blue-tinted)
+- **Selected** (`#293b5b`): `border.selected`, selection outlines
+- **Disabled** (`#414754`): `border.disabled`, inactive element borders
+- **Transparent** (`transparent`): `border.transparent`, placeholder for layout alignment
+
+### Semantic
+- **Error** (`#d07277`): Diagnostics failures, with bg `#d072771a` and border `#4c2b2c`
+- **Warning** (`#dec184`): Lint warnings, with bg `#dec1841a` and border `#5d4c2f`
+- **Info** (`#74ade8`): Informational hints, with bg `#74ade81a` and border `#293b5b`
+- **Hint** (`#788ca6`): Subtle suggestions, with bg `#5a6f891a` and border `#293b5b`
+- **Success** (`#a1c181`): Operation success, with bg `#a1c1811a` and border `#38482f`
+
+### Version Control
+- **Added** (`#27a657` VCS / `#a1c181` marker): Git additions, green
+- **Modified** (`#d3b020` VCS / `#dec184` marker): Git modifications, amber
+- **Deleted** (`#e06c76` VCS / `#d07277` marker): Git deletions, red
+- **Conflict** (`#dec184`): Merge conflicts, amber
+- **Renamed** (`#74ade8`): Renamed files, blue
+
+### Shadows
+- Zed uses **no decorative shadows**. There is no shadow scale, no `box-shadow`, no glow.
+- Depth is communicated exclusively through background color steps and 1px solid borders.
+- Where other editors use `box-shadow: 0px 0px 0px 1px ...`, Zed uses flat `border: 1px solid`.
 
 ## 3. Typography Rules
 
-### Font Family
-- **Primary**: `Geist`, with fallbacks: `Arial, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol`
-- **Monospace**: `Geist Mono`, with fallbacks: `ui-monospace, SFMono-Regular, Roboto Mono, Menlo, Monaco, Liberation Mono, DejaVu Sans Mono, Courier New`
-- **OpenType Features**: `"liga"` enabled globally on all Geist text; `"tnum"` for tabular numbers on specific captions.
+### Font Families
+- **UI**: System UI font stack or `Inter` — all menus, labels, status bar, panel headers
+- **Editor**: User-configurable, default `Zed Plex Mono`, common choices `JetBrains Mono`, `Menlo`, `Monaco`, `Fira Code`
+- **Terminal**: Same as editor monospace — used for ANSI output, command results
 
 ### Hierarchy
 
-| Role | Font | Size | Weight | Line Height | Letter Spacing | Notes |
-|------|------|------|--------|-------------|----------------|-------|
-| Display Hero | Geist | 48px (3.00rem) | 600 | 1.00–1.17 (tight) | -2.4px to -2.88px | Maximum compression, billboard impact |
-| Section Heading | Geist | 40px (2.50rem) | 600 | 1.20 (tight) | -2.4px | Feature section titles |
-| Sub-heading Large | Geist | 32px (2.00rem) | 600 | 1.25 (tight) | -1.28px | Card headings, sub-sections |
-| Sub-heading | Geist | 32px (2.00rem) | 400 | 1.50 | -1.28px | Lighter sub-headings |
-| Card Title | Geist | 24px (1.50rem) | 600 | 1.33 | -0.96px | Feature cards |
-| Card Title Light | Geist | 24px (1.50rem) | 500 | 1.33 | -0.96px | Secondary card headings |
-| Body Large | Geist | 20px (1.25rem) | 400 | 1.80 (relaxed) | normal | Introductions, feature descriptions |
-| Body | Geist | 18px (1.13rem) | 400 | 1.56 | normal | Standard reading text |
-| Body Small | Geist | 16px (1.00rem) | 400 | 1.50 | normal | Standard UI text |
-| Body Medium | Geist | 16px (1.00rem) | 500 | 1.50 | normal | Navigation, emphasized text |
-| Body Semibold | Geist | 16px (1.00rem) | 600 | 1.50 | -0.32px | Strong labels, active states |
-| Button / Link | Geist | 14px (0.88rem) | 500 | 1.43 | normal | Buttons, links, captions |
-| Button Small | Geist | 14px (0.88rem) | 400 | 1.00 (tight) | normal | Compact buttons |
-| Caption | Geist | 12px (0.75rem) | 400–500 | 1.33 | normal | Metadata, tags |
-| Mono Body | Geist Mono | 16px (1.00rem) | 400 | 1.50 | normal | Code blocks |
-| Mono Caption | Geist Mono | 13px (0.81rem) | 500 | 1.54 | normal | Code labels |
-| Mono Small | Geist Mono | 12px (0.75rem) | 500 | 1.00 (tight) | normal | `text-transform: uppercase`, technical labels |
-| Micro Badge | Geist | 7px (0.44rem) | 700 | 1.00 (tight) | normal | `text-transform: uppercase`, tiny badges |
+| Role | Font | Size | Weight | Line Height | Notes |
+|------|------|------|--------|-------------|-------|
+| Dialog Title | Inter | 24–28px (1.50–1.75rem) | 600 | 1.3 (tight) | Settings pages, dialog headers |
+| Panel Header | Inter | 16–18px (1.00–1.13rem) | 600 | 1.4 | Panel titles, section labels |
+| Body | Inter | 13–14px (0.81–0.88rem) | 400 | 1.5 | Descriptions, panel content |
+| Body Emphasized | Inter | 13–14px (0.81–0.88rem) | 500 | 1.5 | Active items, key labels |
+| Tab / Badge | Inter | 11–12px (0.69–0.75rem) | 500 | 1.4 | File tabs, status badges |
+| Micro | Inter | 10–11px (0.63–0.69rem) | 400 | 1.3 (tight) | Line numbers, timestamps |
+| Code Body | Zed Plex Mono | 16px (1.00rem) | 400 | 1.6 (relaxed) | Editor code, default `buffer_font_size` |
+| Code UI | Zed Plex Mono | 13px (0.81rem) | 400 | 1.6 (relaxed) | Inline code, command palette items |
 
 ### Principles
-- **Compression as identity**: Geist Sans at display sizes uses -2.4px to -2.88px letter-spacing — the most aggressive negative tracking of any major design system. This creates text that feels _minified_, like code optimized for production. The tracking progressively relaxes as size decreases: -1.28px at 32px, -0.96px at 24px, -0.32px at 16px, and normal at 14px.
-- **Ligatures everywhere**: Every Geist text element enables OpenType `"liga"`. Ligatures aren't decorative — they're structural, creating tighter, more efficient glyph combinations.
-- **Three weights, strict roles**: 400 (body/reading), 500 (UI/interactive), 600 (headings/emphasis). No bold (700) except for tiny micro-badges. This narrow weight range creates hierarchy through size and tracking, not weight.
-- **Mono for identity**: Geist Mono in uppercase with `"tnum"` or `"liga"` serves as the "developer console" voice — compact technical labels that connect the marketing site to the product.
+- **Small is correct**: Zed deliberately uses 13px for UI body text. The dense layout prioritizes information over comfort. Do not increase type sizes to "improve readability" — density is the design intent.
+- **Three-weight system**: 400 (regular) is default body. 500 (medium) for interactive labels and active items. 600 (semibold) for headings only. Never use 700+ in UI (the sole 700 exception: `emphasis.strong` in syntax highlighting).
+- **Monospace as first-class citizen**: File paths, session IDs, tool names, command output, version numbers, PR references — all monospace. The code font is not a fallback; it is an equal member of the type system.
+- **No letter-spacing adjustment**: Let the font's natural spacing do the work. Zero tracking at all sizes, all weights.
+- **Uniform 1.4–1.5 line-height**: Consistent moderate leading across body text. Not tight, not loose. Tighter (1.3) only for micro text and dialog titles.
 
 ## 4. Component Stylings
 
 ### Buttons
 
-**Primary White (Shadow-bordered)**
-- Background: `#ffffff`
-- Text: `#171717`
-- Padding: 0px 6px (minimal — content-driven width)
-- Radius: 6px (subtly rounded)
-- Shadow: `rgb(235, 235, 235) 0px 0px 0px 1px` (ring-border)
-- Hover: background shifts to `var(--ds-gray-1000)` (dark)
-- Focus: `2px solid var(--ds-focus-color)` outline + `var(--ds-focus-ring)` shadow
-- Use: Standard secondary button
-
-**Primary Dark (Inferred from Geist system)**
-- Background: `#171717`
-- Text: `#ffffff`
-- Padding: 8px 16px
+**Ghost Button (Default)**
+- Background: `transparent`
+- Hover: `#363c46` (`element.hover`)
+- Active: `#454a56` (`element.active`)
+- Text: `#dce0e5` (`text`)
+- Border: none (or `transparent` placeholder)
+- Padding: 4px 8px
 - Radius: 6px
-- Use: Primary CTA ("Start Deploying", "Get Started")
+- Use: Toolbar actions, sidebar buttons, most interactive elements
 
-**Pill Button / Badge**
-- Background: `#ebf5ff` (tinted blue)
-- Text: `#0068d6`
-- Padding: 0px 10px
-- Radius: 9999px (full pill)
-- Font: 12px weight 500
-- Use: Status badges, tags, feature labels
+**Filled Button**
+- Background: `#2e343e` (`element.background`)
+- Hover: `#363c46` (`element.hover`)
+- Text: `#dce0e5` (`text`)
+- Border: 1px solid `#464b57` (`border`)
+- Padding: 6px 12px
+- Radius: 6px
+- Use: Dialog confirmations, primary actions
 
-**Large Pill (Navigation)**
-- Background: transparent or `#171717`
-- Radius: 64px–100px
-- Use: Tab navigation, section selectors
+**Accent Button**
+- Background: `#74ade8` (`text.accent`)
+- Hover: lighter variant
+- Text: `#ffffff` or dark contrast
+- Padding: 6px 12px
+- Radius: 6px
+- Use: Key CTAs only (install extension, destructive confirmations) — use sparingly
 
-### Cards & Containers
-- Background: `#ffffff`
-- Border: via shadow — `rgba(0, 0, 0, 0.08) 0px 0px 0px 1px`
-- Radius: 8px (standard), 12px (featured/image cards)
-- Shadow stack: `rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.04) 0px 2px 2px, #fafafa 0px 0px 0px 1px`
-- Image cards: `1px solid #ebebeb` with 12px top radius
-- Hover: subtle shadow intensification
+### Tab Bar
+- Bar background: `#2f343e` (`tab_bar.background`)
+- Inactive tab: `#2f343e` bg, `#a9afbc` text (`text.muted`)
+- Active tab: `#282c33` bg (matches editor), `#dce0e5` text (`text`)
+- Active tab merges visually with the editor below — no bottom border needed
+- Close button: appears on hover only, `#a9afbc` icon, no background
+- Modified indicator: small dot beside filename
 
-### Inputs & Forms
-- Radio: standard styling with focus `var(--ds-gray-200)` background
-- Focus shadow: `1px 0 0 0 var(--ds-gray-alpha-600)`
-- Focus outline: `2px solid var(--ds-focus-color)` — consistent blue focus ring
-- Border: via shadow technique, not traditional border
+### Panels & Sidebar
+- Background: `#2f343e` (`panel.background`)
+- Border: 1px solid `#464b57` (`border`) on dividing edge
+- Active item: `#454a56` bg (`element.selected`)
+- Focused panel border: `null` in One Dark (no visible focus border)
+- Indent guides: `panel.indent_guide` / `panel.indent_guide_active`
+- Tree structure: ~12px indent per nesting level
+- Project Panel toggle: `cmd-b` (visibility), `cmd-shift-e` (focus)
 
-### Navigation
-- Clean horizontal nav on white, sticky
-- Vercel logotype left-aligned, 262x52px
-- Links: Geist 14px weight 500, `#171717` text
-- Active: weight 600 or underline
-- CTA: dark pill buttons ("Start Deploying", "Contact Sales")
-- Mobile: hamburger menu collapse
-- Product dropdowns with multi-level menus
+### Editor Area
+- Background: `#282c33` (`editor.background`)
+- Default text: `#acb2be` (`editor.foreground`)
+- Line numbers: `#4e5a5f` (dim), current `#d0d4da` (bright)
+- Current line: `#2f343ebf` (75% opacity surface color)
+- Cursor: `#74ade8` (Player 1 accent)
+- Selection: `#74ade83d` (24% opacity accent)
+- Wrap guide: `#c8ccd40d` (5% opacity)
+- Invisible characters: `#4e5a5f` (same as line numbers)
+- Minimap: 80–100px right gutter
 
-### Image Treatment
-- Product screenshots with `1px solid #ebebeb` border
-- Top-rounded images: `12px 12px 0px 0px` radius
-- Dashboard/code preview screenshots dominate feature sections
-- Soft gradient backgrounds behind hero images (pastel multi-color)
+### Input Fields
+- Background: `#2e343e` (`element.background`)
+- Border: 1px solid `#464b57` (`border`)
+- Focus: border changes to `#47679e` (`border.focused`)
+- Placeholder: `#878a98` (`text.placeholder`)
+- Padding: 4px 8px
+- Radius: 6px
 
-### Distinctive Components
+### Context Menu / Dropdown
+- Background: `#2f343e` (`elevated_surface.background`)
+- Hover item: `#363c46` (`element.hover`)
+- Separator: 1px solid `#464b57` (`border`)
+- Shortcut text: `#878a98` (`text.placeholder`), right-aligned
+- Border: 1px solid `#464b57`
+- Radius: 8px
+- Shadow: none (flat, border-defined)
 
-**Workflow Pipeline**
-- Three-step horizontal pipeline: Develop → Preview → Ship
-- Each step has its own accent color: Blue → Pink → Red
-- Connected with lines/arrows
-- The visual metaphor for Vercel's core value proposition
+### Scrollbar
+- Track: `transparent`, border `#2e333c`
+- Thumb: `#c8ccd44c` (~30% opacity)
+- Thumb hover: `#363c46`
+- Width: ~8px, auto-hide when not scrolling
 
-**Trust Bar / Logo Grid**
-- Company logos (Perplexity, ChatGPT, Cursor, etc.) in grayscale
-- Horizontal scroll or grid layout
-- Subtle `#ebebeb` border separation
+### Status Bar
+- Background: `#3b414d` (`status_bar.background`, matches app frame)
+- Text: `#a9afbc` (`text.muted`)
+- Icons: `#a9afbc` default, semantic colors for VCS indicators
+- Border-top: 1px solid `#464b57`
+- Content: language mode, line:column, error/warning counts, VCS branch
 
-**Metric Cards**
-- Large number display (e.g., "10x faster")
-- Geist 48px weight 600 for the metric
-- Description below in gray body text
-- Shadow-bordered card container
+### Tooltip
+- Background: `#454a56` (`element.active`)
+- Text: `#dce0e5` (`text`)
+- Padding: 4px 8px
+- Radius: 4px
+- No border, no shadow
+
+### Command Palette
+- Modal overlay with semi-transparent backdrop
+- Input: `editor.background` + `border.focused` ring
+- List items: 24–28px height, hover `element.hover`
+- Shortcut hints: right-aligned, `text.placeholder` color
+- Fuzzy match highlight: `text.accent` color
+- Radius: 8–12px (dialog level)
+
+### Terminal
+- Background: `#282c34` (`terminal.background`)
+- Foreground: `#abb2bf` (`terminal.foreground`)
+- Bright foreground: `#dce0e5`, dim foreground: `#636d83`
+- ANSI palette: red `#e06c75`, green `#98c379`, yellow `#e5c07b`, blue `#61afef`, magenta `#c678dd`, cyan `#56b6c2`
+- Opens in any buffer tab position (`ctrl-`\``)
+- Backend: Alacritty renderer
 
 ## 5. Layout Principles
 
 ### Spacing System
-- Base unit: 8px
-- Scale: 1px, 2px, 3px, 4px, 5px, 6px, 8px, 10px, 12px, 14px, 16px, 32px, 36px, 40px
-- Notable gap: jumps from 16px to 32px — no 20px or 24px in primary scale
+- Base unit: 4px
+- Scale: 2px, 4px, 6px, 8px, 12px, 16px, 20px, 24px, 32px
+- Horizontal padding for UI elements: 8px–12px
+- Vertical padding for UI elements: 4px–6px
+- Gap between sections: 12px–16px (not 24–32px — density over whitespace)
 
 ### Grid & Container
-- Max content width: approximately 1200px
-- Hero: centered single-column with generous top padding
-- Feature sections: 2–3 column grids for cards
-- Full-width dividers using `border-bottom: 1px solid #171717`
-- Code/dashboard screenshots as full-width or contained with border
+- No max-width container — editor fills entire viewport
+- Sidebar: fixed width 240–280px, user-resizable by drag
+- Bottom panel: fixed height, user-resizable by drag
+- Center (editor): flexible, fills remaining space
+- Minimap: 80–100px right gutter
+- Pane splits: `cmd-k` + direction key, double-click divider to equalize
 
-### Whitespace Philosophy
-- **Gallery emptiness**: Massive vertical padding between sections (80px–120px+). The white space IS the design — it communicates that Vercel has nothing to prove and nothing to hide.
-- **Compressed text, expanded space**: The aggressive negative letter-spacing on headlines is counterbalanced by generous surrounding whitespace. The text is dense; the space around it is vast.
-- **Section rhythm**: White sections alternate with white sections — there's no color variation between sections. Separation comes from borders (shadow-borders) and spacing alone.
+### Window Regions
+| Region | Background | Position |
+|--------|-----------|----------|
+| Title Bar | `#3b414d` (app frame) | Top |
+| Tab Bar | `#2f343e` (surface) | Below title bar |
+| Toolbar | `#282c33` (editor) | Below tab bar |
+| Sidebar | `#2f343e` (surface) | Left (or right) |
+| Editor | `#282c33` (editor) | Center, fills remaining |
+| Bottom Panel | `#2f343e` (surface) | Bottom, resizable |
+| Status Bar | `#3b414d` (app frame) | Very bottom |
+
+### Density Philosophy
+- **Information-dense by default**: Panels pack controls tightly. Lists use 24–28px row heights. Whitespace is structural, not decorative — it separates groups, not individual items.
+- **Compact is correct**: Do not add padding "for breathing room." Sidebar items sit at 24px row height with 4px horizontal padding and 12px indent per nesting level.
+- **Content dominates**: The editor area is maximized. UI chrome (tab bar, status bar, sidebar) occupies the minimum viable footprint.
 
 ### Border Radius Scale
-- Micro (2px): Inline code snippets, small spans
-- Subtle (4px): Small containers
-- Standard (6px): Buttons, links, functional elements
-- Comfortable (8px): Cards, list items
-- Image (12px): Featured cards, image containers (top-rounded)
-- Large (64px): Tab navigation pills
-- XL (100px): Large navigation links
-- Full Pill (9999px): Badges, status pills, tags
-- Circle (50%): Menu toggle, avatar containers
+- Minimal (4px): Tooltips, micro elements
+- Standard (6px): Buttons, inputs, tags, small containers (the workhorse radius)
+- Comfortable (8px): Context menus, dropdowns, panels
+- Generous (12px): Modals, dialogs, command palette
+- Full (9999px): Not used — Zed avoids pill shapes entirely
 
 ## 6. Depth & Elevation
 
 | Level | Treatment | Use |
 |-------|-----------|-----|
-| Flat (Level 0) | No shadow | Page background, text blocks |
-| Ring (Level 1) | `rgba(0,0,0,0.08) 0px 0px 0px 1px` | Shadow-as-border for most elements |
-| Light Ring (Level 1b) | `rgb(235,235,235) 0px 0px 0px 1px` | Lighter ring for tabs, images |
-| Subtle Card (Level 2) | Ring + `rgba(0,0,0,0.04) 0px 2px 2px` | Standard cards with minimal lift |
-| Full Card (Level 3) | Ring + Subtle + `rgba(0,0,0,0.04) 0px 8px 8px -8px` + inner `#fafafa` ring | Featured cards, highlighted panels |
-| Focus (Accessibility) | `2px solid hsla(212, 100%, 48%, 1)` outline | Keyboard focus on all interactive elements |
+| Flat (Level 0) | Same as parent bg | Editor content, empty panels |
+| Surface (Level 1) | `#2f343e` surface bg | Sidebar, tab bar, bottom panel |
+| Frame (Level 2) | `#3b414d` app frame bg | Title bar, status bar (outermost) |
+| Elevated (Level 3) | `#2f343e` bg + 1px `#464b57` border | Context menus, popovers, dropdowns |
+| Modal (Level 4) | `#2f343e` bg + 1px `#464b57` border + backdrop | Command palette, dialogs |
 
-**Shadow Philosophy**: Vercel has arguably the most sophisticated shadow system in modern web design. Rather than using shadows for elevation in the traditional Material Design sense, Vercel uses multi-value shadow stacks where each layer has a distinct architectural purpose: one creates the "border" (0px spread, 1px), another adds ambient softness (2px blur), another handles depth at distance (8px blur with negative spread), and an inner ring (`#fafafa`) creates the subtle highlight that makes the card "glow" from within. This layered approach means cards feel built, not floating.
-
-### Decorative Depth
-- Hero gradient: soft, pastel multi-color gradient wash behind hero content (barely visible, atmospheric)
-- Section borders: `1px solid #171717` (full dark line) between major sections
-- No background color variation — depth comes entirely from shadow layering and border contrast
+**Elevation Philosophy**: Zed does not use drop shadows. Elevation is expressed through background color steps (darker = further back, lighter = closer to user) and border presence. The hierarchy in One Dark reads: editor `#282c33` (deepest) → panels `#2f343e` (mid) → app frame `#3b414d` (outermost/brightest). A context menu "floats" because its `#2f343e` background sits on the `#282c33` editor canvas with a visible `#464b57` border outlining its shape — not because it casts a shadow.
 
 ## 7. Do's and Don'ts
 
 ### Do
-- Use Geist Sans with aggressive negative letter-spacing at display sizes (-2.4px to -2.88px at 48px)
-- Use shadow-as-border (`0px 0px 0px 1px rgba(0,0,0,0.08)`) instead of traditional CSS borders
-- Enable `"liga"` on all Geist text — ligatures are structural, not optional
-- Use the three-weight system: 400 (body), 500 (UI), 600 (headings)
-- Apply workflow accent colors (Red/Pink/Blue) only in their workflow context
-- Use multi-layer shadow stacks for cards (border + elevation + ambient + inner highlight)
-- Keep the color palette achromatic — grays from `#171717` to `#ffffff` are the system
-- Use `#171717` instead of `#000000` for primary text — the micro-warmth matters
+- Use cool blue-gray neutrals for all UI chrome — never warm brown-gray or pure neutral
+- Keep the accent blue (`#74ade8`) for interactive focus states only — not decoration
+- Use 1px solid borders for separation — not shadows or background color alone
+- Pack information densely — 28px list rows, 13px UI body text, 8px gaps
+- Use monospace for anything technical: paths, IDs, commands, output, version numbers
+- Let code content dominate the frame — minimize UI chrome to borders and subtle backgrounds
+- Use ghost buttons (transparent bg, visible on hover) as the default button style
+- Reserve filled/accent buttons for the single most important action per context
+- Match active tab background to the editor canvas to create visual continuity
+- Use the three-layer background system: editor → surface → app frame
 
 ### Don't
-- Don't use positive letter-spacing on Geist Sans — it's always negative or zero
-- Don't use weight 700 (bold) on body text — 600 is the maximum, used only for headings
-- Don't use traditional CSS `border` on cards — use the shadow-border technique
-- Don't introduce warm colors (oranges, yellows, greens) into the UI chrome
-- Don't apply the workflow accent colors (Ship Red, Preview Pink, Develop Blue) decoratively
-- Don't use heavy shadows (> 0.1 opacity) — the shadow system is whisper-level
-- Don't increase body text letter-spacing — Geist is designed to run tight
-- Don't use pill radius (9999px) on primary action buttons — pills are for badges/tags only
-- Don't skip the inner `#fafafa` ring in card shadows — it's the glow that makes the system work
+- Don't use drop shadows anywhere — elevation is border + background step
+- Don't use gradients — flat colors only
+- Don't add colored backgrounds to content areas — neutrals carry the structure
+- Don't use rounded pill shapes (9999px radius) — 6px–8px is the maximum
+- Don't use the accent blue for large filled areas — it's an accent, not a primary fill
+- Don't increase font sizes or spacing beyond spec — the density is intentional, not a bug
+- Don't use weight 700+ in UI — 600 is the ceiling
+- Don't add illustrations or decorative imagery to the editor UI — content is the visual
+- Don't use semantic colors (red/green/amber) for decoration — they carry diagnostic meaning
+- Don't use icons with color fills — monochrome only, matching `icon` / `icon.muted` color
 
 ## 8. Responsive Behavior
 
-### Breakpoints
-| Name | Width | Key Changes |
-|------|-------|-------------|
-| Mobile Small | <400px | Tight single column, minimal padding |
-| Mobile | 400–600px | Standard mobile, stacked layout |
-| Tablet Small | 600–768px | 2-column grids begin |
-| Tablet | 768–1024px | Full card grids, expanded padding |
-| Desktop Small | 1024–1200px | Standard desktop layout |
-| Desktop | 1200–1400px | Full layout, maximum content width |
-| Large Desktop | >1400px | Centered, generous margins |
-
-### Touch Targets
-- Buttons use comfortable padding (8px–16px vertical)
-- Navigation links at 14px with adequate spacing
-- Pill badges have 10px horizontal padding for tap targets
-- Mobile menu toggle uses 50% radius circular button
+### Window Regions
+| Region | Minimum | Default | Resizable |
+|--------|---------|---------|-----------|
+| Sidebar | Collapsible (0px) | 240–280px | Yes, drag edge |
+| Bottom Panel | Collapsible (0px) | ~200px | Yes, drag edge |
+| Editor | Fills remaining | Fills remaining | Automatic |
+| Tab Bar | Fixed height ~32px | ~32px | No |
+| Status Bar | Fixed height ~24px | ~24px | No |
 
 ### Collapsing Strategy
-- Hero: display 48px → scales down, maintains negative tracking proportionally
-- Navigation: horizontal links + CTAs → hamburger menu
-- Feature cards: 3-column → 2-column → single column stacked
-- Code screenshots: maintain aspect ratio, may horizontally scroll
-- Trust bar logos: grid → horizontal scroll
-- Footer: multi-column → stacked single column
-- Section spacing: 80px+ → 48px on mobile
-
-### Image Behavior
-- Dashboard screenshots maintain border treatment at all sizes
-- Hero gradient softens/simplifies on mobile
-- Product screenshots use responsive images with consistent border radius
-- Full-width sections maintain edge-to-edge treatment
+- Sidebar: `cmd-b` toggles visibility; collapses to 0px, no residual chrome
+- Bottom panel: `shift-escape` toggles; anchors to right, bottom, or modal mode (Dock)
+- Pane splits: `cmd-k` + direction to split; double-click divider to equalize; panes can be closed individually
+- Tab bar: scrollable when tabs exceed width; no wrapping or stacking
+- Minimap: hides automatically when editor width is narrow
+- Window narrow state: sidebar collapses first, then bottom panel, editor always fills remaining
 
 ## 9. Agent Prompt Guide
 
 ### Quick Color Reference
-- Primary CTA: Vercel Black (`#171717`)
-- Background: Pure White (`#ffffff`)
-- Heading text: Vercel Black (`#171717`)
-- Body text: Gray 600 (`#4d4d4d`)
-- Border (shadow): `rgba(0, 0, 0, 0.08) 0px 0px 0px 1px`
-- Link: Link Blue (`#0072f5`)
-- Focus ring: Focus Blue (`hsla(212, 100%, 48%, 1)`)
+- Editor: `#282c33` (canvas), `#2f343e` (panels), `#3b414d` (app frame)
+- Text: `#dce0e5` (primary), `#a9afbc` (muted), `#878a98` (placeholder)
+- Code: `#acb2be` (editor foreground), `#4e5a5f` (line numbers), `#d0d4da` (active line number)
+- Border: `#464b57` (standard), `#363c46` (variant), `#47679e` (focused)
+- Accent: `#74ade8` (blue), `#3b9eff` (hover), `#293b5b` (selected border)
+- Semantic: `#d07277` (error), `#dec184` (warning), `#a1c181` (success), `#74ade8` (info)
+- VCS: `#27a657` (added), `#d3b020` (modified), `#e06c76` (deleted)
+- Players: `#74ade8`, `#be5046`, `#bf956a`, `#b477cf`, `#6eb4bf`, `#d07277`, `#dec184`, `#a1c181`
 
 ### Example Component Prompts
-- "Create a hero section on white background. Headline at 48px Geist weight 600, line-height 1.00, letter-spacing -2.4px, color #171717. Subtitle at 20px Geist weight 400, line-height 1.80, color #4d4d4d. Dark CTA button (#171717, 6px radius, 8px 16px padding) and ghost button (white, shadow-border rgba(0,0,0,0.08) 0px 0px 0px 1px, 6px radius)."
-- "Design a card: white background, no CSS border. Use shadow stack: rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.04) 0px 2px 2px, #fafafa 0px 0px 0px 1px. Radius 8px. Title at 24px Geist weight 600, letter-spacing -0.96px. Body at 16px weight 400, #4d4d4d."
-- "Build a pill badge: #ebf5ff background, #0068d6 text, 9999px radius, 0px 10px padding, 12px Geist weight 500."
-- "Create navigation: white sticky header. Geist 14px weight 500 for links, #171717 text. Dark pill CTA 'Start Deploying' right-aligned. Shadow-border on bottom: rgba(0,0,0,0.08) 0px 0px 0px 1px."
-- "Design a workflow section showing three steps: Develop (text color #0a72ef), Preview (#de1d8d), Ship (#ff5b4f). Each step: 14px Geist Mono uppercase label + 24px Geist weight 600 title + 16px weight 400 description in #4d4d4d."
+- "Create a file list panel on `#2f343e` background, 1px solid `#464b57` right border. Each row 28px tall with 8px horizontal padding. Text `#dce0e5` 13px weight 400. Selected row: `#454a56` background. Hover row: `#363c46` background."
+- "Design a tab bar: `#2f343e` background. Inactive tabs `#a9afbc` text on `#2f343e`. Active tab `#282c33` background (merges with editor), `#dce0e5` text. No bottom highlight — background match is the active indicator."
+- "Build a context menu: `#2f343e` background, 1px solid `#464b57` border, 8px radius. Items 24px height, `#dce0e5` 13px text, hover `#363c46`. Separator 1px solid `#464b57`. Shortcuts `#878a98` right-aligned. No shadow."
+- "Create an input field: `#2e343e` background, 1px solid `#464b57` border, 6px radius, 4px 8px padding. Placeholder `#878a98` 13px. Focus: border changes to `#47679e`."
+- "Build a ghost button: `transparent` background, `#dce0e5` 13px weight 500 text, 6px radius, 4px 8px padding. Hover: `#363c46` background. Active: `#454a56`. No border in default state."
 
 ### Iteration Guide
-1. Always use shadow-as-border instead of CSS border — `0px 0px 0px 1px rgba(0,0,0,0.08)` is the foundation
-2. Letter-spacing scales with font size: -2.4px at 48px, -1.28px at 32px, -0.96px at 24px, normal at 14px
-3. Three weights only: 400 (read), 500 (interact), 600 (announce)
-4. Color is functional, never decorative — workflow colors (Red/Pink/Blue) mark pipeline stages only
-5. The inner `#fafafa` ring in card shadows is what gives Vercel cards their subtle inner glow
-6. Geist Mono uppercase for technical labels, Geist Sans for everything else
+1. Start with `#282c33` — the editor canvas. Everything is built around it.
+2. Add `#2f343e` panels and sidebars with `#464b57` borders for structure
+3. Wrap it all in `#3b414d` app frame (title bar + status bar)
+4. Ghost buttons as default — transparent bg that appears on hover as `#363c46`
+5. Text hierarchy: `#dce0e5` > `#a9afbc` > `#878a98` — three levels, no more
+6. Reserve `#74ade8` / `#47679e` blue for focus rings and accent only
+7. 13px UI text, 6px radius, 4px base unit — density over comfort, always

@@ -44,6 +44,13 @@ src/
 - Geist Sans with negative letter-spacing at display sizes.
 - Keep the palette achromatic — grays from `#171717` to `#ffffff`.
 
+## UI Component Rules
+
+- **Prioritize shadcn/ui components** — use `Button`, `Separator`, `Skeleton`, `Badge`, `Tooltip`, `AlertDialog`, `ScrollArea`, `Tabs` etc. from `@/components/ui/` before writing raw HTML elements.
+- Never use raw `<button>` — always use `<Button variant="..." size="...">`.
+- Use `<Separator />` instead of `<div className="border-t ...">` for visual dividers.
+- Use `<Skeleton />` instead of custom loading placeholders.
+
 ## Key Patterns
 
 - Dev server: launch `cargo tauri dev` once, don't restart — Vite HMR handles frontend changes, Tauri watches Rust changes.
