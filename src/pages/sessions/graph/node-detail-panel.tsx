@@ -1,4 +1,3 @@
-import { useTranslation } from "react-i18next";
 import type { MessageRecord } from "@/lib/api";
 import { toolColor } from "./build-tree";
 
@@ -13,7 +12,6 @@ export default function NodeDetailPanel({
   messages,
   onClose,
 }: NodeDetailPanelProps) {
-  const { t } = useTranslation();
   const msg = messages.find((m) => m.id === nodeId);
   if (!msg) return null;
 

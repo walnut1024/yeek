@@ -1,11 +1,10 @@
-import { useState, useMemo, useCallback, useRef } from "react";
-import { ReactFlow, Controls, Background, MarkerType, Panel } from "@xyflow/react";
-import type { Node } from "@xyflow/react";
+import { useState, useMemo, useCallback } from "react";
+import { ReactFlow, Controls, Background, MarkerType, Panel, useReactFlow } from "@xyflow/react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { getSessionTranscript } from "@/lib/api";
 import { Skeleton } from "@/components/ui/skeleton";
-import { buildTree, type TreeNodeData } from "./graph/build-tree";
+import { buildTree } from "./graph/build-tree";
 import { nodeTypes } from "./graph/nodes";
 import NodeDetailPanel from "./graph/node-detail-panel";
 
@@ -13,7 +12,7 @@ import "@xyflow/react/dist/style.css";
 
 export default function SessionGraph({ sessionId }: { sessionId: string }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const flowRef = useRef<{ fitView: (opts?: { padding?: number }) => void }>(null);
+  const { fitView } = useReactFlow();
   const { t } = useTranslation();
 
   const { data: transcript, isLoading, error } = useQuery({
@@ -26,13 +25,13 @@ export default function SessionGraph({ sessionId }: { sessionId: string }) {
     return buildTree(transcript.messages);
   }, [transcript]);
 
-  const onNodeClick = useCallback((_: React.MouseEvent, node: Node<TreeNodeData>) => {
+  const onNodeClick = useCallback((_: React.MouseEvent, node: { id: string }) => {
     setSelectedId(node.id);
   }, []);
 
   const handleFitView = useCallback(() => {
-    flowRef.current?.fitView({ padding: 0.15 });
-  }, []);
+    fitView({ padding: 0.15 });
+  }, [fitView]);
 
   if (isLoading) {
     return (
@@ -62,7 +61,6 @@ export default function SessionGraph({ sessionId }: { sessionId: string }) {
   return (
     <div style={{ width: "100%", height: "100%", position: "relative" }}>
       <ReactFlow
-        ref={flowRef}
         nodes={nodes}
         edges={edges}
         onNodeClick={onNodeClick}

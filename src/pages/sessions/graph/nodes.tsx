@@ -1,9 +1,10 @@
 import type { NodeProps } from "@xyflow/react";
-import { toolColor, type TreeNodeData } from "./build-tree";
+import { toolColor } from "./build-tree";
 
 const W = 200;
 
-function UserNode({ data }: NodeProps<Node<TreeNodeData>>) {
+function UserNode({ data }: NodeProps) {
+  const d = data as { label: string };
   return (
     <div
       style={{
@@ -33,13 +34,14 @@ function UserNode({ data }: NodeProps<Node<TreeNodeData>>) {
           lineHeight: 1.35,
         }}
       >
-        {data.label}
+        {d.label}
       </div>
     </div>
   );
 }
 
-function AssistantNode({ data }: NodeProps<Node<TreeNodeData>>) {
+function AssistantNode({ data }: NodeProps) {
+  const d = data as { label: string; model?: string };
   return (
     <div
       style={{
@@ -69,7 +71,7 @@ function AssistantNode({ data }: NodeProps<Node<TreeNodeData>>) {
         >
           Assistant
         </span>
-        {data.model && (
+        {d.model && (
           <span
             style={{
               fontSize: 8,
@@ -77,7 +79,7 @@ function AssistantNode({ data }: NodeProps<Node<TreeNodeData>>) {
               fontFamily: "var(--font-data, monospace)",
             }}
           >
-            {data.model}
+            {d.model}
           </span>
         )}
       </div>
@@ -88,14 +90,15 @@ function AssistantNode({ data }: NodeProps<Node<TreeNodeData>>) {
           lineHeight: 1.35,
         }}
       >
-        {data.label}
+        {d.label}
       </div>
     </div>
   );
 }
 
-function ToolUseNode({ data }: NodeProps<Node<TreeNodeData>>) {
-  const c = toolColor(data.toolName || "");
+function ToolUseNode({ data }: NodeProps) {
+  const d = data as { label: string; toolName?: string };
+  const c = toolColor(d.toolName || "");
   return (
     <div
       style={{
@@ -115,7 +118,7 @@ function ToolUseNode({ data }: NodeProps<Node<TreeNodeData>>) {
             fontFamily: "var(--font-data, monospace)",
           }}
         >
-          {data.toolName}
+          {d.toolName}
         </span>
       </div>
       <div
@@ -126,13 +129,14 @@ function ToolUseNode({ data }: NodeProps<Node<TreeNodeData>>) {
           fontFamily: "var(--font-data, monospace)",
         }}
       >
-        {data.label}
+        {d.label}
       </div>
     </div>
   );
 }
 
-function ToolResultNode({ data }: NodeProps<Node<TreeNodeData>>) {
+function ToolResultNode({ data }: NodeProps) {
+  const d = data as { label: string };
   return (
     <div
       style={{
@@ -159,13 +163,14 @@ function ToolResultNode({ data }: NodeProps<Node<TreeNodeData>>) {
           lineHeight: 1.3,
         }}
       >
-        {data.label}
+        {d.label}
       </div>
     </div>
   );
 }
 
-function MetaNode({ data }: NodeProps<Node<TreeNodeData>>) {
+function MetaNode({ data }: NodeProps) {
+  const d = data as { label: string };
   return (
     <div
       style={{
@@ -183,7 +188,7 @@ function MetaNode({ data }: NodeProps<Node<TreeNodeData>>) {
           color: "var(--muted-foreground, #a9afbc)",
         }}
       >
-        {data.label}
+        {d.label}
       </span>
     </div>
   );

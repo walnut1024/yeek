@@ -1,4 +1,4 @@
-import type { Node, Edge } from "@xyflow/react";
+import type { Node as RFNode, Edge } from "@xyflow/react";
 import dagre from "@dagrejs/dagre";
 import type { MessageRecord } from "@/lib/api";
 
@@ -46,6 +46,8 @@ export interface TreeNodeData {
   [key: string]: unknown;
 }
 
+type GraphNode = RFNode<TreeNodeData>;
+
 // ─── Subtypes to skip (verbose system attachments) ──────────────────
 
 const SKIP_SUBTYPES = new Set([
@@ -59,9 +61,9 @@ const SKIP_SUBTYPES = new Set([
 // ─── Dagre layout ───────────────────────────────────────────────────
 
 function computeLayout(
-  nodes: Array<Node<TreeNodeData>>,
+  nodes: GraphNode[],
   edges: Edge[]
-): Array<Node<TreeNodeData>> {
+): GraphNode[] {
   const g = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
   g.setGraph({ rankdir: "TB", nodesep: 50, ranksep: 70 });
   for (const n of nodes)
@@ -85,13 +87,13 @@ function computeLayout(
 const W = 200;
 
 export interface BuildTreeResult {
-  nodes: Node<TreeNodeData>[];
+  nodes: GraphNode[];
   edges: Edge[];
   stats: { total: number; users: number; assistants: number; tools: number };
 }
 
 export function buildTree(messages: MessageRecord[]): BuildTreeResult {
-  const nodes: Array<Node<TreeNodeData>> = [];
+  const nodes: GraphNode[] = [];
   const edges: Edge[] = [];
   const msgMap = new Map(messages.map((m) => [m.id, m]));
 
