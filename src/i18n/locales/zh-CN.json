@@ -144,5 +144,14 @@
   "format.noProject": "无项目",
   "format.now": "刚刚",
   "format.notAvailable": "无",
-  "format.unknown": "未知"
+  "format.unknown": "未知",
+
+  "graph.viewGraph": "图谱",
+  "graph.viewFeed": "对话",
+  "graph.fitView": "适配视图",
+  "graph.noData": "没有可可视化的消息",
+  "graph.statsNodes": "{{count}} 个节点",
+  "graph.statsUsers": "{{count}} 个用户",
+  "graph.statsAssistants": "{{count}} 个助手",
+  "graph.statsTools": "{{count}} 个工具"
 }

@@ -153,5 +153,14 @@
   "format.noProject": "No project",
   "format.now": "now",
   "format.notAvailable": "N/A",
-  "format.unknown": "unknown"
+  "format.unknown": "unknown",
+
+  "graph.viewGraph": "Graph",
+  "graph.viewFeed": "Feed",
+  "graph.fitView": "Fit View",
+  "graph.noData": "No messages to visualize",
+  "graph.statsNodes": "{{count}} nodes",
+  "graph.statsUsers": "{{count}} user",
+  "graph.statsAssistants": "{{count}} assistant",
+  "graph.statsTools": "{{count}} tools"
 }
