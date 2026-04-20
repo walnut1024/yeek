@@ -1,15 +1,11 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import {
-  getSessionPreview,
-  softDeleteSessions,
-} from "@/lib/api";
+import { getSessionPreview, softDeleteSessions } from "@/lib/api";
 import { invoke } from "@tauri-apps/api/core";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,11 +22,18 @@ import SourcesTab from "./sources-tab";
 import SessionGraph from "./session-graph";
 import { useLocalStorage } from "@/lib/hooks";
 
-export default function SessionDetailPane({ sessionId }: { sessionId: string }) {
+export default function SessionDetailPane({
+  sessionId,
+}: {
+  sessionId: string;
+}) {
   const queryClient = useQueryClient();
   const { t } = useTranslation();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [viewMode, setViewMode] = useLocalStorage<"feed" | "graph">("graph-view", "feed");
+  const [viewMode, setViewMode] = useLocalStorage<"feed" | "graph">(
+    "graph-view",
+    "feed",
+  );
 
   const { data: preview, isLoading: previewLoading } = useQuery({
     queryKey: ["session-preview", sessionId],
@@ -65,30 +68,36 @@ export default function SessionDetailPane({ sessionId }: { sessionId: string }) 
             <div className="min-w-0 flex-1">
               {/* Meta pills */}
               <div className="flex flex-wrap items-center gap-1">
-                <MetaPill label={t("detail.model")} value={record.model || t("format.notAvailable")} />
-                <MetaPill label={t("detail.branch")} value={record.git_branch || t("format.notAvailable")} />
+                <MetaPill
+                  label={t("detail.model")}
+                  value={record.model || t("format.notAvailable")}
+                />
+                <MetaPill
+                  label={t("detail.branch")}
+                  value={record.git_branch || t("format.notAvailable")}
+                />
                 <MetaPill label={t("detail.status")} value={record.status} />
-                <MetaPill label={t("detail.messages")} value={String(record.message_count)} />
-                <MetaPill label={t("detail.sources")} value={String(preview.source_count)} />
-                <MetaPill label={t("detail.started")} value={formatTime(record.started_at)} />
-                <MetaPill label={t("detail.updated")} value={formatRelativeTime(record.updated_at)} />
+                <MetaPill
+                  label={t("detail.messages")}
+                  value={String(record.message_count)}
+                />
+                <MetaPill
+                  label={t("detail.sources")}
+                  value={String(preview.source_count)}
+                />
+                <MetaPill
+                  label={t("detail.started")}
+                  value={formatTime(record.started_at)}
+                />
+                <MetaPill
+                  label={t("detail.updated")}
+                  value={formatRelativeTime(record.updated_at)}
+                />
               </div>
-              <p className="mt-2 zed-kicker">{t("detail.sourceLabel", { path: record.project_path })}</p>
-              {/* Session ID */}
-              <div className="mt-2 flex items-center gap-2 rounded-md bg-accent px-2.5 py-1.5">
-                <code className="min-w-0 flex-1 truncate font-mono text-[12px] text-muted-foreground">
-                  {record.agent} --resume {record.id}
-                </code>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 shrink-0 rounded-md px-1.5 text-[12px] text-muted-foreground hover:text-foreground"
-                  onClick={() => navigator.clipboard.writeText(record.id)}
-                >
-                  {t("detail.copy")}
-                </Button>
+              <div className="mt-2 flex items-center gap-3 text-[12px] font-medium tracking-[0.14em] text-muted-foreground">
+                <span>{t("detail.sourceLabel", { path: record.id })}</span>
+                <span>{t("detail.sourcePath", { path: record.project_path })}</span>
               </div>
-
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
               <Button
@@ -118,12 +127,14 @@ export default function SessionDetailPane({ sessionId }: { sessionId: string }) 
               </Button>
             </div>
           </div>
-          <Separator className="my-3" />
-          <p className="mb-2 zed-kicker">{t("detail.tabSources")}</p>
+
           <SourcesTab sessionId={sessionId} />
         </section>
 
-        <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialog
+          open={showDeleteConfirm}
+          onOpenChange={setShowDeleteConfirm}
+        >
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>{t("detail.deleteTitle")}</AlertDialogTitle>
@@ -148,20 +159,20 @@ export default function SessionDetailPane({ sessionId }: { sessionId: string }) 
           {/* Graph/Feed toggle */}
           <div className="flex items-center gap-1 border-b border-border px-2 py-1">
             <button
-              className={`pill-tab ${viewMode === "graph" ? "pill-tab-active" : "pill-tab-idle"}`}
-              onClick={() => setViewMode("graph")}
-            >
-              {t("graph.viewGraph")}
-            </button>
-            <button
               className={`pill-tab ${viewMode === "feed" ? "pill-tab-active" : "pill-tab-idle"}`}
               onClick={() => setViewMode("feed")}
             >
               {t("graph.viewFeed")}
             </button>
+            <button
+              className={`pill-tab ${viewMode === "graph" ? "pill-tab-active" : "pill-tab-idle"}`}
+              onClick={() => setViewMode("graph")}
+            >
+              {t("graph.viewGraph")}
+            </button>
           </div>
           {/* Conditional content */}
-          <div className={viewMode === "graph" ? "h-[600px]" : ""}>
+          <div className={viewMode === "graph" ? "h-[70vh]" : ""}>
             {viewMode === "graph" ? (
               <SessionGraph sessionId={sessionId} />
             ) : (

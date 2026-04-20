@@ -1,8 +1,11 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { getSessionTranscript } from "@/lib/api";
+import { TRANSCRIPT_INITIAL_COUNT, TRANSCRIPT_LOAD_MORE } from "@/lib/constants";
 import type { MessageRecord } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { ChevronUpIcon, ChevronDownIcon } from "@/components/icons";
 import { Skeleton } from "@/components/ui/skeleton";
 import UserBubble from "./user-bubble";
 import AIBubble from "./ai-bubble";
@@ -23,8 +26,11 @@ export default function TranscriptView({
 }: {
   sessionId: string;
 }) {
-  const [visibleCount, setVisibleCount] = useState(100);
+  const [visibleCount, setVisibleCount] = useState(TRANSCRIPT_INITIAL_COUNT);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const topAnchorRef = useRef<HTMLDivElement>(null);
+  const bottomAnchorRef = useRef<HTMLDivElement>(null);
+  const pendingJumpBottomRef = useRef(false);
   const { t } = useTranslation();
 
   const { data: transcript, error, isLoading } = useQuery({
@@ -32,13 +38,27 @@ export default function TranscriptView({
     queryFn: () => getSessionTranscript(sessionId),
   });
 
+  // Compute groups from transcript (memoized, always available)
+  const { groups, mainCount } = useMemo(() => {
+    if (!transcript || transcript.main_path.length === 0)
+      return { groups: [], mainCount: 0 };
+    const msgMap = new Map<string, MessageRecord>();
+    for (const m of transcript.messages) {
+      msgMap.set(m.id, m);
+    }
+    const mainMessages: MessageRecord[] = transcript.main_path
+      .map((id) => msgMap.get(id))
+      .filter((m): m is MessageRecord => m != null);
+    return { groups: groupMessages(mainMessages), mainCount: mainMessages.length };
+  }, [transcript]);
+
   // Infinite scroll
   useEffect(() => {
     if (!sentinelRef.current) return;
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0]?.isIntersecting) {
-          setVisibleCount((c) => c + 80);
+          setVisibleCount((c) => c + TRANSCRIPT_LOAD_MORE);
         }
       },
       { rootMargin: "200px" }
@@ -47,6 +67,20 @@ export default function TranscriptView({
     return () => observer.disconnect();
   }, [transcript]);
 
+  // Pending jump to bottom after loading more messages
+  useEffect(() => {
+    if (!pendingJumpBottomRef.current) return;
+    if (visibleCount < groups.length) return;
+    pendingJumpBottomRef.current = false;
+    requestAnimationFrame(() => {
+      bottomAnchorRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "end",
+      });
+    });
+  }, [visibleCount, groups.length]);
+
+  // --- Early returns (after all hooks) ---
   if (isLoading) {
     return (
       <div className="px-4 space-y-3 py-3">
@@ -65,34 +99,36 @@ export default function TranscriptView({
     );
   }
 
-  if (!transcript || transcript.main_path.length === 0) {
+  if (groups.length === 0) {
     return (
       <p className="px-4 py-3 text-[14px] text-muted-foreground">{t("transcript.empty")}</p>
     );
   }
 
-  // Build id→message lookup from all messages
-  const msgMap = new Map<string, MessageRecord>();
-  for (const m of transcript.messages) {
-    msgMap.set(m.id, m);
-  }
-
-  // Extract main path messages (in order)
-  const mainMessages: MessageRecord[] = transcript.main_path
-    .map((id) => msgMap.get(id))
-    .filter((m): m is MessageRecord => m != null);
-
-  // Group into renderable segments
-  const groups = groupMessages(mainMessages);
   const visibleGroups = groups.slice(0, visibleCount);
   const hasMore = groups.length > visibleCount;
+  const branchCount = transcript?.branches.length ?? 0;
+
+  const scrollToTop = () => {
+    topAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const scrollToBottom = () => {
+    if (visibleCount < groups.length) {
+      pendingJumpBottomRef.current = true;
+      setVisibleCount(groups.length);
+      return;
+    }
+    bottomAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  };
 
   return (
-    <div className="px-4">
+    <div className="relative px-4">
+      <div ref={topAnchorRef} />
       <div className="mb-3 text-[14px] text-muted-foreground">
-        {t("transcript.messageCount", { count: mainMessages.length })}
-        {transcript.branches.length > 0 &&
-          ` · ${t("transcript.branchCount", { count: transcript.branches.length })}`}
+        {t("transcript.messageCount", { count: mainCount })}
+        {branchCount > 0 &&
+          ` · ${t("transcript.branchCount", { count: branchCount })}`}
       </div>
 
       <div className="space-y-1">
@@ -113,6 +149,27 @@ export default function TranscriptView({
       </div>
 
       {hasMore && <div ref={sentinelRef} className="h-1" />}
+      <div ref={bottomAnchorRef} />
+      <div className="fixed bottom-6 right-6 z-30 flex flex-col gap-1.5 rounded-md border border-border bg-card/95 p-1.5 backdrop-blur-sm">
+        <Button
+          variant="outline"
+          size="icon-sm"
+          onClick={scrollToTop}
+          aria-label="Scroll to top"
+          title="Scroll to top"
+        >
+          <ChevronUpIcon />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon-sm"
+          onClick={scrollToBottom}
+          aria-label="Scroll to bottom"
+          title="Scroll to bottom"
+        >
+          <ChevronDownIcon />
+        </Button>
+      </div>
     </div>
   );
 }

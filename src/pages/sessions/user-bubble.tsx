@@ -25,9 +25,6 @@ const UserBubble = React.memo(function UserBubble({
             })}
           </span>
         )}
-        <span className="font-mono text-[11px] text-muted-foreground/50">
-          uuid:{msg.id}
-        </span>
       </div>
       <div className="max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
         <p className="whitespace-pre-wrap text-[14px] leading-[1.55] text-foreground">

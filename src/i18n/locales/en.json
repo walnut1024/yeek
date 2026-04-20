@@ -22,8 +22,9 @@
   "sessions.emptySearchHint": "Try broader keywords to widen the result set.",
   "sessions.emptyBrowse": "No sessions yet",
   "sessions.emptyBrowseHint": "Once indexing runs, conversations will appear here grouped by project.",
-  "sessions.selectAll_one": "Select all <strong>{{count}}</strong> session",
-  "sessions.selectAll_other": "Select all <strong>{{count}}</strong> sessions",
+  "sessions.selectAllPrefix": "Select all ",
+  "sessions.selectAllSuffix_one": " session",
+  "sessions.selectAllSuffix_other": " sessions",
   "sessions.searchResults": "Search Results",
   "sessions.noProject": "No project",
   "sessions.selectPrompt": "Ready to inspect",
@@ -38,8 +39,9 @@
   "shortcuts.closeSelection": "Close selection",
   "shortcuts.toggleHelp": "Toggle help",
 
-  "manage.selected_one": "<strong>{{count}}</strong> selected",
-  "manage.selected_other": "<strong>{{count}}</strong> selected",
+  "manage.selectedPrefix": "",
+  "manage.selectedSuffix_one": " selected",
+  "manage.selectedSuffix_other": " selected",
   "manage.cancel": "Cancel",
   "manage.delete": "Delete",
   "manage.deleteConfirm_one": "Delete {{count}} session?",
@@ -67,7 +69,8 @@
   "detail.copy": "Copy",
   "detail.resume": "Resume",
   "detail.delete": "Delete",
-  "detail.sourceLabel": "Source: {{path}}",
+  "detail.sourceLabel": "Session ID: {{path}}",
+  "detail.sourcePath": "Work Dir: {{path}}",
   "detail.deleteTitle": "Soft Delete Session",
   "detail.deleteDescription": "This will mark the session as deleted while preserving the source files on disk.",
   "detail.deleteCancel": "Cancel",
@@ -76,6 +79,7 @@
   "detail.tabSources": "Sources",
 
   "sources.empty": "No source files recorded",
+  "sources.error": "Failed to load sources",
   "sources.destructiveDelete": "Destructive Delete",
   "sources.deleteTitle": "Confirm Destructive Delete",
   "sources.analyzing": "Analyzing sources...",
@@ -162,5 +166,15 @@
   "graph.statsNodes": "{{count}} nodes",
   "graph.statsUsers": "{{count}} user",
   "graph.statsAssistants": "{{count}} assistant",
-  "graph.statsTools": "{{count}} tools"
+  "graph.statsTools": "{{count}} tools",
+  "graph.truncated": "Showing first {{max}} of {{total}} messages",
+  "graph.nodeUser": "User",
+  "graph.nodeAssistant": "Assistant",
+  "graph.nodeResult": "result",
+  "graph.nodeTool": "Tool: {{name}}",
+  "graph.nodeUnknown": "unknown",
+  "graph.nodeEmpty": "(empty)",
+
+  "contextMenu.delete": "Delete",
+  "contextMenu.deleteProject": "Delete All in Project"
 }

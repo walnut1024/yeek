@@ -32,9 +32,6 @@ const AIBubble = React.memo(function AIBubble({
             })}
           </span>
         )}
-        <span className="font-mono text-[11px] text-muted-foreground/50">
-          uuid:{msg.id}
-        </span>
       </div>
       <div className="max-h-[500px] overflow-y-auto custom-scrollbar pr-1 text-[14px] leading-[1.55] text-foreground">
         <Markdown

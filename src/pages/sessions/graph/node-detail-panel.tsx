@@ -1,4 +1,6 @@
 import type { MessageRecord } from "@/lib/api";
+import { useTranslation } from "react-i18next";
+import { Button } from "@/components/ui/button";
 import { toolColor } from "./build-tree";
 
 interface NodeDetailPanelProps {
@@ -15,14 +17,16 @@ export default function NodeDetailPanel({
   const msg = messages.find((m) => m.id === nodeId);
   if (!msg) return null;
 
+  const { t } = useTranslation();
+
   const roleLabel =
     msg.role === "human"
-      ? "User"
+      ? t("graph.nodeUser")
       : msg.kind === "tool_use"
-        ? `Tool: ${msg.tool_name || "unknown"}`
+        ? t("graph.nodeTool", { name: msg.tool_name || t("graph.nodeUnknown") })
         : msg.kind === "tool_result"
-          ? "Tool Result"
-          : "Assistant";
+          ? t("graph.nodeResult")
+          : t("graph.nodeAssistant");
 
   return (
     <div
@@ -58,19 +62,14 @@ export default function NodeDetailPanel({
         >
           {roleLabel}
         </span>
-        <button
+        <Button
+          variant="ghost"
+          size="icon-sm"
           onClick={onClose}
-          style={{
-            background: "none",
-            border: "none",
-            color: "var(--muted-foreground, #a9afbc)",
-            cursor: "pointer",
-            fontSize: 18,
-            lineHeight: 1,
-          }}
+          className="text-muted-foreground"
         >
           ×
-        </button>
+        </Button>
       </div>
       {msg.model && (
         <div
@@ -104,7 +103,7 @@ export default function NodeDetailPanel({
           wordBreak: "break-word",
         }}
       >
-        {msg.content_preview || "(empty)"}
+        {msg.content_preview || t("graph.nodeEmpty")}
       </div>
       {msg.tool_name && (
         <div

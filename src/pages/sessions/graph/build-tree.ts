@@ -29,7 +29,7 @@ export function toolColor(name: string): string {
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
-function truncate(text: string, len = 48): string {
+export function truncate(text: string, len = 48): string {
   if (!text) return "";
   const s = text.replace(/\n/g, " ").trim();
   return s.length > len ? s.slice(0, len) + "\u2026" : s;
@@ -217,7 +217,6 @@ export function buildTree(messages: MessageRecord[]): BuildTreeResult {
         id: `e-${effectiveParent}-${msg.id}`,
         source: effectiveParent,
         target: msg.id,
-        style: { stroke: "#555", strokeWidth: 1.2 },
       });
     }
   }

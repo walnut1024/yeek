@@ -1,97 +1,45 @@
 import type { NodeProps } from "@xyflow/react";
+import { Handle, Position } from "@xyflow/react";
+import { useTranslation } from "react-i18next";
 import { toolColor } from "./build-tree";
-
-const W = 200;
 
 function UserNode({ data }: NodeProps) {
   const d = data as { label: string };
+  const { t } = useTranslation();
   return (
-    <div
-      style={{
-        width: W,
-        padding: "7px 10px",
-        background: "var(--card, #2f343e)",
-        borderRadius: 6,
-        border: "1px solid var(--ring, #47679e)",
-      }}
-    >
-      <div
-        style={{
-          fontSize: 9,
-          fontWeight: 600,
-          color: "var(--primary, #74ade8)",
-          marginBottom: 2,
-          textTransform: "uppercase",
-          letterSpacing: 0.8,
-        }}
-      >
-        User
+    <div className="graph-node" style={{ padding: "7px 10px", borderColor: "var(--ring, #47679e)", borderRadius: 6 }}>
+      <Handle type="target" position={Position.Top} />
+      <div className="graph-node-tag mb-0.5" style={{ color: "var(--primary, #74ade8)" }}>
+        {t("graph.nodeUser")}
       </div>
-      <div
-        style={{
-          fontSize: 11,
-          color: "var(--foreground, #dce0e5)",
-          lineHeight: 1.35,
-        }}
-      >
+      <div className="graph-node-label">
         {d.label}
       </div>
+      <Handle type="source" position={Position.Bottom} />
     </div>
   );
 }
 
 function AssistantNode({ data }: NodeProps) {
   const d = data as { label: string; model?: string };
+  const { t } = useTranslation();
   return (
-    <div
-      style={{
-        width: W,
-        padding: "7px 10px",
-        background: "var(--card, #2f343e)",
-        borderRadius: 6,
-        border: "1px solid #5a9e7a",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 2,
-        }}
-      >
-        <span
-          style={{
-            fontSize: 9,
-            fontWeight: 600,
-            color: "#81b29a",
-            textTransform: "uppercase",
-            letterSpacing: 0.8,
-          }}
-        >
-          Assistant
+    <div className="graph-node" style={{ padding: "7px 10px", border: "1px solid #5a9e7a", borderRadius: 6 }}>
+      <Handle type="target" position={Position.Top} />
+      <div className="flex items-center justify-between mb-0.5">
+        <span className="graph-node-tag" style={{ color: "#81b29a" }}>
+          {t("graph.nodeAssistant")}
         </span>
         {d.model && (
-          <span
-            style={{
-              fontSize: 8,
-              color: "var(--muted-foreground, #a9afbc)",
-              fontFamily: "var(--font-data, monospace)",
-            }}
-          >
+          <span className="graph-node-hint text-[8px]">
             {d.model}
           </span>
         )}
       </div>
-      <div
-        style={{
-          fontSize: 11,
-          color: "var(--foreground, #dce0e5)",
-          lineHeight: 1.35,
-        }}
-      >
+      <div className="graph-node-label">
         {d.label}
       </div>
+      <Handle type="source" position={Position.Bottom} />
     </div>
   );
 }
@@ -100,71 +48,34 @@ function ToolUseNode({ data }: NodeProps) {
   const d = data as { label: string; toolName?: string };
   const c = toolColor(d.toolName || "");
   return (
-    <div
-      style={{
-        width: W,
-        padding: "5px 9px",
-        background: "var(--card, #2f343e)",
-        borderRadius: 4,
-        border: `1px solid ${c}50`,
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-        <span
-          style={{
-            fontSize: 10,
-            fontWeight: 600,
-            color: c,
-            fontFamily: "var(--font-data, monospace)",
-          }}
-        >
+    <div className="graph-node" style={{ padding: "5px 9px", borderRadius: 4, border: `1px solid ${c}50` }}>
+      <Handle type="target" position={Position.Top} />
+      <div className="flex items-center gap-1.5">
+        <span className="graph-node-detail font-semibold" style={{ color: c }}>
           {d.toolName}
         </span>
       </div>
-      <div
-        style={{
-          fontSize: 10,
-          color: "var(--muted-foreground, #a9afbc)",
-          marginTop: 1,
-          fontFamily: "var(--font-data, monospace)",
-        }}
-      >
+      <div className="graph-node-detail mt-px">
         {d.label}
       </div>
+      <Handle type="source" position={Position.Bottom} />
     </div>
   );
 }
 
 function ToolResultNode({ data }: NodeProps) {
   const d = data as { label: string };
+  const { t } = useTranslation();
   return (
-    <div
-      style={{
-        width: W,
-        padding: "4px 9px",
-        background: "var(--editor, #282c33)",
-        borderRadius: 4,
-        border: "1px solid var(--border, #464b57)",
-      }}
-    >
-      <div
-        style={{
-          fontSize: 9,
-          color: "var(--muted-foreground, #a9afbc)",
-          fontFamily: "var(--font-data, monospace)",
-        }}
-      >
-        result
+    <div className="graph-node" style={{ padding: "4px 9px", borderRadius: 4, background: "var(--editor, #282c33)" }}>
+      <Handle type="target" position={Position.Top} />
+      <div className="graph-node-hint">
+        {t("graph.nodeResult")}
       </div>
-      <div
-        style={{
-          fontSize: 10,
-          color: "var(--muted-foreground, #a9afbc)",
-          lineHeight: 1.3,
-        }}
-      >
+      <div className="graph-node-detail leading-[1.3]">
         {d.label}
       </div>
+      <Handle type="source" position={Position.Bottom} />
     </div>
   );
 }
@@ -172,24 +83,12 @@ function ToolResultNode({ data }: NodeProps) {
 function MetaNode({ data }: NodeProps) {
   const d = data as { label: string };
   return (
-    <div
-      style={{
-        maxWidth: W,
-        padding: "4px 8px",
-        background: "transparent",
-        borderRadius: 4,
-        border: "1px dashed var(--border, #464b57)",
-        fontStyle: "italic",
-      }}
-    >
-      <span
-        style={{
-          fontSize: 10,
-          color: "var(--muted-foreground, #a9afbc)",
-        }}
-      >
+    <div className="graph-node" style={{ padding: "4px 8px", borderRadius: 4, background: "transparent", border: "1px dashed var(--border, #464b57)", fontStyle: "italic" }}>
+      <Handle type="target" position={Position.Top} />
+      <span className="graph-node-detail">
         {d.label}
       </span>
+      <Handle type="source" position={Position.Bottom} />
     </div>
   );
 }

@@ -31,5 +31,6 @@ docs/
 .claude/
 .agents/
 .superpowers/
-CLAUDE.md
-DESIGN.md
+
+reference/
+demo/

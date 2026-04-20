@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
 import type { MessageRecord } from "@/lib/api";
 import SubagentExpansion from "./subagent-expansion";
-import { ToolIcon, getToolIcon, ChevronIcon } from "@/components/icons";
+import { ToolIcon, ChevronIcon } from "@/components/icons";
 
 interface ToolPair {
   call: MessageRecord;
@@ -151,8 +151,6 @@ function ToolItem({
     ? JSON.stringify(toolInputObj, null, 2)
     : call.content_preview.split("\n").slice(1).join("\n").trim();
 
-  const ToolSpecificIcon = getToolIcon(toolName);
-
   return (
     <div className="group/item relative mt-0.5 first:mt-0">
       <button
@@ -161,11 +159,6 @@ function ToolItem({
         className="flex w-full items-center gap-1.5 rounded-md border border-transparent bg-secondary/10 px-1.5 py-0.5 text-left transition-colors hover:border-border/50 hover:bg-accent/30"
       >
         <ChevronIcon expanded={isOpen} className="text-muted-foreground/30" />
-        {ToolSpecificIcon ? (
-          <ToolSpecificIcon className="text-primary/80" />
-        ) : (
-          <ToolIcon className="text-primary/80" />
-        )}
         <span className="font-mono text-[13px] font-medium text-primary/90">
           {toolName}
         </span>
@@ -176,9 +169,6 @@ function ToolItem({
         )}
         <span className="truncate font-mono text-[13px] text-muted-foreground/80">
           {target}
-        </span>
-        <span className="ml-auto shrink-0 font-mono text-[11px] text-muted-foreground/40">
-          uuid:{call.id}
         </span>
       </button>
 

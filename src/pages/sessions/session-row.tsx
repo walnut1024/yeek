@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import type { SessionRecord } from "@/lib/api";
 import { formatRelativeTime } from "@/lib/formatters";
+import { TITLE_TRUNCATE_LEN } from "@/lib/constants";
 
 const SessionRow = React.memo(function SessionRow({
   session,
@@ -11,6 +12,7 @@ const SessionRow = React.memo(function SessionRow({
   manageMode,
   checked,
   onCheck,
+  onContextMenu,
 }: {
   session: SessionRecord;
   isSelected: boolean;
@@ -18,13 +20,25 @@ const SessionRow = React.memo(function SessionRow({
   manageMode?: boolean;
   checked?: boolean;
   onCheck?: () => void;
+  onContextMenu?: (e: React.MouseEvent, sessionId: string) => void;
 }) {
   const title = session.title || session.id.slice(0, 12);
   const { t } = useTranslation();
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onSelect}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onContextMenu?.(e, session.id);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
       aria-label={t("sessionRow.openAria", { title })}
       className={`zed-list-row flex w-full items-start gap-2.5 border px-2.5 py-2 text-left transition-colors [animation:fadeSlideIn_300ms_ease-out] ${
         isSelected
@@ -59,7 +73,7 @@ const SessionRow = React.memo(function SessionRow({
               {session.agent === "claude_code" ? "Claude Code" : session.agent}
             </p>
             <span className="mt-0.5 block truncate text-[14px] leading-[1.3] text-foreground">
-              {title.length > 80 ? `${title.slice(0, 80)}...` : title}
+              {title.length > TITLE_TRUNCATE_LEN ? `${title.slice(0, TITLE_TRUNCATE_LEN)}...` : title}
             </span>
           </div>
           <span className="shrink-0 rounded-sm border border-border bg-secondary px-1.5 py-0.5 font-mono text-[12px] text-muted-foreground">
@@ -84,7 +98,7 @@ const SessionRow = React.memo(function SessionRow({
           </span>
         </div>
       </div>
-    </button>
+    </div>
   );
 });
 

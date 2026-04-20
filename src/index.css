@@ -139,7 +139,7 @@
   }
 
   .pill-tab {
-    @apply rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors;
+    @apply rounded-md px-2.5 py-1.5 text-[14px] font-medium transition-colors;
   }
 
   .pill-tab-active {
@@ -151,7 +151,7 @@
   }
 
   .zed-kicker {
-    @apply text-[11px] font-medium tracking-[0.14em] text-muted-foreground;
+    @apply text-[14px] font-medium tracking-[0.14em] text-muted-foreground;
   }
 
   .zed-section-title {
@@ -159,7 +159,7 @@
   }
 
   .zed-chip {
-    @apply inline-flex items-center gap-1 rounded-sm border border-border bg-secondary px-1.5 py-0.5 text-[12px] text-muted-foreground;
+    @apply inline-flex items-center gap-1 rounded-sm border border-border bg-secondary px-1.5 py-0.5 text-[14px] text-muted-foreground;
   }
 
   .zed-input {
@@ -172,6 +172,24 @@
 
   .zed-empty-state {
     @apply rounded-md border border-border bg-card;
+  }
+
+  /* Graph node styles */
+  .graph-node {
+    @apply rounded-md border bg-card text-foreground;
+    width: 200px;
+  }
+  .graph-node-tag {
+    @apply text-[9px] font-semibold uppercase tracking-[0.8px];
+  }
+  .graph-node-label {
+    @apply text-[11px] leading-[1.35] text-foreground;
+  }
+  .graph-node-detail {
+    @apply font-mono text-[10px] text-muted-foreground;
+  }
+  .graph-node-hint {
+    @apply font-mono text-[9px] text-muted-foreground;
   }
 
   /* Custom scrollbar for content blocks */

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { listen } from "@tauri-apps/api/event";
@@ -7,7 +7,7 @@ import {
   searchSessions,
   getSystemStatus,
   softDeleteSessions,
-  type SessionRecord,
+  softDeleteProject,
 } from "@/lib/api";
 import { useDebouncedValue, useLocalStorage } from "@/lib/hooks";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -16,7 +16,10 @@ import { Button } from "@/components/ui/button";
 import SessionRow from "@/pages/sessions/session-row";
 import SessionDetailPane from "@/pages/sessions/session-detail-pane";
 import SystemPage from "@/pages/system/system-page";
-import { formatProjectLabel } from "@/lib/formatters";
+import { SESSION_PAGE_SIZE } from "@/lib/constants";
+import { useGroupedSessions } from "./use-grouped-sessions";
+import { useSessionSelection } from "./use-session-selection";
+import { useKeyboardNavigation } from "./use-keyboard-navigation";
 
 export function AppShell() {
   const [section, setSection] = useState<"sessions" | "system">("sessions");
@@ -63,11 +66,7 @@ export function AppShell() {
                 type="button"
                 key={s}
                 onClick={() => setSection(s)}
-                className={`rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors ${
-                  section === s
-                    ? "border border-border bg-[var(--editor)] text-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                }`}
+                className={`pill-tab ${section === s ? "pill-tab-active" : "pill-tab-idle"}`}
               >
                 {t(`nav.${s}`)}
               </button>
@@ -113,43 +112,11 @@ function SessionsPage({
   const [collapsedProjects, setCollapsedProjects] = useLocalStorage<
     Record<string, boolean>
   >("collapsed-projects", {});
-  const [manageMode, setManageMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [ctxMenu, setCtxMenu] = useState<
+    { x: number; y: number; sessionId: string; projectPath?: string } | null
+  >(null);
+  const ctxRef = useRef<HTMLDivElement>(null);
   const { t } = useTranslation();
-
-  const deleteBatch = useMutation({
-    mutationFn: (ids: string[]) => softDeleteSessions(ids),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sessions"] });
-      exitManageMode();
-    },
-  });
-
-  const toggleSession = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const toggleProject = (sessions: SessionRecord[]) => {
-    const ids = sessions.map((s) => s.id);
-    const allSelected = ids.every((id) => selectedIds.has(id));
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      ids.forEach((id) => (allSelected ? next.delete(id) : next.add(id)));
-      return next;
-    });
-  };
-
-  const exitManageMode = () => {
-    setManageMode(false);
-    setSelectedIds(new Set());
-    setConfirmDelete(false);
-  };
 
   const isSearching = search.trim().length > 0;
   const sort = sortDesc ? "updated_at" : "updated_at_asc";
@@ -159,7 +126,7 @@ function SessionsPage({
     queryFn: () =>
       browseSessions({
         sort,
-        limit: 200,
+        limit: SESSION_PAGE_SIZE,
       }),
     enabled: !isSearching,
   });
@@ -169,145 +136,57 @@ function SessionsPage({
     queryFn: () =>
       searchSessions({
         query: search,
-        limit: 200,
+        limit: SESSION_PAGE_SIZE,
       }),
     enabled: isSearching,
   });
 
   const { data, isLoading, error } = isSearching ? searchQuery : browseQuery;
-  const sessions = data?.sessions ?? [];
+  const sessions = useMemo(() => data?.sessions ?? [], [data?.sessions]);
 
-  const grouped = useMemo(() => {
-    const map = new Map<string, { label: string; sessions: SessionRecord[] }>();
-    for (const s of sessions) {
-      const key = isSearching ? "Results" : (s.project_path ?? t("sessions.noProject"));
-      if (!map.has(key)) {
-        map.set(key, {
-          label: isSearching ? t("sessions.searchResults") : formatProjectLabel(s.project_path),
-          sessions: [],
-        });
+  const grouped = useGroupedSessions(sessions, isSearching);
+  const {
+    manageMode, setManageMode, selectedIds, confirmDelete, setConfirmDelete,
+    toggleSession, toggleProject, exitManageMode, allSelected, someSelected,
+    toggleAll, flatSessionIds,
+  } = useSessionSelection(sessions, grouped, collapsedProjects, selectedId, onSelect);
+  const { showHelp, setShowHelp, searchRef } = useKeyboardNavigation(flatSessionIds, selectedId, onSelect);
+
+  const deleteBatch = useMutation({
+    mutationFn: (ids: string[]) => softDeleteSessions(ids),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      exitManageMode();
+    },
+  });
+
+  const ctxDelete = useMutation({
+    mutationFn: () => {
+      if (!ctxMenu) throw new Error("no context menu");
+      if (ctxMenu.projectPath) return softDeleteProject(ctxMenu.projectPath);
+      return softDeleteSessions([ctxMenu.sessionId]);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      setCtxMenu(null);
+    },
+  });
+
+  // Close context menu on outside click
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (ctxRef.current && !ctxRef.current.contains(e.target as Node)) {
+        setCtxMenu(null);
       }
-      map.get(key)?.sessions.push(s);
-    }
-
-    for (const group of map.values()) {
-      group.sessions.sort((a, b) =>
-        (b.updated_at ?? "").localeCompare(a.updated_at ?? "")
-      );
-    }
-
-    return Array.from(map.entries())
-      .sort((a, b) => {
-        const aTime = a[1].sessions[0]?.updated_at ?? "";
-        const bTime = b[1].sessions[0]?.updated_at ?? "";
-        return bTime.localeCompare(aTime);
-      })
-      .map(([key, group]) => ({
-        key,
-        label: group.label,
-        sessions: group.sessions,
-      }));
-  }, [sessions, isSearching]);
+    };
+    window.addEventListener("mousedown", handler);
+    return () => window.removeEventListener("mousedown", handler);
+  }, [ctxMenu]);
 
   const toggleCollapse = (key: string) => {
     setCollapsedProjects((prev) => ({ ...prev, [key]: !prev[key] }));
   };
-
-  const allSelected = sessions.length > 0 && sessions.every((s) => selectedIds.has(s.id));
-  const someSelected = selectedIds.size > 0 && !allSelected;
-
-  const toggleAll = () => {
-    if (allSelected) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(sessions.map((s) => s.id)));
-    }
-  };
-
-  const [showHelp, setShowHelp] = useState(false);
-  const searchRef = useRef<HTMLInputElement>(null);
-  const hasAutoSelectedRef = useRef(false);
-
-  const flatSessionIds = useMemo(() => {
-    const ids: string[] = [];
-    for (const g of grouped) {
-      if (!collapsedProjects[g.key]) {
-        for (const s of g.sessions) {
-          ids.push(s.id);
-        }
-      }
-    }
-    return ids;
-  }, [grouped, collapsedProjects]);
-
-  const topSessionId = flatSessionIds[0] ?? grouped[0]?.sessions[0]?.id ?? null;
-
-  useEffect(() => {
-    if (!topSessionId) {
-      hasAutoSelectedRef.current = false;
-      return;
-    }
-
-    if (selectedId && sessions.some((session) => session.id === selectedId)) {
-      hasAutoSelectedRef.current = true;
-      return;
-    }
-
-    if (!hasAutoSelectedRef.current && selectedId === null) {
-      hasAutoSelectedRef.current = true;
-      onSelect(topSessionId);
-      return;
-    }
-
-    if (selectedId && !sessions.some((session) => session.id === selectedId)) {
-      onSelect(topSessionId);
-    }
-  }, [topSessionId, selectedId, sessions, onSelect]);
-
-  const navigateList = useCallback(
-    (direction: "up" | "down") => {
-      if (flatSessionIds.length === 0) return;
-      const idx = selectedId ? flatSessionIds.indexOf(selectedId) : -1;
-      const next =
-        direction === "down"
-          ? Math.min(idx + 1, flatSessionIds.length - 1)
-          : Math.max(idx - 1, 0);
-      onSelect(flatSessionIds[next]);
-    },
-    [flatSessionIds, selectedId, onSelect]
-  );
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA") return;
-
-      switch (e.key) {
-        case "?":
-          setShowHelp((v) => !v);
-          break;
-        case "/":
-          e.preventDefault();
-          searchRef.current?.focus();
-          break;
-        case "j":
-        case "ArrowDown":
-          navigateList("down");
-          break;
-        case "k":
-        case "ArrowUp":
-          navigateList("up");
-          break;
-        case "Escape":
-          if (showHelp) setShowHelp(false);
-          else onSelect(null);
-          break;
-      }
-    };
-
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [navigateList, showHelp, onSelect]);
 
   return (
     <div className="grid h-full min-h-0 xl:grid-cols-[360px_minmax(0,1fr)]">
@@ -325,11 +204,7 @@ function SessionsPage({
               <button
                 type="button"
                 onClick={() => setSortDesc(!sortDesc)}
-                className={`rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors ${
-                  !sortDesc
-                    ? "border border-border bg-[var(--editor)] text-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                }`}
+                className={`pill-tab ${!sortDesc ? "pill-tab-active" : "pill-tab-idle"}`}
               >
                 {sortDesc ? t("sessions.sortNewest") : t("sessions.sortOldest")}
               </button>
@@ -339,11 +214,7 @@ function SessionsPage({
                   if (manageMode) exitManageMode();
                   else setManageMode(true);
                 }}
-                className={`rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors ${
-                  manageMode
-                    ? "border border-border bg-[var(--editor)] text-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                }`}
+                className={`pill-tab ${manageMode ? "pill-tab-active" : "pill-tab-idle"}`}
               >
                 {manageMode ? t("sessions.done") : t("sessions.manage")}
               </button>
@@ -421,10 +292,7 @@ function SessionsPage({
                     )}
                   </button>
                   <span className="text-[13px] text-muted-foreground">
-                  <span
-                    className="text-[13px] text-muted-foreground"
-                    dangerouslySetInnerHTML={{ __html: t("sessions.selectAll", { count: sessions.length }) }}
-                  />
+                    {t("sessions.selectAllPrefix")}<span className="font-medium text-foreground">{sessions.length}</span>{t("sessions.selectAllSuffix")}
                   </span>
                 </div>
               )}
@@ -465,6 +333,11 @@ function SessionsPage({
                       <button
                         type="button"
                         onClick={() => toggleCollapse(g.key)}
+                        onContextMenu={(e) => {
+                          if (isSearching) return;
+                          e.preventDefault();
+                          setCtxMenu({ x: e.clientX, y: e.clientY, sessionId: "", projectPath: g.key });
+                        }}
                         className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-border bg-secondary px-2.5 py-1.5 text-left transition-colors hover:bg-accent"
                       >
                         <span className="grid size-4 shrink-0 place-items-center rounded-sm bg-[var(--editor)] text-[10px] text-primary">
@@ -492,6 +365,9 @@ function SessionsPage({
                             manageMode={manageMode}
                             checked={selectedIds.has(session.id)}
                             onCheck={() => toggleSession(session.id)}
+                            onContextMenu={(e, id) => {
+                              setCtxMenu({ x: e.clientX, y: e.clientY, sessionId: id });
+                            }}
                           />
                         ))}
                       </div>
@@ -535,10 +411,9 @@ function SessionsPage({
               </div>
             ) : (
               <div className="flex items-center justify-between gap-4">
-                <span
-                  className="text-[13px] text-muted-foreground"
-                  dangerouslySetInnerHTML={{ __html: t("manage.selected", { count: selectedIds.size }) }}
-                />
+                <span className="text-[13px] text-muted-foreground">
+                  {t("manage.selectedPrefix")}<span className="font-medium text-foreground">{selectedIds.size}</span>{t("manage.selectedSuffix")}
+                </span>
                 <div className="flex shrink-0 items-center gap-2">
                   <Button variant="outline" size="sm" className="h-8 rounded-md px-3 text-[13px]" onClick={exitManageMode}>
                     {t("manage.cancel")}
@@ -570,6 +445,22 @@ function SessionsPage({
           </div>
         )}
       </section>
+
+      {ctxMenu && (
+        <div
+          ref={ctxRef}
+          className="fixed z-50 min-w-[120px] rounded-md border border-border bg-card p-1 shadow-lg"
+          style={{ left: ctxMenu.x, top: ctxMenu.y }}
+        >
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[13px] text-destructive hover:bg-accent"
+            onClick={() => ctxDelete.mutate()}
+          >
+            {ctxMenu.projectPath ? t("contextMenu.deleteProject") : t("contextMenu.delete")}
+          </button>
+        </div>
+      )}
 
       {showHelp && (
         <div

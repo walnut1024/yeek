@@ -20,7 +20,8 @@
   "sessions.emptySearchHint": "尝试使用更宽泛的关键词来扩大搜索范围。",
   "sessions.emptyBrowse": "暂无会话",
   "sessions.emptyBrowseHint": "索引完成后，对话将按项目分组显示在这里。",
-  "sessions.selectAll_other": "全选 <strong>{{count}}</strong> 个会话",
+  "sessions.selectAllPrefix": "全选 ",
+  "sessions.selectAllSuffix": " 个会话",
   "sessions.searchResults": "搜索结果",
   "sessions.noProject": "无项目",
   "sessions.selectPrompt": "准备就绪",
@@ -35,7 +36,8 @@
   "shortcuts.closeSelection": "关闭选择",
   "shortcuts.toggleHelp": "切换帮助",
 
-  "manage.selected_other": "已选 <strong>{{count}}</strong> 个",
+  "manage.selectedPrefix": "已选 ",
+  "manage.selectedSuffix": " 个",
   "manage.cancel": "取消",
   "manage.delete": "删除",
   "manage.deleteConfirm_other": "删除 {{count}} 个会话？",
@@ -61,7 +63,8 @@
   "detail.copy": "复制",
   "detail.resume": "恢复",
   "detail.delete": "删除",
-  "detail.sourceLabel": "来源：{{path}}",
+  "detail.sourceLabel": "会话 ID：{{path}}",
+  "detail.sourcePath": "工作路径：{{path}}",
   "detail.deleteTitle": "软删除会话",
   "detail.deleteDescription": "这将标记该会话为已删除，但保留磁盘上的源文件。",
   "detail.deleteCancel": "取消",
@@ -70,6 +73,7 @@
   "detail.tabSources": "来源",
 
   "sources.empty": "没有记录的源文件",
+  "sources.error": "加载来源失败",
   "sources.destructiveDelete": "彻底删除",
   "sources.deleteTitle": "确认彻底删除",
   "sources.analyzing": "正在分析源文件…",
@@ -153,5 +157,15 @@
   "graph.statsNodes": "{{count}} 个节点",
   "graph.statsUsers": "{{count}} 个用户",
   "graph.statsAssistants": "{{count}} 个助手",
-  "graph.statsTools": "{{count}} 个工具"
+  "graph.statsTools": "{{count}} 个工具",
+  "graph.truncated": "显示前 {{max}} 条，共 {{total}} 条消息",
+  "graph.nodeUser": "用户",
+  "graph.nodeAssistant": "助手",
+  "graph.nodeResult": "结果",
+  "graph.nodeTool": "工具：{{name}}",
+  "graph.nodeUnknown": "未知",
+  "graph.nodeEmpty": "（空）",
+
+  "contextMenu.delete": "删除",
+  "contextMenu.deleteProject": "删除项目下所有会话"
 }
