@@ -309,10 +309,14 @@ fn extract_main_path(
         return Vec::new();
     };
 
-    // Backtrack from leaf to root, stop when parent_id is dangling
+    // Backtrack from leaf to root, stop when parent_id is dangling or cycle detected
     let mut path = Vec::new();
+    let mut visited = std::collections::HashSet::new();
     let mut current = Some(leaf_id);
     while let Some(id) = current {
+        if !visited.insert(id.clone()) {
+            break; // cycle detected
+        }
         path.push(id.clone());
         if let Some(&idx) = id_map.get(&id) {
             let parent = &messages[idx].parent_id;
