@@ -167,5 +167,32 @@
   "graph.nodeEmpty": "（空）",
 
   "contextMenu.delete": "删除",
-  "contextMenu.deleteProject": "删除项目下所有会话"
+  "contextMenu.deleteProject": "删除项目下所有会话",
+
+  "nav.skills": "技能",
+
+  "skills.title": "技能",
+  "skills.countChip": "{{skills}} 个技能 · {{agents}} 个代理",
+  "skills.global": "全局",
+  "skills.project": "项目",
+  "skills.viewPlugins": "插件",
+  "skills.viewAllSkills": "所有技能",
+  "skills.health": "健康",
+  "skills.healthOk_other": "{{count}} 正常",
+  "skills.healthPartial": "{{count}} 部分",
+  "skills.healthHook": "{{count}} 钩子",
+  "skills.healthBroken": "{{count}} 损坏",
+  "skills.path": "路径",
+  "skills.market": "来源",
+  "skills.marketUpdated": "更新于 {{date}}",
+  "skills.uninstall": "卸载",
+  "skills.uninstallTitle": "卸载 {{name}}？",
+  "skills.uninstallDesc": "此操作将从磁盘删除插件并从注册表中移除。之后可以从市场重新安装。",
+  "skills.emptyProject": "未找到项目级技能",
+  "skills.emptyStandalone": "未找到独立技能",
+  "skills.moreSkills": "... 还有 {{count}} 个",
+  "skills.disabled": "已禁用",
+  "skills.scopeGlobal": "全局",
+  "skills.scopeProject": "项目",
+  "skills.standaloneSection": "独立"
 }

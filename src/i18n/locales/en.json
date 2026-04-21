@@ -176,5 +176,33 @@
   "graph.nodeEmpty": "(empty)",
 
   "contextMenu.delete": "Delete",
-  "contextMenu.deleteProject": "Delete All in Project"
+  "contextMenu.deleteProject": "Delete All in Project",
+
+  "nav.skills": "Skills",
+
+  "skills.title": "Skills",
+  "skills.countChip": "{{skills}} skills · {{agents}} agents",
+  "skills.global": "Global",
+  "skills.project": "Project",
+  "skills.viewPlugins": "Plugins",
+  "skills.viewAllSkills": "All Skills",
+  "skills.health": "Health",
+  "skills.healthOk_one": "{{count}} OK",
+  "skills.healthOk_other": "{{count}} OK",
+  "skills.healthPartial": "{{count}} Partial",
+  "skills.healthHook": "{{count}} Hook",
+  "skills.healthBroken": "{{count}} Broken",
+  "skills.path": "Path",
+  "skills.market": "Market",
+  "skills.marketUpdated": "Updated {{date}}",
+  "skills.uninstall": "Uninstall",
+  "skills.uninstallTitle": "Uninstall {{name}}?",
+  "skills.uninstallDesc": "This will remove the plugin from disk and delete it from the plugin registry. You can reinstall from the marketplace later.",
+  "skills.emptyProject": "No project-level skills found",
+  "skills.emptyStandalone": "No standalone skills found",
+  "skills.moreSkills": "... {{count}} more",
+  "skills.disabled": "disabled",
+  "skills.scopeGlobal": "Global",
+  "skills.scopeProject": "Project",
+  "skills.standaloneSection": "Standalone"
 }
