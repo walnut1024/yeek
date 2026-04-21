@@ -286,3 +286,16 @@ export async function togglePlugin(key: string): Promise<void> {
 export async function uninstallPlugin(key: string): Promise<void> {
   return invoke("uninstall_plugin", { key });
 }
+
+export interface FixPluginResult {
+  action: string;
+  message: string;
+}
+
+export async function cleanPlugin(key: string): Promise<FixPluginResult> {
+  return invoke("clean_plugin", { key });
+}
+
+export async function reinstallPlugin(key: string): Promise<FixPluginResult> {
+  return invoke("reinstall_plugin", { key });
+}

@@ -5,6 +5,8 @@ import {
   listPlugins,
   togglePlugin,
   uninstallPlugin,
+  cleanPlugin,
+  reinstallPlugin,
   type PluginInfo,
   type SkillInfo,
 } from "@/lib/api";
@@ -44,6 +46,9 @@ export default function SkillsPage() {
   const [view, setView] = useState<"plugin" | "flat">("plugin");
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [uninstallTarget, setUninstallTarget] = useState<PluginInfo | null>(null);
+  const [cleanTarget, setCleanTarget] = useState<PluginInfo | null>(null);
+  const [reinstallTarget, setReinstallTarget] = useState<PluginInfo | null>(null);
+  const [reinstallError, setReinstallError] = useState<string | null>(null);
   const { t } = useTranslation();
   const queryClient = useQueryClient();
 
@@ -63,6 +68,26 @@ export default function SkillsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["plugins"] });
       setUninstallTarget(null);
+    },
+  });
+
+  const cleanMut = useMutation({
+    mutationFn: (key: string) => cleanPlugin(key),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["plugins"] });
+      setCleanTarget(null);
+    },
+  });
+
+  const reinstallMut = useMutation({
+    mutationFn: (key: string) => reinstallPlugin(key),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["plugins"] });
+      setReinstallTarget(null);
+      setReinstallError(null);
+    },
+    onError: (err: any) => {
+      setReinstallError(err?.message ?? "Unknown error");
     },
   });
 
@@ -157,6 +182,8 @@ export default function SkillsPage() {
                 onToggleExpand={() => setExpandedKey(expandedKey === p.key ? null : p.key)}
                 onToggle={() => toggleMut.mutate(p.key)}
                 onUninstall={() => setUninstallTarget(p)}
+                onClean={() => setCleanTarget(p)}
+                onReinstall={() => { setReinstallTarget(p); setReinstallError(null); }}
               />
             ))}
           </div>
@@ -226,6 +253,70 @@ export default function SkillsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Clean dialog */}
+      <AlertDialog
+        open={!!cleanTarget}
+        onOpenChange={(open) => !open && setCleanTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t("skills.cleanTitle", { name: cleanTarget?.name })}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("skills.cleanDesc")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("detail.deleteCancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={cleanMut.isPending}
+              onClick={() => cleanTarget && cleanMut.mutate(cleanTarget.key)}
+              className="border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20"
+            >
+              {cleanMut.isPending ? "..." : t("skills.clean")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Reinstall dialog */}
+      <AlertDialog
+        open={!!reinstallTarget}
+        onOpenChange={(open) => {
+          if (!open) {
+            setReinstallTarget(null);
+            setReinstallError(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t("skills.reinstallTitle", { name: reinstallTarget?.name })}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("skills.reinstallDesc")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {reinstallError && (
+            <div className="rounded-sm border border-destructive/30 bg-destructive/10 p-2 text-[12px] text-destructive">
+              {t("skills.reinstallError", { error: reinstallError })}
+            </div>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("detail.deleteCancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={reinstallMut.isPending}
+              onClick={() => reinstallTarget && reinstallMut.mutate(reinstallTarget.key)}
+              className="border-chart-3/30 bg-chart-3/10 text-chart-3 hover:bg-chart-3/20"
+            >
+              {reinstallMut.isPending ? "..." : t("skills.reinstall")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -245,12 +336,16 @@ function PluginCard({
   onToggleExpand,
   onToggle,
   onUninstall,
+  onClean,
+  onReinstall,
 }: {
   plugin: PluginInfo;
   expanded: boolean;
   onToggleExpand: () => void;
   onToggle: () => void;
   onUninstall: () => void;
+  onClean: () => void;
+  onReinstall: () => void;
 }) {
   const { t } = useTranslation();
 
@@ -308,17 +403,35 @@ function PluginCard({
             />
           </span>
         </label>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-6 rounded-md px-2 text-[11px] text-muted-foreground hover:border-destructive hover:text-destructive hover:bg-destructive/10"
-          onClick={(e) => {
-            e.stopPropagation();
-            onUninstall();
-          }}
-        >
-          {t("skills.uninstall")}
-        </Button>
+        {plugin.health === "broken" ? (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 rounded-md px-2 text-[11px] text-muted-foreground hover:border-destructive hover:text-destructive hover:bg-destructive/10"
+              onClick={(e) => { e.stopPropagation(); onClean(); }}
+            >
+              {t("skills.clean")}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 rounded-md px-2 text-[11px] text-muted-foreground hover:border-chart-3 hover:text-chart-3 hover:bg-chart-3/10"
+              onClick={(e) => { e.stopPropagation(); onReinstall(); }}
+            >
+              {t("skills.reinstall")}
+            </Button>
+          </>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-6 rounded-md px-2 text-[11px] text-muted-foreground hover:border-destructive hover:text-destructive hover:bg-destructive/10"
+            onClick={(e) => { e.stopPropagation(); onUninstall(); }}
+          >
+            {t("skills.uninstall")}
+          </Button>
+        )}
       </div>
 
       {expanded && (

@@ -1017,3 +1017,199 @@ pub fn uninstall_plugin(key: String) -> Result<(), AppError> {
 
     Ok(())
 }
+
+// --- Plugin Fix: Clean & Reinstall ---
+
+fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> Result<(), AppError> {
+    std::fs::create_dir_all(dst)
+        .map_err(|e| AppError::Internal(format!("Failed to create dir {}: {}", dst.display(), e)))?;
+    for entry in std::fs::read_dir(src)
+        .map_err(|e| AppError::Internal(format!("Failed to read dir {}: {}", src.display(), e)))?
+    {
+        let entry = entry.map_err(|e| AppError::Internal(format!("Dir entry error: {}", e)))?;
+        // Skip symlinks
+        if entry.path().symlink_metadata().map(|m| m.file_type().is_symlink()).unwrap_or(false) {
+            continue;
+        }
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+        if src_path.is_dir() {
+            copy_dir_recursive(&src_path, &dst_path)?;
+        } else {
+            std::fs::copy(&src_path, &dst_path)
+                .map_err(|e| AppError::Internal(format!("Failed to copy {}: {}", src_path.display(), e)))?;
+        }
+    }
+    Ok(())
+}
+
+/// Remove orphaned registry entry for a broken plugin (install dir missing/empty).
+#[tauri::command]
+pub fn clean_plugin(key: String) -> Result<plugin::FixPluginResult, AppError> {
+    let home = dirs::home_dir().ok_or_else(|| AppError::Internal("No home directory".into()))?;
+    let claude_dir = home.join(".claude");
+
+    // 1. Read registry, remove install dir if present
+    let registry_path = claude_dir.join("plugins/installed_plugins.json");
+    let mut registry: serde_json::Value = read_json(&registry_path)?;
+
+    if let Some(install_path) = registry
+        .get("plugins")
+        .and_then(|p| p.get(&key))
+        .and_then(|v| v.as_array())
+        .and_then(|a| a.first())
+        .and_then(|e| e["installPath"].as_str())
+    {
+        let path = std::path::Path::new(install_path);
+        if path.exists() {
+            let _ = std::fs::remove_dir_all(path);
+        }
+    }
+
+    // 2. Remove from registry
+    if let Some(plugins) = registry.get_mut("plugins").and_then(|v| v.as_object_mut()) {
+        plugins.remove(&key);
+    }
+    let output = serde_json::to_string_pretty(&registry)
+        .map_err(|e| AppError::Internal(format!("Failed to serialize registry: {}", e)))?;
+    std::fs::write(&registry_path, output)
+        .map_err(|e| AppError::Internal(format!("Failed to write registry: {}", e)))?;
+
+    // 3. Remove from enabledPlugins
+    let settings_path = claude_dir.join("settings.json");
+    if let Ok(mut settings) = read_json(&settings_path) {
+        if let Some(enabled) = settings.get_mut("enabledPlugins").and_then(|v| v.as_object_mut()) {
+            enabled.remove(&key);
+        }
+        if let Ok(output) = serde_json::to_string_pretty(&settings) {
+            let _ = std::fs::write(&settings_path, output);
+        }
+    }
+
+    Ok(plugin::FixPluginResult {
+        action: "clean".into(),
+        message: format!("Cleaned orphaned entry for {}", key),
+    })
+}
+
+/// Re-download a broken plugin from its marketplace (experimental).
+#[tauri::command]
+pub fn reinstall_plugin(key: String) -> Result<plugin::FixPluginResult, AppError> {
+    let home = dirs::home_dir().ok_or_else(|| AppError::Internal("No home directory".into()))?;
+    let claude_dir = home.join(".claude");
+
+    // 1. Parse key: "pluginName@marketplace"
+    let parts: Vec<&str> = key.splitn(2, '@').collect();
+    let plugin_name = parts.first().ok_or_else(|| AppError::Validation("Invalid plugin key".into()))?;
+    let market_name = parts.get(1).ok_or_else(|| {
+        AppError::Validation(format!("Plugin key '{}' missing marketplace suffix", key))
+    })?;
+
+    // 2. Read marketplace metadata
+    let marketplaces_path = claude_dir.join("plugins/known_marketplaces.json");
+    let marketplaces: serde_json::Value = read_json(&marketplaces_path)?;
+    let mkt = marketplaces.get(market_name)
+        .ok_or_else(|| AppError::NotFound(format!("Marketplace '{}' not found", market_name)))?;
+    let repo = mkt["source"]["repo"].as_str()
+        .ok_or_else(|| AppError::NotFound(format!("No repo for marketplace '{}'", market_name)))?;
+    let clone_path_str = mkt["installLocation"].as_str().unwrap_or("");
+    let clone_path = std::path::Path::new(clone_path_str);
+
+    // 3. Read registry for install path and version
+    let registry_path = claude_dir.join("plugins/installed_plugins.json");
+    let registry: serde_json::Value = read_json(&registry_path)?;
+    let entry = registry
+        .get("plugins")
+        .and_then(|p| p.get(&key))
+        .and_then(|v| v.as_array())
+        .and_then(|a| a.first())
+        .ok_or_else(|| AppError::NotFound(format!("Plugin '{}' not found in registry", key)))?;
+    let install_path_str = entry["installPath"].as_str()
+        .ok_or_else(|| AppError::NotFound(format!("No installPath for '{}'", key)))?;
+    let git_sha = entry["gitCommitSha"].as_str().unwrap_or("");
+
+    // 4. Ensure marketplace clone is available
+    let clone_exists = clone_path.join(".git").exists();
+    if clone_exists {
+        // Fetch latest
+        let _ = std::process::Command::new("git")
+            .args(["fetch", "origin"])
+            .current_dir(clone_path)
+            .output();
+        if !git_sha.is_empty() {
+            let out = std::process::Command::new("git")
+                .args(["checkout", git_sha])
+                .current_dir(clone_path)
+                .output()
+                .map_err(|e| AppError::Internal(format!("git checkout failed: {}", e)))?;
+            if !out.status.success() {
+                return Err(AppError::Internal(format!(
+                    "git checkout {} failed: {}", git_sha,
+                    String::from_utf8_lossy(&out.stderr)
+                )));
+            }
+        } else {
+            let _ = std::process::Command::new("git")
+                .args(["pull", "--ff-only"])
+                .current_dir(clone_path)
+                .output();
+        }
+    } else {
+        // Clone the repo
+        let clone_url = format!("https://github.com/{}.git", repo);
+        let out = std::process::Command::new("git")
+            .args(["clone", &clone_url, &clone_path.to_string_lossy()])
+            .output()
+            .map_err(|e| AppError::Internal(format!("git clone failed: {}", e)))?;
+        if !out.status.success() {
+            return Err(AppError::Internal(format!(
+                "git clone failed: {}", String::from_utf8_lossy(&out.stderr)
+            )));
+        }
+        if !git_sha.is_empty() {
+            let _ = std::process::Command::new("git")
+                .args(["checkout", git_sha])
+                .current_dir(clone_path)
+                .output();
+        }
+    }
+
+    // 5. Find plugin source directory in marketplace
+    let clone_path_buf = clone_path.to_path_buf();
+    let candidates = [
+        clone_path.join(format!("plugins/{}", plugin_name)),
+        clone_path.join(format!("skills/{}", plugin_name)),
+        clone_path.join(format!("agents/{}", plugin_name)),
+    ];
+    let source_dir = candidates.iter().find(|p| p.exists() && p.is_dir())
+        .or_else(|| {
+            // Single-plugin repo: use clone root if it has plugin-like content
+            let has_skill = clone_path.join("skills").is_dir() || clone_path.join("SKILL.md").exists();
+            let has_plugin_json = clone_path.join(".claude-plugin/plugin.json").exists();
+            if has_skill || has_plugin_json {
+                Some(&clone_path_buf)
+            } else {
+                None
+            }
+        })
+        .ok_or_else(|| AppError::NotFound(format!(
+            "Could not find plugin '{}' in marketplace '{}'", plugin_name, market_name
+        )))?;
+
+    // 6. Remove old install dir, copy fresh source
+    let install_path = std::path::Path::new(install_path_str);
+    if install_path.exists() {
+        let _ = std::fs::remove_dir_all(install_path);
+    }
+    if let Some(parent) = install_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| AppError::Internal(format!("Failed to create cache dir: {}", e)))?;
+    }
+    copy_dir_recursive(source_dir, install_path)?;
+
+    // 7. Return success
+    Ok(plugin::FixPluginResult {
+        action: "reinstall".into(),
+        message: format!("Reinstalled {} from {}", key, repo),
+    })
+}

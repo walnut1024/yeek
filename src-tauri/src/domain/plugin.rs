@@ -51,3 +51,9 @@ pub struct HealthSummary {
     pub hook: usize,
     pub broken: usize,
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FixPluginResult {
+    pub action: String,
+    pub message: String,
+}
