@@ -964,7 +964,9 @@ fn truncate_preview(s: &str, max_len: usize) -> String {
     }
 }
 
-/// Index a pre-discovered list of sources, committing per-source.
+/// Index a pre-discovered list of sources.
+/// Uses a single transaction with SAVEPOINTs for per-source isolation —
+/// one COMMIT (one fsync) instead of N.
 /// The `on_progress` callback receives the count of sources processed so far.
 pub fn index_sources<F>(
     conn: &rusqlite::Connection,
@@ -987,6 +989,9 @@ where
         rows.filter_map(|r| r.ok()).collect()
     };
 
+    // Single transaction for all sources — one fsync at the end
+    conn.execute_batch("BEGIN")?;
+
     for (i, source) in sources.iter().enumerate() {
         // Skip unchanged files
         if let Some(stored_fp) = existing_fingerprints.get(&source.path) {
@@ -996,20 +1001,14 @@ where
             }
         }
 
-        // Per-source transaction
-        let tx_result = conn.execute_batch("BEGIN");
-        if tx_result.is_err() {
-            errors += 1;
-            on_progress((i + 1) as i64);
-            continue;
-        }
+        // Per-source savepoint for isolation
+        let sp = format!("sp_{}", i);
+        conn.execute_batch(&format!("SAVEPOINT {}", sp))?;
 
         match index_single_source(conn, source, &existing_fingerprints) {
             Ok(is_update) => {
-                if let Err(e) = conn.execute_batch("COMMIT") {
-                    log::error!("Failed to commit source {}: {}", source.path, e);
-                    errors += 1;
-                } else if is_update {
+                conn.execute_batch(&format!("RELEASE {}", sp))?;
+                if is_update {
                     updated += 1;
                 } else {
                     indexed += 1;
@@ -1017,7 +1016,7 @@ where
             }
             Err(e) => {
                 log::error!("Failed to index source {}: {}", source.path, e);
-                let _ = conn.execute_batch("ROLLBACK");
+                conn.execute_batch(&format!("ROLLBACK TO {}", sp))?;
                 errors += 1;
             }
         }
@@ -1025,15 +1024,9 @@ where
         on_progress((i + 1) as i64);
     }
 
-    // Fix sessions with missing or incorrect project_path (e.g. subagent
-    // transcripts indexed by an older version of the extractor).
+    // Post-index cleanup (still inside the transaction)
     if let Err(e) = fix_project_paths(conn) {
         log::warn!("project_path fix-up failed: {}", e);
-    }
-
-    // Clean up duplicate source links: keep only the latest fingerprint per (session_id, path)
-    if let Err(e) = dedup_session_sources(conn) {
-        log::warn!("session_sources dedup failed: {}", e);
     }
 
     crate::store::actions::record_action(
@@ -1045,6 +1038,9 @@ where
             indexed, updated, errors
         )),
     )?;
+
+    // Single COMMIT — one fsync for the entire batch
+    conn.execute_batch("COMMIT")?;
 
     Ok(IndexResult {
         indexed,
