@@ -126,6 +126,7 @@ fn migrate_v2(conn: &rusqlite::Connection) -> Result<(), crate::app::errors::App
 }
 
 /// Version 3 migration: rebuild FTS5 as external content table (saves ~34MB).
+/// This is a HEAVY migration — must run on a background thread.
 fn migrate_v3(conn: &rusqlite::Connection) -> Result<(), crate::app::errors::AppError> {
     conn.execute_batch(
         "DROP TABLE IF EXISTS messages_fts;
@@ -143,7 +144,14 @@ fn migrate_v3(conn: &rusqlite::Connection) -> Result<(), crate::app::errors::App
     Ok(())
 }
 
-pub fn init_schema(conn: &rusqlite::Connection) -> Result<(), crate::app::errors::AppError> {
+/// Latest lightweight migration version (schema changes only, safe on main thread).
+const LIGHTWEIGHT_VERSION: i64 = 2;
+/// Latest overall version (including heavy migrations).
+const LATEST_VERSION: i64 = 3;
+
+/// Initialize schema and run lightweight migrations on the main thread.
+/// Returns the target version if heavy migrations are pending, or None if fully up-to-date.
+pub fn init_schema(conn: &rusqlite::Connection) -> Result<Option<i64>, crate::app::errors::AppError> {
     conn.execute_batch(
         "PRAGMA journal_mode=WAL;
          PRAGMA foreign_keys=ON;
@@ -152,23 +160,47 @@ pub fn init_schema(conn: &rusqlite::Connection) -> Result<(), crate::app::errors
     )?;
     conn.execute_batch(SCHEMA_SQL)?;
 
-    // Version-based migration system
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .unwrap_or(0);
 
+    // Lightweight migrations (safe on main thread)
     if version < 1 {
         migrate_v1(conn)?;
     }
     if version < 2 {
         migrate_v2(conn)?;
     }
-    if version < 3 {
-        migrate_v3(conn)?;
+
+    // Bump version to lightweight ceiling
+    if version < LIGHTWEIGHT_VERSION {
+        conn.execute_batch(&format!("PRAGMA user_version = {};", LIGHTWEIGHT_VERSION))?;
     }
 
-    // Set to latest version
-    conn.execute_batch("PRAGMA user_version = 3;")?;
+    // Signal if heavy migrations are needed
+    Ok(if version < LATEST_VERSION {
+        Some(LATEST_VERSION)
+    } else {
+        None
+    })
+}
+
+/// Run heavy data migrations on a background thread.
+/// Opens its own connection; safe to call from any thread.
+pub fn run_heavy_migrations(db_path: &std::path::Path) -> Result<(), crate::app::errors::AppError> {
+    let conn = rusqlite::Connection::open(db_path)
+        .map_err(|e| crate::app::errors::AppError::DbError(e.to_string()))?;
+
+    let version: i64 = conn
+        .query_row("PRAGMA user_version", [], |row| row.get(0))
+        .unwrap_or(0);
+
+    if version < 3 {
+        log::info!("Running heavy migration v3 (FTS rebuild)...");
+        migrate_v3(&conn)?;
+        conn.execute_batch("PRAGMA user_version = 3;")?;
+        log::info!("Heavy migration v3 completed");
+    }
 
     Ok(())
 }

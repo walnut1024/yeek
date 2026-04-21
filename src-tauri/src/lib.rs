@@ -44,7 +44,9 @@ pub fn run() {
             let conn =
                 rusqlite::Connection::open(&db_path).expect("failed to open database");
 
-            schema::init_schema(&conn).expect("failed to initialize database schema");
+            // Lightweight schema + migrations (main thread, fast)
+            let pending_heavy = schema::init_schema(&conn)
+                .expect("failed to initialize database schema");
 
             // Resolve Claude projects dir for file watcher
             let claude_projects_dir = dirs::home_dir()
@@ -66,6 +68,19 @@ pub fn run() {
             app.manage(AppState::new(conn, db_path.clone())
                 .with_handle(app.handle().clone())
                 .with_watcher(watcher));
+
+            // Heavy data migrations on background thread (non-blocking)
+            if let Some(_target) = pending_heavy {
+                let hm_db_path = db_path.clone();
+                std::thread::Builder::new()
+                    .name("yeek-schema-migrate".into())
+                    .spawn(move || {
+                        if let Err(e) = schema::run_heavy_migrations(&hm_db_path) {
+                            log::error!("Heavy migration failed: {}", e);
+                        }
+                    })
+                    .expect("Failed to spawn migration thread");
+            }
 
             // Startup sync: background thread — window appears immediately
             sync::background::spawn_background_scan(
