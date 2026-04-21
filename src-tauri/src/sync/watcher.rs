@@ -130,20 +130,47 @@ fn run_incremental_scan(
         .map_err(|e| AppError::DbError(e.to_string()))?;
     schema::init_schema(&conn)?;
 
-    // Build SourceDescriptors from changed paths
+    // Build SourceDescriptors from changed paths, skip files over 10MB
+    const MAX_WATCHER_FILE_SIZE: u64 = 10 * 1024 * 1024;
     let sources: Vec<_> = changed_paths
         .iter()
-        .filter_map(|p| source_descriptor_from_path(p))
+        .filter_map(|p| {
+            let meta = std::fs::metadata(p).ok()?;
+            if meta.len() > MAX_WATCHER_FILE_SIZE {
+                log::info!("Watcher: skipping large file ({}MB): {}", meta.len() / 1024 / 1024, p.display());
+                return None;
+            }
+            source_descriptor_from_path(p)
+        })
         .collect();
 
     if sources.is_empty() {
         return Ok(());
     }
 
-    let total = sources.len() as i64;
-    log::info!("Watcher: incremental scan of {} sources", total);
+    // Filter out sources already known to the DB (fingerprint matches).
+    // The watcher should only index truly new or changed sources.
+    let existing: std::collections::HashSet<String> = {
+        let mut stmt = conn.prepare("SELECT path FROM sources WHERE status = 'active'")?;
+        let rows: Vec<String> = stmt.query_map([], |row| row.get::<_, String>(0))?
+            .filter_map(|r| r.ok())
+            .collect();
+        rows.into_iter().collect()
+    };
 
-    let result = claudecode::index_sources(&conn, &sources, |_| {})?;
+    let new_sources: Vec<_> = sources
+        .into_iter()
+        .filter(|s| !existing.contains(&s.path))
+        .collect();
+
+    if new_sources.is_empty() {
+        return Ok(());
+    }
+
+    let total = new_sources.len() as i64;
+    log::info!("Watcher: indexing {} new sources", total);
+
+    let result = claudecode::index_sources(&conn, &new_sources, |_| {})?;
 
     let _ = app_handle.emit(
         "sync-completed",

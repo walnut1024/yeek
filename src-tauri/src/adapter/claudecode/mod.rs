@@ -1114,6 +1114,7 @@ fn index_single_source(
 ) -> Result<bool, AppError> {
     let is_update = existing_fingerprints.contains_key(&source.path);
     let project_path = extract_project_path_from_source(&source.path);
+    let session_id: String;
 
     if source.source_type == "claude_subagent_transcript" {
         let parent_session_id = extract_parent_session_id(&source.path);
@@ -1123,27 +1124,32 @@ fn index_single_source(
             .ok_or_else(|| AppError::Internal(format!("Invalid subagent path: {}", source.path)))?;
 
         let (record, messages) = parse_subagent_session(&source.path, &parent_id, &agent_id, project_path.as_deref())?;
+        session_id = record.id.clone();
         sessions::upsert_session(conn, &record)?;
         for msg in &messages {
             crate::store::messages::upsert_message(conn, msg)?;
         }
         crate::store::sources::upsert_source(conn, source)?;
         crate::store::sources::link_session_source(
-            conn, &record.id, &source.fingerprint,
+            conn, &session_id, &source.fingerprint,
             &source.source_type, &source.path, "file_safe",
         )?;
     } else {
         let (record, messages) = parse_session(&source.path, project_path.as_deref())?;
+        session_id = record.id.clone();
         sessions::upsert_session(conn, &record)?;
         for msg in &messages {
             crate::store::messages::upsert_message(conn, msg)?;
         }
         crate::store::sources::upsert_source(conn, source)?;
         crate::store::sources::link_session_source(
-            conn, &record.id, &source.fingerprint,
+            conn, &session_id, &source.fingerprint,
             &source.source_type, &source.path, "file_safe",
         )?;
     }
+
+    // Batch rebuild FTS for this session instead of per-message FTS writes
+    crate::store::messages::rebuild_fts_for_session(conn, &session_id)?;
 
     Ok(is_update)
 }

@@ -68,10 +68,11 @@ CREATE TABLE IF NOT EXISTS action_log (
 
 CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
     session_id UNINDEXED,
-    message_id UNINDEXED,
     role,
     kind,
-    content_preview
+    content_preview,
+    content='messages',
+    content_rowid='rowid'
 );
 "#;
 
@@ -124,6 +125,24 @@ fn migrate_v2(conn: &rusqlite::Connection) -> Result<(), crate::app::errors::App
     Ok(())
 }
 
+/// Version 3 migration: rebuild FTS5 as external content table (saves ~34MB).
+fn migrate_v3(conn: &rusqlite::Connection) -> Result<(), crate::app::errors::AppError> {
+    conn.execute_batch(
+        "DROP TABLE IF EXISTS messages_fts;
+         CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+             session_id UNINDEXED,
+             role,
+             kind,
+             content_preview,
+             content='messages',
+             content_rowid='rowid'
+         );
+         INSERT INTO messages_fts(rowid, session_id, role, kind, content_preview)
+             SELECT rowid, session_id, role, kind, content_preview FROM messages;",
+    )?;
+    Ok(())
+}
+
 pub fn init_schema(conn: &rusqlite::Connection) -> Result<(), crate::app::errors::AppError> {
     conn.execute_batch(
         "PRAGMA journal_mode=WAL;
@@ -144,9 +163,12 @@ pub fn init_schema(conn: &rusqlite::Connection) -> Result<(), crate::app::errors
     if version < 2 {
         migrate_v2(conn)?;
     }
+    if version < 3 {
+        migrate_v3(conn)?;
+    }
 
     // Set to latest version
-    conn.execute_batch("PRAGMA user_version = 2;")?;
+    conn.execute_batch("PRAGMA user_version = 3;")?;
 
     Ok(())
 }

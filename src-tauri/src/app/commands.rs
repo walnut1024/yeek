@@ -622,7 +622,8 @@ pub fn release_and_resync(state: State<'_, AppState>) -> Result<ActionResult, Ap
              DELETE FROM messages;
              DELETE FROM session_sources;
              DELETE FROM sources;
-             DELETE FROM sessions;"
+             DELETE FROM sessions;
+             DELETE FROM sqlite_sequence;"
         )?;
         action_store::record_action(&db, None, "release", Some("Cleared all indexed data"))?;
     }

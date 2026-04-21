@@ -64,17 +64,25 @@ pub fn upsert_message(
         ],
     )?;
 
-    // Update FTS index
-    conn.execute(
-        "DELETE FROM messages_fts WHERE message_id = ?",
-        params![msg.id],
-    )?;
-    conn.execute(
-        "INSERT INTO messages_fts (session_id, message_id, role, kind, content_preview)
-         VALUES (?, ?, ?, ?, ?)",
-        params![msg.session_id, msg.id, msg.role, msg.kind, msg.content_preview],
-    )?;
+    Ok(())
+}
 
+/// Rebuild FTS index for all messages of a given session (batch operation).
+pub fn rebuild_fts_for_session(
+    conn: &rusqlite::Connection,
+    session_id: &str,
+) -> Result<(), AppError> {
+    // Delete existing FTS entries for this session
+    conn.execute(
+        "DELETE FROM messages_fts WHERE rowid IN (SELECT rowid FROM messages WHERE session_id = ?1)",
+        params![session_id],
+    )?;
+    // Batch insert FTS entries
+    conn.execute(
+        "INSERT INTO messages_fts (rowid, session_id, role, kind, content_preview)
+         SELECT rowid, session_id, role, kind, content_preview FROM messages WHERE session_id = ?1",
+        params![session_id],
+    )?;
     Ok(())
 }
 
