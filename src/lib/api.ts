@@ -225,3 +225,64 @@ export async function getSessionTranscript(
 ): Promise<TranscriptPayload> {
   return invoke("get_session_transcript", { sessionId });
 }
+
+// ── Skills / Plugins ──────────────────────────────────────────
+
+export interface SkillInfo {
+  name: string;
+  description: string;
+  skill_type: string;
+  tools?: string;
+  file_path: string;
+  health: string;
+  health_detail?: string;
+}
+
+export interface MarketplaceInfo {
+  name: string;
+  repo: string;
+  last_updated?: string;
+}
+
+export interface PluginInfo {
+  key: string;
+  name: string;
+  version: string;
+  scope: string;
+  marketplace?: MarketplaceInfo;
+  install_path: string;
+  enabled: boolean;
+  health: string;
+  health_issues: string[];
+  skills: SkillInfo[];
+  agents: SkillInfo[];
+  installed_at?: string;
+  last_updated?: string;
+}
+
+export interface HealthSummary {
+  ok: number;
+  partial: number;
+  hook: number;
+  broken: number;
+}
+
+export interface SkillsOverview {
+  plugins: PluginInfo[];
+  total_plugins: number;
+  total_skills: number;
+  total_agents: number;
+  health_summary: HealthSummary;
+}
+
+export async function listPlugins(scope: string): Promise<SkillsOverview> {
+  return invoke("list_plugins", { scope });
+}
+
+export async function togglePlugin(key: string): Promise<void> {
+  return invoke("toggle_plugin", { key });
+}
+
+export async function uninstallPlugin(key: string): Promise<void> {
+  return invoke("uninstall_plugin", { key });
+}
