@@ -944,3 +944,75 @@ fn list_project_plugins(state: &AppState) -> Result<plugin::SkillsOverview, AppE
         plugins,
     })
 }
+
+// --- Plugin Toggle & Uninstall ---
+
+#[tauri::command]
+pub fn toggle_plugin(key: String) -> Result<(), AppError> {
+    let home = dirs::home_dir().ok_or_else(|| AppError::Internal("No home directory".into()))?;
+    let settings_path = home.join(".claude/settings.json");
+
+    let mut settings: serde_json::Value = read_json(&settings_path)?;
+
+    let enabled = settings
+        .get_mut("enabledPlugins")
+        .and_then(|v| v.as_object_mut())
+        .ok_or_else(|| AppError::Internal("No enabledPlugins in settings.json".into()))?;
+
+    let current = enabled.get(&key).and_then(|v| v.as_bool()).unwrap_or(true);
+    enabled.insert(key, serde_json::Value::Bool(!current));
+
+    let output = serde_json::to_string_pretty(&settings)
+        .map_err(|e| AppError::Internal(format!("Failed to serialize settings: {}", e)))?;
+    std::fs::write(&settings_path, output)
+        .map_err(|e| AppError::Internal(format!("Failed to write settings: {}", e)))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn uninstall_plugin(key: String) -> Result<(), AppError> {
+    let home = dirs::home_dir().ok_or_else(|| AppError::Internal("No home directory".into()))?;
+    let claude_dir = home.join(".claude");
+
+    // 1. Read registry, find install path, remove directory
+    let registry_path = claude_dir.join("plugins/installed_plugins.json");
+    let mut registry: serde_json::Value = read_json(&registry_path)?;
+
+    let install_path = registry
+        .get("plugins")
+        .and_then(|p| p.get(&key))
+        .and_then(|v| v.as_array())
+        .and_then(|a| a.first())
+        .and_then(|e| e["installPath"].as_str())
+        .ok_or_else(|| AppError::NotFound(format!("Plugin {} not found in registry", key)))?
+        .to_string();
+
+    let path = std::path::Path::new(&install_path);
+    if path.exists() {
+        std::fs::remove_dir_all(path)
+            .map_err(|e| AppError::DeleteFailed(format!("Failed to remove {}: {}", install_path, e)))?;
+    }
+
+    // 2. Remove from registry
+    if let Some(plugins) = registry.get_mut("plugins").and_then(|v| v.as_object_mut()) {
+        plugins.remove(&key);
+    }
+    let output = serde_json::to_string_pretty(&registry)
+        .map_err(|e| AppError::Internal(format!("Failed to serialize registry: {}", e)))?;
+    std::fs::write(&registry_path, output)
+        .map_err(|e| AppError::Internal(format!("Failed to write registry: {}", e)))?;
+
+    // 3. Remove from enabledPlugins in settings.json
+    let settings_path = claude_dir.join("settings.json");
+    if let Ok(mut settings) = read_json(&settings_path) {
+        if let Some(enabled) = settings.get_mut("enabledPlugins").and_then(|v| v.as_object_mut()) {
+            enabled.remove(&key);
+        }
+        if let Ok(output) = serde_json::to_string_pretty(&settings) {
+            let _ = std::fs::write(&settings_path, output);
+        }
+    }
+
+    Ok(())
+}
