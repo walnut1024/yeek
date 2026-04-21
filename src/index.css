@@ -39,6 +39,8 @@
     --color-card: var(--card);
     --color-foreground: var(--foreground);
     --color-background: var(--background);
+    --color-element-hover: var(--element-hover);
+    --color-element-active: var(--element-active);
     --radius-sm: calc(var(--radius) * 0.67);
     --radius-md: var(--radius);
     --radius-lg: calc(var(--radius) * 1.33);
@@ -49,46 +51,49 @@
 }
 
 :root {
-    --background: #3b414d;
-    --foreground: #dce0e5;
-    --card: #2f343e;
-    --card-foreground: #dce0e5;
-    --popover: #2f343e;
-    --popover-foreground: #dce0e5;
+    /* ── Hermes dark palette ──────────────────────────────── */
+    --background: #000000;
+    --foreground: #ffe6cb;
+    --card: #041C1C;
+    --card-foreground: #ffe6cb;
+    --popover: #041C1C;
+    --popover-foreground: #ffe6cb;
     --primary: #74ade8;
-    --primary-foreground: #282c33;
-    --secondary: #2e343e;
-    --secondary-foreground: #dce0e5;
-    --muted: #2e343e;
-    --muted-foreground: #a9afbc;
-    --accent: #363c46;
-    --accent-foreground: #dce0e5;
+    --primary-foreground: #000000;
+    --secondary: #0a2a2a;
+    --secondary-foreground: #ffe6cb;
+    --muted: #0a2a2a;
+    --muted-foreground: rgba(255, 230, 203, 0.6);
+    --accent: #0a2a2a;
+    --accent-foreground: #ffe6cb;
     --destructive: #d07277;
-    --border: #464b57;
-    --input: #2e343e;
-    --ring: #47679e;
+    --border: rgba(255, 230, 203, 0.15);
+    --input: #0a2a2a;
+    --ring: rgba(116, 173, 232, 0.5);
     --chart-1: #74ade8;
     --chart-2: #a1c181;
     --chart-3: #dec184;
     --chart-4: #d07277;
     --chart-5: #878a98;
     --radius: 6px;
-    --sidebar: #2f343e;
-    --sidebar-foreground: #dce0e5;
+    --sidebar: #041C1C;
+    --sidebar-foreground: #ffe6cb;
     --sidebar-primary: #74ade8;
-    --sidebar-primary-foreground: #282c33;
-    --sidebar-accent: #363c46;
-    --sidebar-accent-foreground: #dce0e5;
-    --sidebar-border: #464b57;
-    --sidebar-ring: #47679e;
-    --editor: #282c33;
-    --surface: #2f343e;
-    --frame: #3b414d;
-    --element-hover: #363c46;
-    --element-active: #454a56;
-    --line: #4e5a5f;
+    --sidebar-primary-foreground: #000000;
+    --sidebar-accent: #0a2a2a;
+    --sidebar-accent-foreground: #ffe6cb;
+    --sidebar-border: rgba(255, 230, 203, 0.15);
+    --sidebar-ring: rgba(116, 173, 232, 0.5);
+
+    /* ── Extended tokens ──────────────────────────────────── */
+    --editor: #021212;
+    --surface: #041C1C;
+    --frame: #000000;
+    --element-hover: rgba(255, 230, 203, 0.05);
+    --element-active: rgba(255, 230, 203, 0.1);
+    --line: rgba(255, 230, 203, 0.2);
     --selection: rgba(116, 173, 232, 0.24);
-    --scroll-thumb: rgba(200, 204, 212, 0.3);
+    --scroll-thumb: rgba(255, 230, 203, 0.2);
 }
 
 @layer base {
@@ -130,6 +135,17 @@
     @apply relative min-h-screen overflow-hidden bg-background text-foreground;
   }
 
+  /* Amber gradient overlay — subtle warm atmosphere */
+  .amber-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: radial-gradient(ellipse at 0% 0%, transparent 60%, rgba(255, 189, 56, 0.35) 100%);
+    mix-blend-mode: lighten;
+    opacity: 0.12;
+  }
+
   .surface-panel {
     @apply border border-border bg-card;
   }
@@ -139,19 +155,19 @@
   }
 
   .pill-tab {
-    @apply rounded-md px-2.5 py-1.5 text-[14px] font-medium transition-colors;
+    @apply rounded-md px-2.5 py-1.5 text-[12px] font-medium uppercase tracking-[0.1em] transition-colors;
   }
 
   .pill-tab-active {
-    @apply border border-border bg-[var(--editor)] text-foreground;
+    @apply border border-border bg-card text-foreground;
   }
 
   .pill-tab-idle {
-    @apply text-muted-foreground hover:bg-accent hover:text-foreground;
+    @apply border border-transparent text-muted-foreground hover:bg-element-hover hover:text-foreground;
   }
 
   .zed-kicker {
-    @apply text-[14px] font-medium tracking-[0.14em] text-muted-foreground;
+    @apply text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground;
   }
 
   .zed-section-title {
@@ -159,11 +175,11 @@
   }
 
   .zed-chip {
-    @apply inline-flex items-center gap-1 rounded-sm border border-border bg-secondary px-1.5 py-0.5 text-[14px] text-muted-foreground;
+    @apply inline-flex items-center gap-1 rounded-sm border border-border bg-secondary px-1.5 py-0.5 font-mono text-[12px] text-muted-foreground;
   }
 
   .zed-input {
-    @apply h-8 w-full rounded-md border border-border bg-input px-2.5 text-[14px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/75 focus:border-ring;
+    @apply h-8 w-full rounded-md border border-border bg-input px-2.5 text-[14px] text-foreground outline-none transition-colors placeholder:text-[rgba(255,230,203,0.35)] focus:border-ring;
   }
 
   .zed-list-row {
@@ -205,7 +221,7 @@
     border-radius: 10px;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: var(--muted-foreground);
+    background: rgba(255, 230, 203, 0.4);
   }
 }
 

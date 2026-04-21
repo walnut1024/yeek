@@ -199,7 +199,7 @@ export default function SystemPage() {
                     className="border border-destructive/30 bg-destructive/10 px-2.5 py-2"
                   >
                     <div className="flex items-center justify-between gap-3">
-                      <Badge className="border-[#4c2b2c] bg-destructive/10 px-1.5 py-0.5 text-[12px] text-destructive">
+                      <Badge className="border-destructive/30 bg-destructive/10 px-1.5 py-0.5 text-[12px] text-destructive">
                         {a.action}
                       </Badge>
                       <span className="font-mono text-[12px] text-muted-foreground">

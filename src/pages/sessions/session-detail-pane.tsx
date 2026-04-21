@@ -147,7 +147,7 @@ export default function SessionDetailPane({
               <AlertDialogAction
                 disabled={softDel.isPending}
                 onClick={() => softDel.mutate()}
-                className="border-[#4c2b2c] bg-destructive/10 text-destructive hover:bg-destructive/20"
+                className="border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20"
               >
                 {softDel.isPending ? t("detail.deleting") : t("detail.delete")}
               </AlertDialogAction>
