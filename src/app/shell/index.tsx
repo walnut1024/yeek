@@ -10,6 +10,7 @@ import {
   softDeleteProject,
 } from "@/lib/api";
 import { useDebouncedValue, useLocalStorage } from "@/lib/hooks";
+import { useZoom } from "./use-zoom";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ export function AppShell() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const { t, i18n } = useTranslation();
+  useZoom();
 
   const { data: status } = useQuery({
     queryKey: ["system-status"],
@@ -50,16 +52,15 @@ export function AppShell() {
 
   return (
     <div className="app-shell">
+      <div className="amber-overlay" />
       <div className="relative z-10 flex h-screen flex-col overflow-hidden">
-        <header className="flex h-11 items-center justify-between border-b border-border bg-background px-3">
-          <div className="flex items-center gap-2.5">
-            <span className="size-2 rounded-full bg-primary" />
-            <span className="text-[14px] font-medium text-foreground">
+        <header className="flex h-11 items-center justify-between border-b border-border bg-background px-4">
+          <div className="flex items-center gap-3">
+            <span className="font-mono text-[15px] font-bold uppercase tracking-[0.06em] text-foreground">
               {t("app.title")}
             </span>
-
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             {(["sessions", "skills", "system"] as const).map((s) => (
               <button
                 type="button"
@@ -70,16 +71,17 @@ export function AppShell() {
                 {t(`nav.${s}`)}
               </button>
             ))}
-            <span className="flex items-center gap-1.5 border border-border bg-secondary px-2 py-1">
-              <span className="size-1.5 rounded-full bg-[#a1c181]" />
-              <span className="font-mono text-[12px] text-muted-foreground">
+            <span className="ml-2 flex items-center gap-1.5 border border-border px-2 py-1">
+              <span className="size-1.5 rounded-full bg-chart-2" />
+              <span className="font-mono text-[11px] text-muted-foreground">
                 {status ? t("nav.sessionCount", { count: status.total_sessions }) : "..."}
               </span>
             </span>
             <button
               type="button"
               onClick={() => i18n.changeLanguage(i18n.language === "zh-CN" ? "en" : "zh-CN")}
-              className="rounded-md px-2.5 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              className="ml-1 font-mono text-[12px] font-medium tracking-[0.04em] text-muted-foreground transition-colors hover:bg-element-hover hover:text-foreground"
+              style={{ padding: "6px 10px" }}
             >
               {i18n.language === "zh-CN" ? "EN" : "中"}
             </button>
@@ -404,7 +406,7 @@ function SessionsPage({
           <SessionDetailPane sessionId={selectedId} />
         ) : (
           <div className="flex h-full items-center justify-center p-6">
-            <div className="max-w-xl border border-border bg-card p-4">
+            <div className="max-w-xl border border-border bg-card p-5">
               <p className="zed-kicker">{t("sessions.selectPrompt")}</p>
               <h3 className="mt-2 max-w-md text-[16px] font-medium leading-[1.2] text-foreground">
                 {t("sessions.selectHeading")}
@@ -435,7 +437,7 @@ function SessionsPage({
 
       {showHelp && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
           onClick={() => setShowHelp(false)}
         >
           <div
@@ -450,6 +452,9 @@ function SessionsPage({
               <Shortcut keys={["/"]} desc={t("shortcuts.focusSearch")} />
               <Shortcut keys={["Esc"]} desc={t("shortcuts.closeSelection")} />
               <Shortcut keys={["?"]} desc={t("shortcuts.toggleHelp")} />
+              <Shortcut keys={["⌘", "="]} desc={t("shortcuts.zoomIn")} />
+              <Shortcut keys={["⌘", "-"]} desc={t("shortcuts.zoomOut")} />
+              <Shortcut keys={["⌘", "0"]} desc={t("shortcuts.zoomReset")} />
             </div>
           </div>
         </div>

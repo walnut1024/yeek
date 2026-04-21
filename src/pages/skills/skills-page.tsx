@@ -31,12 +31,6 @@ const HEALTH_COLORS: Record<string, { dot: string; text: string; bg: string; bor
   broken: { dot: "bg-destructive", text: "text-destructive", bg: "bg-destructive/15", border: "border-destructive/30" },
 };
 
-const HEALTH_BORDER_L: Record<string, string> = {
-  ok: "border-l-chart-2",
-  partial: "border-l-chart-3",
-  hook: "border-l-chart-5",
-  broken: "border-l-destructive",
-};
 
 const HEALTH_LABELS: Record<string, string> = {
   ok: "OK",
@@ -175,7 +169,7 @@ export default function SkillsPage() {
               >
                 <Badge
                   variant="outline"
-                  className={`px-1 py-0 text-[10px] font-medium ${
+                  className={`px-1 py-0 text-[11px] font-medium ${
                     s.skill_type === "agent"
                       ? "text-chart-3 border-chart-3/30"
                       : "text-primary border-primary/30"
@@ -183,10 +177,10 @@ export default function SkillsPage() {
                 >
                   {s.skill_type === "agent" ? "A" : "S"}
                 </Badge>
-                <span className="w-[160px] shrink-0 truncate text-[13px] font-medium text-foreground">
+                <span className="w-[160px] shrink-0 truncate text-[14px] font-medium text-foreground">
                   {s.name}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">
+                <span className="min-w-0 flex-1 truncate text-[13px] text-muted-foreground">
                   {s.description}
                 </span>
                 <span className="zed-chip">
@@ -225,7 +219,7 @@ export default function SkillsPage() {
             <AlertDialogAction
               disabled={uninstallMut.isPending}
               onClick={() => uninstallTarget && uninstallMut.mutate(uninstallTarget.key)}
-              className="border-[#4c2b2c] bg-destructive/10 text-destructive hover:bg-destructive/20"
+              className="border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20"
             >
               {uninstallMut.isPending ? t("detail.deleting") : t("skills.uninstall")}
             </AlertDialogAction>
@@ -261,11 +255,7 @@ function PluginCard({
   const { t } = useTranslation();
 
   return (
-    <div
-      className={`surface-card overflow-hidden transition border-l-[3px] ${
-        HEALTH_BORDER_L[plugin.health] ?? ""
-      }`}
-    >
+    <div className="surface-card overflow-hidden transition">
       <div
         className="flex cursor-pointer items-center gap-2 px-2.5 py-2 transition-colors hover:bg-accent/50"
         onClick={onToggleExpand}
@@ -288,7 +278,7 @@ function PluginCard({
             )}
             {plugin.health === "hook" && <span className="zed-chip">hook-only</span>}
             {plugin.marketplace && (
-              <span className="text-primary opacity-70">
+              <span className="text-muted-foreground">
                 ← {plugin.marketplace.name}
                 <span className="ml-1 font-mono text-[10px]">{plugin.marketplace.repo}</span>
               </span>

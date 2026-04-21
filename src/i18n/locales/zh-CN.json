@@ -35,6 +35,9 @@
   "shortcuts.focusSearch": "聚焦搜索",
   "shortcuts.closeSelection": "关闭选择",
   "shortcuts.toggleHelp": "切换帮助",
+  "shortcuts.zoomIn": "放大",
+  "shortcuts.zoomOut": "缩小",
+  "shortcuts.zoomReset": "重置缩放",
 
   "manage.selectedPrefix": "已选 ",
   "manage.selectedSuffix": " 个",

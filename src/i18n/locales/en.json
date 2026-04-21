@@ -38,6 +38,9 @@
   "shortcuts.focusSearch": "Focus search",
   "shortcuts.closeSelection": "Close selection",
   "shortcuts.toggleHelp": "Toggle help",
+  "shortcuts.zoomIn": "Zoom in",
+  "shortcuts.zoomOut": "Zoom out",
+  "shortcuts.zoomReset": "Reset zoom",
 
   "manage.selectedPrefix": "",
   "manage.selectedSuffix_one": " selected",

@@ -7,6 +7,12 @@
     <title>yeek-frontend</title>
   </head>
   <body>
+    <script>
+      try {
+        var s = localStorage.getItem('yeek:font-size');
+        document.documentElement.style.zoom = (s ? JSON.parse(s) : 16) / 14;
+      } catch(e) {}
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
