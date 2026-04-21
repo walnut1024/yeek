@@ -1213,3 +1213,353 @@ pub fn reinstall_plugin(key: String) -> Result<plugin::FixPluginResult, AppError
         message: format!("Reinstalled {} from {}", key, repo),
     })
 }
+
+// --- Marketplace Management ---
+
+#[tauri::command]
+pub fn list_marketplaces() -> Result<plugin::MarketplaceListResult, AppError> {
+    let home = dirs::home_dir().ok_or_else(|| AppError::Internal("No home directory".into()))?;
+    let claude_dir = home.join(".claude");
+
+    let marketplaces: serde_json::Value =
+        read_json_or_default(&claude_dir.join("plugins/known_marketplaces.json"));
+    let registry: serde_json::Value =
+        read_json_or_default(&claude_dir.join("plugins/installed_plugins.json"));
+
+    // Count plugins per marketplace from registry
+    let mut plugin_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    if let Some(plugins) = registry.get("plugins").and_then(|v| v.as_object()) {
+        for key in plugins.keys() {
+            let market_name = key.split('@').last().unwrap_or("");
+            if !market_name.is_empty() {
+                *plugin_counts.entry(market_name.to_string()).or_insert(0) += 1;
+            }
+        }
+    }
+
+    let mut entries = Vec::new();
+    if let Some(obj) = marketplaces.as_object() {
+        for (name, val) in obj {
+            let repo = val["source"]["repo"].as_str().unwrap_or("").to_string();
+            let install_location = val["installLocation"].as_str().unwrap_or("").to_string();
+            let last_updated = val["lastUpdated"].as_str().map(String::from);
+            let plugin_count = *plugin_counts.get(name).unwrap_or(&0);
+
+            entries.push(plugin::MarketplaceEntry {
+                name: name.clone(),
+                repo,
+                install_location,
+                last_updated,
+                plugin_count,
+            });
+        }
+    }
+
+    Ok(plugin::MarketplaceListResult { marketplaces: entries })
+}
+
+#[tauri::command]
+pub fn add_marketplace(name: String, repo: String) -> Result<(), AppError> {
+    let home = dirs::home_dir().ok_or_else(|| AppError::Internal("No home directory".into()))?;
+    let claude_dir = home.join(".claude");
+    let marketplaces_dir = claude_dir.join("plugins/marketplaces");
+    std::fs::create_dir_all(&marketplaces_dir)
+        .map_err(|e| AppError::Internal(format!("Failed to create marketplaces dir: {}", e)))?;
+
+    // Clone repo
+    let clone_url = format!("https://github.com/{}.git", repo);
+    let dest = marketplaces_dir.join(&name);
+    let out = std::process::Command::new("git")
+        .args(["clone", &clone_url, &dest.to_string_lossy()])
+        .output()
+        .map_err(|e| AppError::Internal(format!("git clone failed: {}", e)))?;
+    if !out.status.success() {
+        return Err(AppError::Internal(format!(
+            "git clone failed: {}", String::from_utf8_lossy(&out.stderr)
+        )));
+    }
+
+    // Update known_marketplaces.json
+    let path = claude_dir.join("plugins/known_marketplaces.json");
+    let mut marketplaces: serde_json::Value = read_json_or_default(&path);
+    let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    marketplaces[&name] = serde_json::json!({
+        "source": { "source": "github", "repo": repo },
+        "installLocation": dest.to_string_lossy(),
+        "lastUpdated": now
+    });
+    let output = serde_json::to_string_pretty(&marketplaces)
+        .map_err(|e| AppError::Internal(format!("Failed to serialize: {}", e)))?;
+    std::fs::write(&path, output)
+        .map_err(|e| AppError::Internal(format!("Failed to write: {}", e)))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn update_marketplace(name: String) -> Result<(), AppError> {
+    let home = dirs::home_dir().ok_or_else(|| AppError::Internal("No home directory".into()))?;
+    let claude_dir = home.join(".claude");
+
+    let path = claude_dir.join("plugins/known_marketplaces.json");
+    let mut marketplaces: serde_json::Value = read_json(&path)?;
+    let mkt = marketplaces.get_mut(&name)
+        .ok_or_else(|| AppError::NotFound(format!("Marketplace '{}' not found", name)))?;
+    let clone_path = mkt["installLocation"].as_str().unwrap_or("");
+
+    // git pull
+    let out = std::process::Command::new("git")
+        .args(["pull", "--ff-only"])
+        .current_dir(clone_path)
+        .output()
+        .map_err(|e| AppError::Internal(format!("git pull failed: {}", e)))?;
+    if !out.status.success() {
+        return Err(AppError::Internal(format!(
+            "git pull failed: {}", String::from_utf8_lossy(&out.stderr)
+        )));
+    }
+
+    // Update lastUpdated
+    let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    mkt["lastUpdated"] = serde_json::Value::String(now);
+    let output = serde_json::to_string_pretty(&marketplaces)
+        .map_err(|e| AppError::Internal(format!("Failed to serialize: {}", e)))?;
+    std::fs::write(&path, output)
+        .map_err(|e| AppError::Internal(format!("Failed to write: {}", e)))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn remove_marketplace(name: String, remove_plugins: bool) -> Result<(), AppError> {
+    let home = dirs::home_dir().ok_or_else(|| AppError::Internal("No home directory".into()))?;
+    let claude_dir = home.join(".claude");
+
+    let path = claude_dir.join("plugins/known_marketplaces.json");
+    let mut marketplaces: serde_json::Value = read_json(&path)?;
+    let install_location = marketplaces.get(&name)
+        .and_then(|v| v["installLocation"].as_str())
+        .unwrap_or("")
+        .to_string();
+
+    // Delete local clone
+    if !install_location.is_empty() {
+        let p = std::path::Path::new(&install_location);
+        if p.exists() {
+            let _ = std::fs::remove_dir_all(p);
+        }
+    }
+
+    // Optionally remove all plugins belonging to this marketplace
+    if remove_plugins {
+        let registry_path = claude_dir.join("plugins/installed_plugins.json");
+        if let Ok(mut registry) = read_json(&registry_path) {
+            let keys_to_remove: Vec<String> = registry
+                .get("plugins")
+                .and_then(|v| v.as_object())
+                .map(|obj| {
+                    obj.keys()
+                        .filter(|k| k.split('@').last() == Some(&name))
+                        .cloned()
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            if let Some(plugins) = registry.get_mut("plugins").and_then(|v| v.as_object_mut()) {
+                for key in &keys_to_remove {
+                    // Remove install dir
+                    if let Some(entry) = plugins.get(key)
+                        .and_then(|v| v.as_array())
+                        .and_then(|a| a.first())
+                        .and_then(|e| e["installPath"].as_str())
+                    {
+                        let _ = std::fs::remove_dir_all(std::path::Path::new(entry));
+                    }
+                    plugins.remove(key);
+                }
+            }
+            if let Ok(output) = serde_json::to_string_pretty(&registry) {
+                let _ = std::fs::write(&registry_path, output);
+            }
+        }
+
+        // Clean enabledPlugins
+        let settings_path = claude_dir.join("settings.json");
+        if let Ok(mut settings) = read_json(&settings_path) {
+            if let Some(enabled) = settings.get_mut("enabledPlugins").and_then(|v| v.as_object_mut()) {
+                let keys: Vec<String> = enabled.keys()
+                    .filter(|k| k.split('@').last() == Some(&name))
+                    .cloned()
+                    .collect();
+                for key in keys {
+                    enabled.remove(&key);
+                }
+            }
+            if let Ok(output) = serde_json::to_string_pretty(&settings) {
+                let _ = std::fs::write(&settings_path, output);
+            }
+        }
+    }
+
+    // Remove from known_marketplaces.json
+    if let Some(obj) = marketplaces.as_object_mut() {
+        obj.remove(&name);
+    }
+    let output = serde_json::to_string_pretty(&marketplaces)
+        .map_err(|e| AppError::Internal(format!("Failed to serialize: {}", e)))?;
+    std::fs::write(&path, output)
+        .map_err(|e| AppError::Internal(format!("Failed to write: {}", e)))?;
+
+    Ok(())
+}
+
+// --- Marketplace Plugin Browser & Install ---
+
+#[tauri::command]
+pub fn list_marketplace_plugins(marketplace_name: String) -> Result<Vec<plugin::MarketplacePlugin>, AppError> {
+    let home = dirs::home_dir().ok_or_else(|| AppError::Internal("No home directory".into()))?;
+    let claude_dir = home.join(".claude");
+
+    let marketplaces: serde_json::Value = read_json(&claude_dir.join("plugins/known_marketplaces.json"))?;
+    let clone_path_str = marketplaces[&marketplace_name]["installLocation"]
+        .as_str().unwrap_or("");
+    let clone_path = std::path::Path::new(clone_path_str);
+    if !clone_path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let registry: serde_json::Value = read_json_or_default(&claude_dir.join("plugins/installed_plugins.json"));
+    let installed_names: std::collections::HashSet<String> = registry
+        .get("plugins").and_then(|v| v.as_object())
+        .map(|obj| obj.keys()
+            .filter(|k| k.split('@').last() == Some(marketplace_name.as_str()))
+            .filter_map(|k| k.split('@').next())
+            .map(|s| s.to_string()).collect())
+        .unwrap_or_default();
+
+    let mut result = Vec::new();
+
+    let plugins_dir = clone_path.join("plugins");
+    let skills_dir = clone_path.join("skills");
+
+    // Pattern 1: plugins/<name>/ (e.g., claude-plugins-official)
+    if plugins_dir.is_dir() {
+        if let Ok(entries) = std::fs::read_dir(&plugins_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if !path.is_dir() { continue; }
+                let name = entry.file_name().to_string_lossy().into_owned();
+                let skills = scan_skills(&path);
+                let agents = scan_agents(&path);
+                let desc = skills.iter().chain(agents.iter())
+                    .next().map(|s| s.description.clone()).unwrap_or_else(|| name.clone());
+                result.push(plugin::MarketplacePlugin {
+                    installed: installed_names.contains(&name),
+                    name, description: desc,
+                    skill_count: skills.len(), agent_count: agents.len(),
+                    has_hooks: has_hooks(&path),
+                });
+            }
+        }
+    }
+    // Pattern 2: skills/<name>/ (e.g., anthropic-agent-skills)
+    else if skills_dir.is_dir() {
+        if let Ok(entries) = std::fs::read_dir(&skills_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if !path.is_dir() { continue; }
+                let name = entry.file_name().to_string_lossy().into_owned();
+                let desc = path.join("SKILL.md").exists()
+                    .then(|| parse_frontmatter(&path.join("SKILL.md"), "skill"))
+                    .flatten().map(|s| s.description).unwrap_or_else(|| name.clone());
+                result.push(plugin::MarketplacePlugin {
+                    installed: installed_names.contains(&name),
+                    name, description: desc,
+                    skill_count: 1, agent_count: 0, has_hooks: false,
+                });
+            }
+        }
+    }
+    // Pattern 3: root subdirectories with SKILL.md (e.g., axton-obsidian-visual-skills)
+    else if let Ok(entries) = std::fs::read_dir(clone_path) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_dir() { continue; }
+            let name = entry.file_name().to_string_lossy().into_owned();
+            // Skip common non-plugin directories
+            if ["node_modules", ".git", "dist", "src", "test", "tests", "__tests__"].contains(&name.as_str()) { continue; }
+            if !path.join("SKILL.md").exists() { continue; }
+            let desc = parse_frontmatter(&path.join("SKILL.md"), "skill")
+                .map(|s| s.description).unwrap_or_else(|| name.clone());
+            result.push(plugin::MarketplacePlugin {
+                installed: installed_names.contains(&name),
+                name, description: desc,
+                skill_count: 1, agent_count: 0, has_hooks: false,
+            });
+        }
+    }
+
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn install_marketplace_plugin(marketplace_name: String, plugin_name: String) -> Result<(), AppError> {
+    let home = dirs::home_dir().ok_or_else(|| AppError::Internal("No home directory".into()))?;
+    let claude_dir = home.join(".claude");
+
+    let marketplaces: serde_json::Value = read_json(&claude_dir.join("plugins/known_marketplaces.json"))?;
+    let clone_path_str = marketplaces[&marketplace_name]["installLocation"]
+        .as_str().unwrap_or("");
+    let clone_path = std::path::Path::new(clone_path_str);
+
+    let source = clone_path.join(format!("plugins/{}", plugin_name));
+    let source = if source.is_dir() { source } else { clone_path.join(format!("skills/{}", plugin_name)) };
+    if !source.is_dir() {
+        return Err(AppError::NotFound(format!("Plugin '{}' not found in '{}'", plugin_name, marketplace_name)));
+    }
+
+    let git_sha = std::process::Command::new("git")
+        .args(["rev-parse", "--short", "HEAD"])
+        .current_dir(clone_path)
+        .output().ok()
+        .and_then(|o| if o.status.success() { Some(String::from_utf8_lossy(&o.stdout).trim().to_string()) } else { None })
+        .unwrap_or_else(|| "unknown".to_string());
+
+    let install_path = claude_dir.join(format!("plugins/cache/{}/{}/{}", marketplace_name, plugin_name, git_sha));
+    std::fs::create_dir_all(&install_path)
+        .map_err(|e| AppError::Internal(format!("Failed to create dir: {}", e)))?;
+    copy_dir_recursive(&source, &install_path)?;
+
+    let registry_path = claude_dir.join("plugins/installed_plugins.json");
+    let mut registry: serde_json::Value = read_json(&registry_path)?;
+    let key = format!("{}@{}", plugin_name, marketplace_name);
+    let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+
+    let plugins = registry.get_mut("plugins").and_then(|v| v.as_object_mut())
+        .ok_or_else(|| AppError::Internal("Invalid registry".into()))?;
+    plugins.insert(key.clone(), serde_json::json!([{
+        "scope": "user",
+        "installPath": install_path.to_string_lossy(),
+        "version": git_sha,
+        "installedAt": now,
+        "lastUpdated": now,
+        "gitCommitSha": git_sha,
+    }]));
+
+    let output = serde_json::to_string_pretty(&registry)
+        .map_err(|e| AppError::Internal(format!("Serialize: {}", e)))?;
+    std::fs::write(&registry_path, output)
+        .map_err(|e| AppError::Internal(format!("Write: {}", e)))?;
+
+    let settings_path = claude_dir.join("settings.json");
+    if let Ok(mut settings) = read_json(&settings_path) {
+        if let Some(enabled) = settings.get_mut("enabledPlugins").and_then(|v| v.as_object_mut()) {
+            enabled.insert(key, serde_json::Value::Bool(true));
+        }
+        if let Ok(output) = serde_json::to_string_pretty(&settings) {
+            let _ = std::fs::write(&settings_path, output);
+        }
+    }
+
+    Ok(())
+}

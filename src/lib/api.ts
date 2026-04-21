@@ -299,3 +299,50 @@ export async function cleanPlugin(key: string): Promise<FixPluginResult> {
 export async function reinstallPlugin(key: string): Promise<FixPluginResult> {
   return invoke("reinstall_plugin", { key });
 }
+
+// ── Marketplace ───────────────────────────────────────────
+
+export interface MarketplaceEntry {
+  name: string;
+  repo: string;
+  install_location: string;
+  last_updated?: string;
+  plugin_count: number;
+}
+
+export interface MarketplaceListResult {
+  marketplaces: MarketplaceEntry[];
+}
+
+export async function listMarketplaces(): Promise<MarketplaceListResult> {
+  return invoke("list_marketplaces");
+}
+
+export async function addMarketplace(name: string, repo: string): Promise<void> {
+  return invoke("add_marketplace", { name, repo });
+}
+
+export async function updateMarketplace(name: string): Promise<void> {
+  return invoke("update_marketplace", { name });
+}
+
+export async function removeMarketplace(name: string, removePlugins: boolean): Promise<void> {
+  return invoke("remove_marketplace", { name, removePlugins });
+}
+
+export interface MarketplacePlugin {
+  name: string;
+  description: string;
+  skill_count: number;
+  agent_count: number;
+  has_hooks: boolean;
+  installed: boolean;
+}
+
+export async function listMarketplacePlugins(marketplaceName: string): Promise<MarketplacePlugin[]> {
+  return invoke("list_marketplace_plugins", { marketplaceName });
+}
+
+export async function installMarketplacePlugin(marketplaceName: string, pluginName: string): Promise<void> {
+  return invoke("install_marketplace_plugin", { marketplaceName, pluginName });
+}

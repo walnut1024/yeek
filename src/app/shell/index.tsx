@@ -18,13 +18,14 @@ import SessionRow from "@/pages/sessions/session-row";
 import SessionDetailPane from "@/pages/sessions/session-detail-pane";
 import SystemPage from "@/pages/system/system-page";
 import SkillsPage from "@/pages/skills/skills-page";
+import MarketplacePage from "@/pages/marketplace/marketplace-page";
 import { SESSION_PAGE_SIZE } from "@/lib/constants";
 import { useGroupedSessions } from "./use-grouped-sessions";
 import { useSessionSelection } from "./use-session-selection";
 import { useKeyboardNavigation } from "./use-keyboard-navigation";
 
 export function AppShell() {
-  const [section, setSection] = useState<"sessions" | "skills" | "system">("sessions");
+  const [section, setSection] = useState<"sessions" | "skills" | "marketplace" | "system">("sessions");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const { t, i18n } = useTranslation();
@@ -53,46 +54,56 @@ export function AppShell() {
   return (
     <div className="app-shell">
       <div className="amber-overlay" />
-      <div className="relative z-10 flex h-screen flex-col overflow-hidden">
-        <header className="flex h-11 items-center justify-between border-b border-border bg-background px-4">
-          <div className="flex items-center gap-3">
+      <div className="relative z-10 flex h-screen overflow-hidden">
+        {/* Sidebar */}
+        <nav className="flex w-[180px] shrink-0 flex-col border-r border-border bg-card">
+          <div className="px-4 py-3">
             <span className="font-mono text-[15px] font-bold uppercase tracking-[0.06em] text-foreground">
               {t("app.title")}
             </span>
           </div>
-          <div className="flex items-center gap-1">
-            {(["sessions", "skills", "system"] as const).map((s) => (
+          <div className="flex-1 space-y-0.5 px-2">
+            {([
+              { key: "sessions" as const, label: t("nav.sessions"), badge: status ? String(status.total_sessions) : undefined },
+              { key: "skills" as const, label: t("nav.skills") },
+              { key: "marketplace" as const, label: t("nav.marketplace") },
+              { key: "system" as const, label: t("nav.system") },
+            ]).map(({ key, label, badge }) => (
               <button
                 type="button"
-                key={s}
-                onClick={() => setSection(s)}
-                className={`pill-tab ${section === s ? "pill-tab-active" : "pill-tab-idle"}`}
+                key={key}
+                onClick={() => setSection(key)}
+                className={`flex w-full items-center gap-2 rounded-sm px-2.5 py-1.5 text-[12px] font-medium uppercase tracking-[0.1em] transition-colors ${
+                  section === key
+                    ? "bg-secondary text-foreground"
+                    : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+                }`}
               >
-                {t(`nav.${s}`)}
+                <span className="flex-1 text-left">{label}</span>
+                {badge && (
+                  <span className="font-mono text-[10px] text-muted-foreground">{badge}</span>
+                )}
               </button>
             ))}
-            <span className="ml-2 flex items-center gap-1.5 border border-border px-2 py-1">
-              <span className="size-1.5 rounded-full bg-chart-2" />
-              <span className="font-mono text-[11px] text-muted-foreground">
-                {status ? t("nav.sessionCount", { count: status.total_sessions }) : "..."}
-              </span>
-            </span>
+          </div>
+          <div className="border-t border-border px-2 py-2">
             <button
               type="button"
               onClick={() => i18n.changeLanguage(i18n.language === "zh-CN" ? "en" : "zh-CN")}
-              className="ml-1 font-mono text-[12px] font-medium tracking-[0.04em] text-muted-foreground transition-colors hover:bg-element-hover hover:text-foreground"
-              style={{ padding: "6px 10px" }}
+              className="w-full rounded-sm px-2.5 py-1.5 text-left font-mono text-[12px] font-medium tracking-[0.04em] text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground"
             >
-              {i18n.language === "zh-CN" ? "EN" : "中"}
+              {i18n.language === "zh-CN" ? "EN" : "中文"}
             </button>
           </div>
-        </header>
+        </nav>
 
-        <main className="min-h-0 flex-1">
+        {/* Main content */}
+        <main className="min-h-0 min-w-0 flex-1">
           {section === "sessions" && (
             <SessionsPage selectedId={selectedId} onSelect={setSelectedId} />
           )}
           {section === "skills" && <SkillsPage />}
+          {section === "marketplace" && <MarketplacePage />}
           {section === "system" && <SystemPage />}
         </main>
       </div>

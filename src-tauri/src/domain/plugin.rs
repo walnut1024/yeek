@@ -57,3 +57,27 @@ pub struct FixPluginResult {
     pub action: String,
     pub message: String,
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct MarketplaceEntry {
+    pub name: String,
+    pub repo: String,
+    pub install_location: String,
+    pub last_updated: Option<String>,
+    pub plugin_count: usize,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct MarketplaceListResult {
+    pub marketplaces: Vec<MarketplaceEntry>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct MarketplacePlugin {
+    pub name: String,
+    pub description: String,
+    pub skill_count: usize,
+    pub agent_count: usize,
+    pub has_hooks: bool,
+    pub installed: bool,
+}

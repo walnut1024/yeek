@@ -8,8 +8,9 @@ mod sync;
 use tauri::Manager;
 
 use app::commands::{
-    browse_sessions, clean_plugin, destructive_delete_session, get_action_log, get_delete_plan, get_session_detail,
-    get_session_preview, get_session_transcript, get_subagent_messages, get_system_status, list_plugins, reinstall_plugin, release_and_resync, rescan_sources, resume_session, search_sessions, soft_delete_project, soft_delete_sessions, toggle_plugin, uninstall_plugin,
+    add_marketplace, browse_sessions, clean_plugin, destructive_delete_session, get_action_log, get_delete_plan, get_session_detail,
+    get_session_preview, get_session_transcript, get_subagent_messages, get_system_status, install_marketplace_plugin, list_marketplaces, list_marketplace_plugins, list_plugins,
+    reinstall_plugin, release_and_resync, remove_marketplace, rescan_sources, resume_session, search_sessions, soft_delete_project, soft_delete_sessions, toggle_plugin, uninstall_plugin, update_marketplace,
 };
 use app::state::AppState;
 use store::schema;
@@ -112,6 +113,12 @@ pub fn run() {
             uninstall_plugin,
             clean_plugin,
             reinstall_plugin,
+            list_marketplaces,
+            add_marketplace,
+            update_marketplace,
+            remove_marketplace,
+            list_marketplace_plugins,
+            install_marketplace_plugin,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

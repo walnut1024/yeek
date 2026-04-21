@@ -182,6 +182,7 @@
   "contextMenu.deleteProject": "Delete All in Project",
 
   "nav.skills": "Skills",
+  "nav.marketplace": "Marketplace",
 
   "skills.title": "Skills",
   "skills.countChip": "{{skills}} skills · {{agents}} agents",
@@ -215,5 +216,25 @@
   "skills.scopeGlobal": "Global",
   "skills.scopeProject": "Project",
   "skills.standaloneSection": "Standalone",
-  "skills.refresh": "Refresh"
+  "skills.refresh": "Refresh",
+
+  "marketplace.title": "Marketplace",
+  "marketplace.add": "Add Marketplace",
+  "marketplace.addTitle": "Add Marketplace",
+  "marketplace.addDesc": "Enter the marketplace name and GitHub repository to clone.",
+  "marketplace.addNamePlaceholder": "Marketplace name",
+  "marketplace.addRepoPlaceholder": "owner/repo",
+  "marketplace.update": "Update",
+  "marketplace.updating": "Updating...",
+  "marketplace.updateAll": "Update All",
+  "marketplace.remove": "Remove",
+  "marketplace.removeTitle": "Remove {{name}}?",
+  "marketplace.removeDesc": "This will delete the local clone. Optionally remove all plugins from this marketplace.",
+  "marketplace.removePlugins": "Also remove plugins",
+  "marketplace.pluginCount": "{{count}} plugins",
+  "marketplace.empty": "No marketplaces added yet",
+  "marketplace.noPlugins": "No plugins found in this marketplace",
+  "marketplace.installed": "Installed",
+  "marketplace.install": "Install",
+  "marketplace.installing": "Installing..."
 }

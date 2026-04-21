@@ -43,7 +43,6 @@ const HEALTH_LABELS: Record<string, string> = {
 
 export default function SkillsPage() {
   const [scope, setScope] = useState<"global" | "project">("global");
-  const [view, setView] = useState<"plugin" | "flat">("plugin");
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [uninstallTarget, setUninstallTarget] = useState<PluginInfo | null>(null);
   const [cleanTarget, setCleanTarget] = useState<PluginInfo | null>(null);
@@ -93,10 +92,6 @@ export default function SkillsPage() {
 
   const plugins = data?.plugins ?? [];
   const hs = data?.health_summary;
-  const flatSkills = plugins.flatMap((p) => [
-    ...p.skills.map((s) => ({ ...s, plugin: p })),
-    ...p.agents.map((a) => ({ ...a, plugin: p })),
-  ]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -123,16 +118,6 @@ export default function SkillsPage() {
               ? t("skills.countChip", { skills: data.total_skills, agents: data.total_agents })
               : "..."}
           </span>
-          {(["plugin", "flat"] as const).map((v) => (
-            <button
-              type="button"
-              key={v}
-              onClick={() => setView(v)}
-              className={`pill-tab ${view === v ? "pill-tab-active" : "pill-tab-idle"}`}
-            >
-              {v === "plugin" ? t("skills.viewPlugins") : t("skills.viewAllSkills")}
-            </button>
-          ))}
           <Button
             variant="outline"
             size="sm"
@@ -172,7 +157,7 @@ export default function SkillsPage() {
               </p>
             </div>
           </div>
-        ) : view === "plugin" ? (
+        ) : (
           <div className="space-y-1 p-2">
             {plugins.map((p) => (
               <PluginCard
@@ -185,40 +170,6 @@ export default function SkillsPage() {
                 onClean={() => setCleanTarget(p)}
                 onReinstall={() => { setReinstallTarget(p); setReinstallError(null); }}
               />
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-1 p-2">
-            {flatSkills.map((s, i) => (
-              <div
-                key={i}
-                className="zed-list-row flex items-center gap-2 border border-transparent px-2.5 py-1.5 transition-colors hover:border-border hover:bg-accent/50"
-              >
-                <Badge
-                  variant="outline"
-                  className={`px-1 py-0 text-[11px] font-medium ${
-                    s.skill_type === "agent"
-                      ? "text-chart-3 border-chart-3/30"
-                      : "text-primary border-primary/30"
-                  }`}
-                >
-                  {s.skill_type === "agent" ? "A" : "S"}
-                </Badge>
-                <span className="w-[160px] shrink-0 truncate text-[14px] font-medium text-foreground">
-                  {s.name}
-                </span>
-                <span className="min-w-0 flex-1 truncate text-[13px] text-muted-foreground">
-                  {s.description}
-                </span>
-                <span className="zed-chip">
-                  {s.plugin.name} ← {s.plugin.marketplace?.name ?? ""}
-                </span>
-                <span
-                  className={`size-1.5 shrink-0 rounded-full ${
-                    s.health === "ok" ? "bg-chart-2" : "bg-chart-3"
-                  }`}
-                />
-              </div>
             ))}
           </div>
         )}
@@ -356,7 +307,7 @@ function PluginCard({
         onClick={onToggleExpand}
       >
         <span
-          className={`grid size-4 shrink-0 place-items-center rounded-sm bg-secondary text-[10px] text-primary transition ${
+          className={`grid size-4 shrink-0 place-items-center rounded-sm bg-secondary text-[10px] text-foreground transition ${
             expanded ? "rotate-90" : ""
           }`}
         >
@@ -393,7 +344,7 @@ function PluginCard({
           />
           <span
             className={`block h-[18px] w-[32px] rounded-full border transition ${
-              plugin.enabled ? "bg-primary border-primary" : "bg-secondary border-border"
+              plugin.enabled ? "bg-foreground border-foreground" : "bg-secondary border-border"
             }`}
           >
             <span
@@ -503,7 +454,7 @@ function SkillRow({ skill }: { skill: SkillInfo }) {
         className={`grid size-4 shrink-0 place-items-center px-0 py-0 text-[9px] font-medium ${
           skill.skill_type === "agent"
             ? "text-chart-3 border-chart-3/30"
-            : "text-primary border-primary/30"
+            : "text-foreground border-foreground/30"
         }`}
       >
         {skill.skill_type === "agent" ? "A" : "S"}

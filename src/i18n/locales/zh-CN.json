@@ -173,6 +173,7 @@
   "contextMenu.deleteProject": "删除项目下所有会话",
 
   "nav.skills": "技能",
+  "nav.marketplace": "市场",
 
   "skills.title": "技能",
   "skills.countChip": "{{skills}} 个技能 · {{agents}} 个代理",
@@ -205,5 +206,25 @@
   "skills.scopeGlobal": "全局",
   "skills.scopeProject": "项目",
   "skills.standaloneSection": "独立",
-  "skills.refresh": "刷新"
+  "skills.refresh": "刷新",
+
+  "marketplace.title": "市场",
+  "marketplace.add": "添加市场",
+  "marketplace.addTitle": "添加市场",
+  "marketplace.addDesc": "输入市场名称和 GitHub 仓库地址进行克隆。",
+  "marketplace.addNamePlaceholder": "市场名称",
+  "marketplace.addRepoPlaceholder": "owner/repo",
+  "marketplace.update": "更新",
+  "marketplace.updating": "更新中...",
+  "marketplace.updateAll": "全部更新",
+  "marketplace.remove": "移除",
+  "marketplace.removeTitle": "移除 {{name}}？",
+  "marketplace.removeDesc": "此操作将删除本地克隆。可选择同时移除该市场下的所有插件。",
+  "marketplace.removePlugins": "同时移除插件",
+  "marketplace.pluginCount": "{{count}} 个插件",
+  "marketplace.empty": "尚未添加市场",
+  "marketplace.noPlugins": "此市场中未找到插件",
+  "marketplace.installed": "已安装",
+  "marketplace.install": "安装",
+  "marketplace.installing": "安装中..."
 }
