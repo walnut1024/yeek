@@ -16,13 +16,14 @@ import { Button } from "@/components/ui/button";
 import SessionRow from "@/pages/sessions/session-row";
 import SessionDetailPane from "@/pages/sessions/session-detail-pane";
 import SystemPage from "@/pages/system/system-page";
+import SkillsPage from "@/pages/skills/skills-page";
 import { SESSION_PAGE_SIZE } from "@/lib/constants";
 import { useGroupedSessions } from "./use-grouped-sessions";
 import { useSessionSelection } from "./use-session-selection";
 import { useKeyboardNavigation } from "./use-keyboard-navigation";
 
 export function AppShell() {
-  const [section, setSection] = useState<"sessions" | "system">("sessions");
+  const [section, setSection] = useState<"sessions" | "skills" | "system">("sessions");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const { t, i18n } = useTranslation();
@@ -56,12 +57,10 @@ export function AppShell() {
             <span className="text-[14px] font-medium text-foreground">
               {t("app.title")}
             </span>
-            <span className="zed-chip font-mono uppercase tracking-[0.08em] text-primary">
-              {t("app.sessionBrowser")}
-            </span>
+
           </div>
           <div className="flex items-center gap-2">
-            {(["sessions", "system"] as const).map((s) => (
+            {(["sessions", "skills", "system"] as const).map((s) => (
               <button
                 type="button"
                 key={s}
@@ -91,6 +90,7 @@ export function AppShell() {
           {section === "sessions" && (
             <SessionsPage selectedId={selectedId} onSelect={setSelectedId} />
           )}
+          {section === "skills" && <SkillsPage />}
           {section === "system" && <SystemPage />}
         </main>
       </div>
@@ -108,7 +108,7 @@ function SessionsPage({
   const queryClient = useQueryClient();
   const [searchRaw, setSearchRaw] = useState("");
   const search = useDebouncedValue(searchRaw, 250);
-  const [sortDesc, setSortDesc] = useLocalStorage("sort-desc", true);
+  const [sortDesc] = useLocalStorage("sort-desc", true);
   const [collapsedProjects, setCollapsedProjects] = useLocalStorage<
     Record<string, boolean>
   >("collapsed-projects", {});
@@ -146,7 +146,7 @@ function SessionsPage({
 
   const grouped = useGroupedSessions(sessions, isSearching);
   const {
-    manageMode, setManageMode, selectedIds, confirmDelete, setConfirmDelete,
+    manageMode, selectedIds, confirmDelete, setConfirmDelete,
     toggleSession, toggleProject, exitManageMode, allSelected, someSelected,
     toggleAll, flatSessionIds,
   } = useSessionSelection(sessions, grouped, collapsedProjects, selectedId, onSelect);
@@ -192,35 +192,6 @@ function SessionsPage({
     <div className="grid h-full min-h-0 xl:grid-cols-[360px_minmax(0,1fr)]">
       <section className="surface-panel flex min-h-0 flex-1 flex-col overflow-hidden">
         <div className="border-b border-border px-3 py-2">
-          <div className="mb-2 flex items-start justify-between gap-3">
-            <div>
-              <p className="zed-kicker">{t("sessions.searchGroup")}</p>
-              <h2 className="mt-1 text-[14px] font-medium leading-none text-foreground">{t("sessions.title")}</h2>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="zed-chip px-2 py-1 text-right font-mono">
-                {data ? t("sessions.total", { count: data.total }) : "..."}
-              </div>
-              <button
-                type="button"
-                onClick={() => setSortDesc(!sortDesc)}
-                className={`pill-tab ${!sortDesc ? "pill-tab-active" : "pill-tab-idle"}`}
-              >
-                {sortDesc ? t("sessions.sortNewest") : t("sessions.sortOldest")}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (manageMode) exitManageMode();
-                  else setManageMode(true);
-                }}
-                className={`pill-tab ${manageMode ? "pill-tab-active" : "pill-tab-idle"}`}
-              >
-                {manageMode ? t("sessions.done") : t("sessions.manage")}
-              </button>
-            </div>
-          </div>
-
           <label className="block">
             <span className="sr-only">{t("sessions.searchSrLabel")}</span>
             <input
