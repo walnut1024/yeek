@@ -757,7 +757,7 @@ fn list_global_plugins() -> Result<plugin::SkillsOverview, AppError> {
 
     // 2. Read enabled state
     let settings_path = claude_dir.join("settings.json");
-    let settings: serde_json::Value = read_json(&settings_path)?;
+    let settings: serde_json::Value = read_json_or_default(&settings_path);
     let enabled_map = settings.get("enabledPlugins").and_then(|v| v.as_object());
 
     // 3. Read marketplace metadata
@@ -901,8 +901,9 @@ fn list_project_plugins(state: &AppState) -> Result<plugin::SkillsOverview, AppE
         let skills_dir = path.join(".claude/skills");
         let agents_dir = path.join(".claude/agents");
 
-        let skills = if skills_dir.exists() { scan_skills(path) } else { Vec::new() };
-        let agents = if agents_dir.exists() { scan_agents(path) } else { Vec::new() };
+        let claude_dir = path.join(".claude");
+        let skills = if skills_dir.exists() { scan_skills(&claude_dir) } else { Vec::new() };
+        let agents = if agents_dir.exists() { scan_agents(&claude_dir) } else { Vec::new() };
 
         if skills.is_empty() && agents.is_empty() {
             continue;
