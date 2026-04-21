@@ -51,6 +51,10 @@ src/
 - Use `<Separator />` instead of `<div className="border-t ...">` for visual dividers.
 - Use `<Skeleton />` instead of custom loading placeholders.
 
+## Frontend Demos
+
+- Frontend demo/prototype pages should be generated in the `ui_design/` directory (not in `demo/`).
+
 ## Key Patterns
 
 - Dev server: launch `cargo tauri dev` once, don't restart — Vite HMR handles frontend changes, Tauri watches Rust changes.

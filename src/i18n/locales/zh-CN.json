@@ -194,5 +194,6 @@
   "skills.disabled": "已禁用",
   "skills.scopeGlobal": "全局",
   "skills.scopeProject": "项目",
-  "skills.standaloneSection": "独立"
+  "skills.standaloneSection": "独立",
+  "skills.refresh": "刷新"
 }

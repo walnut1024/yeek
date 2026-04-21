@@ -115,8 +115,8 @@ export default function SystemPage() {
                 <span className="text-[13px] text-destructive">{t("system.confirmRelease")}</span>
                 <Button
                   size="sm"
-                  variant="outline"
                   className="h-7 rounded-md px-2.5 text-[13px]"
+                  variant="outline"
                   onClick={() => setConfirmRelease(false)}
                   disabled={isScanning}
                 >
@@ -124,8 +124,8 @@ export default function SystemPage() {
                 </Button>
                 <Button
                   size="sm"
-                  variant="destructive"
                   className="h-7 rounded-md px-2.5 text-[13px] font-medium"
+                  variant="destructive"
                   onClick={() => release.mutate()}
                   disabled={isScanning}
                 >
@@ -135,8 +135,8 @@ export default function SystemPage() {
             ) : (
               <Button
                 size="sm"
-                variant="outline"
                 className="h-7 rounded-md px-2.5 text-[13px] text-muted-foreground hover:border-destructive hover:text-destructive disabled:opacity-60"
+                variant="outline"
                 onClick={() => setConfirmRelease(true)}
                 disabled={isScanning}
               >
@@ -273,7 +273,7 @@ export default function SystemPage() {
 
                         {/* Card */}
                         <div className={`ml-3 mb-3 flex-1 border p-2 ${cardBg} ${cardBorder}`}>
-                          <div className={`flex items-center gap-2`}>
+                          <div className="flex items-center gap-2">
                             <span className={`rounded-sm px-1.5 py-0.5 text-[12px] font-medium text-primary-foreground ${badgeBg}`}>
                               {a.action}
                             </span>

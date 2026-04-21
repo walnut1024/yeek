@@ -204,5 +204,6 @@
   "skills.disabled": "disabled",
   "skills.scopeGlobal": "Global",
   "skills.scopeProject": "Project",
-  "skills.standaloneSection": "Standalone"
+  "skills.standaloneSection": "Standalone",
+  "skills.refresh": "Refresh"
 }

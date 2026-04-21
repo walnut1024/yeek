@@ -8,6 +8,8 @@ import {
   type PluginInfo,
   type SkillInfo,
 } from "@/lib/api";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -21,6 +23,28 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+// Health color mapping — uses design system tokens (chart-2=green, chart-3=amber, chart-5=gray, destructive=red)
+const HEALTH_COLORS: Record<string, { dot: string; text: string; bg: string; border: string }> = {
+  ok: { dot: "bg-chart-2", text: "text-chart-2", bg: "bg-chart-2/15", border: "border-chart-2/30" },
+  partial: { dot: "bg-chart-3", text: "text-chart-3", bg: "bg-chart-3/15", border: "border-chart-3/30" },
+  hook: { dot: "bg-chart-5", text: "text-chart-5", bg: "bg-chart-5/15", border: "border-chart-5/30" },
+  broken: { dot: "bg-destructive", text: "text-destructive", bg: "bg-destructive/15", border: "border-destructive/30" },
+};
+
+const HEALTH_BORDER_L: Record<string, string> = {
+  ok: "border-l-chart-2",
+  partial: "border-l-chart-3",
+  hook: "border-l-chart-5",
+  broken: "border-l-destructive",
+};
+
+const HEALTH_LABELS: Record<string, string> = {
+  ok: "OK",
+  partial: "PARTIAL",
+  hook: "HOOK",
+  broken: "BROKEN",
+};
+
 export default function SkillsPage() {
   const [scope, setScope] = useState<"global" | "project">("global");
   const [view, setView] = useState<"plugin" | "flat">("plugin");
@@ -29,9 +53,10 @@ export default function SkillsPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, refetch } = useQuery({
     queryKey: ["plugins", scope],
     queryFn: () => listPlugins(scope),
+    refetchInterval: 30_000,
   });
 
   const toggleMut = useMutation({
@@ -56,58 +81,58 @@ export default function SkillsPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Toolbar */}
-      <div className="flex items-center justify-between border-b border-border bg-surface px-3 py-2">
-        <div className="flex items-center gap-3">
-          <h2 className="text-[14px] font-medium text-foreground">{t("skills.title")}</h2>
-          <div className="view-toggle flex overflow-hidden rounded-md border border-border">
+      {/* Toolbar — matches sessions page toolbar style */}
+      <div className="flex items-center justify-between border-b border-border px-3 py-2">
+        <div className="flex items-center gap-2">
+          {(["global", "project"] as const).map((s) => (
             <button
               type="button"
-              className={`px-2.5 py-1 text-[12px] font-medium transition ${scope === "global" ? "bg-[var(--element-active)] text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-              onClick={() => setScope("global")}
+              key={s}
+              onClick={() => setScope(s)}
+              className={`pill-tab ${scope === s ? "pill-tab-active" : "pill-tab-idle"}`}
             >
-              {t("skills.global")} <span className="text-[10px] opacity-60">{data?.total_plugins ?? "..."}</span>
+              {t(`skills.${s}`)}
+              <span className="ml-1 text-[10px] opacity-60">
+                {s === "global" ? (data?.total_plugins ?? "...") : "0"}
+              </span>
             </button>
-            <button
-              type="button"
-              className={`border-l border-border px-2.5 py-1 text-[12px] font-medium transition ${scope === "project" ? "bg-[var(--element-active)] text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-              onClick={() => setScope("project")}
-            >
-              {t("skills.project")} <span className="text-[10px] opacity-60">0</span>
-            </button>
-          </div>
+          ))}
         </div>
         <div className="flex items-center gap-2">
-          <div className="zed-chip px-2 py-1 font-mono text-[12px]">
-            {data ? t("skills.countChip", { skills: data.total_skills, agents: data.total_agents }) : "..."}
-          </div>
-          <div className="view-toggle flex overflow-hidden rounded-md border border-border">
+          <span className="zed-chip">
+            {data
+              ? t("skills.countChip", { skills: data.total_skills, agents: data.total_agents })
+              : "..."}
+          </span>
+          {(["plugin", "flat"] as const).map((v) => (
             <button
               type="button"
-              className={`px-2.5 py-1 text-[12px] font-medium transition ${view === "plugin" ? "bg-[var(--element-active)] text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-              onClick={() => setView("plugin")}
+              key={v}
+              onClick={() => setView(v)}
+              className={`pill-tab ${view === v ? "pill-tab-active" : "pill-tab-idle"}`}
             >
-              {t("skills.viewPlugins")}
+              {v === "plugin" ? t("skills.viewPlugins") : t("skills.viewAllSkills")}
             </button>
-            <button
-              type="button"
-              className={`border-l border-border px-2.5 py-1 text-[12px] font-medium transition ${view === "flat" ? "bg-[var(--element-active)] text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-              onClick={() => setView("flat")}
-            >
-              {t("skills.viewAllSkills")}
-            </button>
-          </div>
+          ))}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 rounded-md px-2.5 text-[13px]"
+            onClick={() => refetch()}
+          >
+            {t("skills.refresh")}
+          </Button>
         </div>
       </div>
 
       {/* Health bar */}
       {hs && (
-        <div className="flex items-center gap-3 border-b border-[var(--border-variant)] bg-[var(--element)] px-3 py-1.5 text-[12px] text-muted-foreground">
-          <span className="text-[10px] uppercase tracking-[0.06em] text-placeholder">{t("skills.health")}</span>
-          <HealthDot color="ok" count={hs.ok} />
-          <HealthDot color="partial" count={hs.partial} />
-          <HealthDot color="hook" count={hs.hook} />
-          <HealthDot color="broken" count={hs.broken} />
+        <div className="flex items-center gap-3 border-b border-border bg-secondary px-3 py-1.5 text-[12px] text-muted-foreground">
+          <span className="text-[10px] uppercase tracking-[0.08em]">{t("skills.health")}</span>
+          <HealthDot dot="bg-chart-2" count={hs.ok} />
+          <HealthDot dot="bg-chart-3" count={hs.partial} />
+          <HealthDot dot="bg-chart-5" count={hs.hook} />
+          <HealthDot dot="bg-destructive" count={hs.broken} />
         </div>
       )}
 
@@ -118,6 +143,15 @@ export default function SkillsPage() {
             {Array.from({ length: 6 }).map((_, i) => (
               <Skeleton key={i} className="h-18 w-full rounded-md" />
             ))}
+          </div>
+        ) : plugins.length === 0 ? (
+          <div className="flex h-72 items-center justify-center px-6">
+            <div className="max-w-sm text-center">
+              <div className="mx-auto mb-3 size-10 rounded-sm border border-border bg-secondary" />
+              <p className="text-[16px] font-medium text-foreground">
+                {scope === "project" ? t("skills.emptyProject") : t("skills.emptyStandalone")}
+              </p>
+            </div>
           </div>
         ) : view === "plugin" ? (
           <div className="space-y-1 p-2">
@@ -133,18 +167,36 @@ export default function SkillsPage() {
             ))}
           </div>
         ) : (
-          <div className="p-2">
+          <div className="space-y-1 p-2">
             {flatSkills.map((s, i) => (
-              <div key={i} className="flex items-center gap-2 rounded-md px-3 py-1.5 hover:bg-[var(--element-hover)]">
-                <span className={`text-[10px] font-medium uppercase ${s.skill_type === "agent" ? "text-[var(--warning)]" : "text-[var(--accent)]"}`}>
+              <div
+                key={i}
+                className="zed-list-row flex items-center gap-2 border border-transparent px-2.5 py-1.5 transition-colors hover:border-border hover:bg-accent/50"
+              >
+                <Badge
+                  variant="outline"
+                  className={`px-1 py-0 text-[10px] font-medium ${
+                    s.skill_type === "agent"
+                      ? "text-chart-3 border-chart-3/30"
+                      : "text-primary border-primary/30"
+                  }`}
+                >
                   {s.skill_type === "agent" ? "A" : "S"}
+                </Badge>
+                <span className="w-[160px] shrink-0 truncate text-[13px] font-medium text-foreground">
+                  {s.name}
                 </span>
-                <span className="w-[160px] shrink-0 truncate text-[13px] font-medium text-foreground">{s.name}</span>
-                <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">{s.description}</span>
-                <span className="shrink-0 rounded-sm border border-[var(--border-variant)] bg-[var(--element)] px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">
+                  {s.description}
+                </span>
+                <span className="zed-chip">
                   {s.plugin.name} ← {s.plugin.marketplace?.name ?? ""}
                 </span>
-                <span className={`size-1.5 shrink-0 rounded-full ${s.health === "ok" ? "bg-[var(--success)]" : "bg-[var(--warning)]"}`} />
+                <span
+                  className={`size-1.5 shrink-0 rounded-full ${
+                    s.health === "ok" ? "bg-chart-2" : "bg-chart-3"
+                  }`}
+                />
               </div>
             ))}
           </div>
@@ -152,12 +204,17 @@ export default function SkillsPage() {
       </ScrollArea>
 
       {/* Uninstall dialog */}
-      <AlertDialog open={!!uninstallTarget} onOpenChange={(open) => !open && setUninstallTarget(null)}>
+      <AlertDialog
+        open={!!uninstallTarget}
+        onOpenChange={(open) => !open && setUninstallTarget(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t("skills.uninstallTitle", { name: uninstallTarget?.name })}</AlertDialogTitle>
+            <AlertDialogTitle>
+              {t("skills.uninstallTitle", { name: uninstallTarget?.name })}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              <span className="font-mono text-[11px] text-muted-foreground block mb-2 rounded-sm border border-[var(--border-variant)] bg-[var(--element)] p-2 break-all">
+              <span className="mb-2 block rounded-sm border border-border bg-secondary p-2 font-mono text-[11px] text-muted-foreground break-all">
                 {uninstallTarget?.install_path}
               </span>
               {t("skills.uninstallDesc")}
@@ -179,16 +236,10 @@ export default function SkillsPage() {
   );
 }
 
-function HealthDot({ color, count }: { color: string; count: number }) {
-  const colors: Record<string, string> = {
-    ok: "bg-[var(--success)]",
-    partial: "bg-[var(--warning)]",
-    hook: "bg-[var(--text-placeholder)]",
-    broken: "bg-[var(--error)]",
-  };
+function HealthDot({ dot, count }: { dot: string; count: number }) {
   return (
     <span className="flex items-center gap-1">
-      <span className={`size-1.5 rounded-full ${colors[color] ?? ""}`} />
+      <span className={`size-1.5 rounded-full ${dot}`} />
       <span className="font-mono text-[11px]">{count}</span>
     </span>
   );
@@ -208,66 +259,105 @@ function PluginCard({
   onUninstall: () => void;
 }) {
   const { t } = useTranslation();
-  const borderColors: Record<string, string> = {
-    ok: "border-l-[3px] border-l-[var(--success)]",
-    partial: "border-l-[3px] border-l-[var(--warning)]",
-    hook: "border-l-[3px] border-l-[var(--text-placeholder)]",
-    broken: "border-l-[3px] border-l-[var(--error)]",
-  };
 
   return (
-    <div className={`overflow-hidden rounded-md border border-border bg-[var(--surface)] transition ${borderColors[plugin.health] ?? ""}`}>
+    <div
+      className={`surface-card overflow-hidden transition border-l-[3px] ${
+        HEALTH_BORDER_L[plugin.health] ?? ""
+      }`}
+    >
       <div
-        className="flex cursor-pointer items-center gap-2 px-3 py-2 hover:bg-[var(--element-hover)]"
+        className="flex cursor-pointer items-center gap-2 px-2.5 py-2 transition-colors hover:bg-accent/50"
         onClick={onToggleExpand}
       >
-        <span className={`grid size-4 shrink-0 place-items-center rounded-sm bg-[var(--element)] text-[10px] text-[var(--accent)] transition ${expanded ? "rotate-90" : ""}`}>&#x25B6;</span>
+        <span
+          className={`grid size-4 shrink-0 place-items-center rounded-sm bg-secondary text-[10px] text-primary transition ${
+            expanded ? "rotate-90" : ""
+          }`}
+        >
+          ▶
+        </span>
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-medium text-foreground">{plugin.name}</p>
           <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-            <span className="font-mono">v{plugin.version}</span>
-            {(plugin.skills.length + plugin.agents.length) > 0 && (
-              <span>{plugin.skills.length} skills, {plugin.agents.length} agents</span>
+            <span className="zed-chip font-mono">v{plugin.version}</span>
+            {plugin.skills.length + plugin.agents.length > 0 && (
+              <span className="zed-chip">
+                {plugin.skills.length} skills · {plugin.agents.length} agents
+              </span>
             )}
-            {plugin.health === "hook" && <span>hook-only</span>}
+            {plugin.health === "hook" && <span className="zed-chip">hook-only</span>}
             {plugin.marketplace && (
-              <span className="text-[var(--accent)] opacity-70">
+              <span className="text-primary opacity-70">
                 ← {plugin.marketplace.name}
-                <span className="font-mono text-[10px] ml-1">{plugin.marketplace.repo}</span>
+                <span className="ml-1 font-mono text-[10px]">{plugin.marketplace.repo}</span>
               </span>
             )}
           </div>
         </div>
         <HealthBadge health={plugin.health} />
-        <label className="relative inline-flex shrink-0 cursor-pointer" onClick={(e) => e.stopPropagation()}>
-          <input type="checkbox" className="sr-only" checked={plugin.enabled} onChange={onToggle} />
-          <span className={`block h-[18px] w-[32px] rounded-full border transition ${plugin.enabled ? "bg-[var(--accent)] border-[var(--accent)]" : "bg-[var(--element-active)] border-[var(--border)]"}`}>
-            <span className={`block size-3 rounded-full bg-foreground transition ${plugin.enabled ? "translate-x-[14px]" : ""} mt-[2px] ml-[2px]`} />
+        <label
+          className="relative inline-flex shrink-0 cursor-pointer"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <input
+            type="checkbox"
+            className="sr-only"
+            checked={plugin.enabled}
+            onChange={onToggle}
+          />
+          <span
+            className={`block h-[18px] w-[32px] rounded-full border transition ${
+              plugin.enabled ? "bg-primary border-primary" : "bg-secondary border-border"
+            }`}
+          >
+            <span
+              className={`mt-[2px] ml-[2px] block size-3 rounded-full bg-foreground transition ${
+                plugin.enabled ? "translate-x-[14px]" : ""
+              }`}
+            />
           </span>
         </label>
-        <button
-          type="button"
-          className="shrink-0 rounded-md border border-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground transition hover:border-[var(--error)] hover:text-[var(--error)] hover:bg-[rgba(208,114,119,0.1)]"
-          onClick={(e) => { e.stopPropagation(); onUninstall(); }}
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-6 rounded-md px-2 text-[11px] text-muted-foreground hover:border-destructive hover:text-destructive hover:bg-destructive/10"
+          onClick={(e) => {
+            e.stopPropagation();
+            onUninstall();
+          }}
         >
           {t("skills.uninstall")}
-        </button>
+        </Button>
       </div>
 
       {expanded && (
-        <div className="border-t border-border bg-[var(--editor)]">
+        <div className="border-t border-border bg-card">
           <DetailRow label={t("skills.path")} value={plugin.install_path} mono />
           {plugin.marketplace && (
             <DetailRow
               label={t("skills.market")}
-              value={`${plugin.marketplace.name} · ${plugin.marketplace.repo}${plugin.marketplace.last_updated ? ` · ${plugin.marketplace.last_updated.split("T")[0]}` : ""}`}
+              value={`${plugin.marketplace.name} · ${plugin.marketplace.repo}${
+                plugin.marketplace.last_updated
+                  ? ` · ${plugin.marketplace.last_updated.split("T")[0]}`
+                  : ""
+              }`}
             />
           )}
           {plugin.health_issues.length > 0 && (
-            <div className="px-3 py-2 border-b border-[var(--border-variant)]">
+            <div className="border-b border-border px-3 py-2">
               {plugin.health_issues.map((issue, i) => (
-                <div key={i} className={`text-[11px] flex items-center gap-1 ${plugin.health === "broken" ? "text-[var(--error)]" : "text-[var(--warning)]"}`}>
-                  <span className={`size-1 rounded-full ${plugin.health === "broken" ? "bg-[var(--error)]" : "bg-[var(--warning)]"}`} />
+                <div
+                  key={i}
+                  className={`flex items-center gap-1 text-[11px] ${
+                    plugin.health === "broken" ? "text-destructive" : "text-chart-3"
+                  }`}
+                >
+                  <span
+                    className={`size-1 rounded-full ${
+                      plugin.health === "broken" ? "bg-destructive" : "bg-chart-3"
+                    }`}
+                  />
                   {issue}
                 </div>
               ))}
@@ -287,52 +377,56 @@ function PluginCard({
 
 function DetailRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="flex items-center gap-2 border-b border-[var(--border-variant)] px-3 py-1">
-      <span className="text-[10px] uppercase tracking-[0.06em] text-placeholder opacity-70 shrink-0 w-12">{label}</span>
-      <span className={`min-w-0 flex-1 truncate text-[11px] text-placeholder ${mono ? "font-mono direction-rtl text-left" : ""}`}>{value}</span>
+    <div className="flex items-center gap-2 border-b border-border px-3 py-1">
+      <span className="w-12 shrink-0 text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+        {label}
+      </span>
+      <span
+        className={`min-w-0 flex-1 truncate text-[11px] text-muted-foreground ${
+          mono ? "font-mono" : ""
+        }`}
+      >
+        {value}
+      </span>
     </div>
   );
 }
 
 function SkillRow({ skill }: { skill: SkillInfo }) {
   return (
-    <div className="flex items-center gap-2 border-b border-[var(--border-variant)] px-3 py-1 hover:bg-[var(--element-hover)]">
-      <span className={`grid size-4 shrink-0 place-items-center rounded-sm bg-[var(--element)] text-[9px] ${skill.skill_type === "agent" ? "text-[var(--warning)]" : "text-[var(--accent)]"}`}>
+    <div className="flex items-center gap-2 border-b border-border px-3 py-1 transition-colors hover:bg-accent/50">
+      <Badge
+        variant="outline"
+        className={`grid size-4 shrink-0 place-items-center px-0 py-0 text-[9px] font-medium ${
+          skill.skill_type === "agent"
+            ? "text-chart-3 border-chart-3/30"
+            : "text-primary border-primary/30"
+        }`}
+      >
         {skill.skill_type === "agent" ? "A" : "S"}
+      </Badge>
+      <span className="truncate text-[13px] text-foreground">{skill.name}</span>
+      <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">
+        {skill.description}
       </span>
-      <span className="text-[13px] text-foreground truncate">{skill.name}</span>
-      <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">{skill.description}</span>
-      {skill.tools && (
-        <span className="shrink-0 rounded-sm border border-[var(--border-variant)] bg-[var(--element)] px-1 py-0.5 font-mono text-[10px] text-muted-foreground">{skill.tools}</span>
-      )}
-      <span className={`size-1.5 shrink-0 rounded-full ${skill.health === "ok" ? "bg-[var(--success)]" : "bg-[var(--warning)]"}`} />
+      {skill.tools && <span className="zed-chip font-mono text-[10px]">{skill.tools}</span>}
+      <span
+        className={`size-1.5 shrink-0 rounded-full ${
+          skill.health === "ok" ? "bg-chart-2" : "bg-chart-3"
+        }`}
+      />
     </div>
   );
 }
 
 function HealthBadge({ health }: { health: string }) {
-  const styles: Record<string, string> = {
-    ok: "text-[var(--success)] bg-[rgba(161,193,129,0.15)] border-[rgba(161,193,129,0.3)]",
-    partial: "text-[var(--warning)] bg-[rgba(222,193,132,0.15)] border-[rgba(222,193,132,0.3)]",
-    hook: "text-[var(--text-placeholder)] bg-[rgba(135,138,152,0.15)] border-[rgba(135,138,152,0.3)]",
-    broken: "text-[var(--error)] bg-[rgba(208,114,119,0.15)] border-[rgba(208,114,119,0.3)]",
-  };
-  const dotColors: Record<string, string> = {
-    ok: "bg-[var(--success)]",
-    partial: "bg-[var(--warning)]",
-    hook: "bg-[var(--text-placeholder)]",
-    broken: "bg-[var(--error)]",
-  };
-  const labels: Record<string, string> = {
-    ok: "OK",
-    partial: "PARTIAL",
-    hook: "HOOK",
-    broken: "BROKEN",
-  };
+  const hc = HEALTH_COLORS[health] ?? HEALTH_COLORS.hook;
   return (
-    <span className={`flex shrink-0 items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.04em] ${styles[health] ?? ""}`}>
-      <span className={`size-1 rounded-full ${dotColors[health] ?? ""}`} />
-      {labels[health] ?? health.toUpperCase()}
+    <span
+      className={`flex shrink-0 items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.04em] ${hc.text} ${hc.bg} ${hc.border}`}
+    >
+      <span className={`size-1 rounded-full ${hc.dot}`} />
+      {HEALTH_LABELS[health] ?? health.toUpperCase()}
     </span>
   );
 }
