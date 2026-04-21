@@ -9,7 +9,7 @@ use tauri::Manager;
 
 use app::commands::{
     browse_sessions, destructive_delete_session, get_action_log, get_delete_plan, get_session_detail,
-    get_session_preview, get_session_transcript, get_subagent_messages, get_system_status, release_and_resync, rescan_sources, resume_session, search_sessions, soft_delete_project, soft_delete_sessions,
+    get_session_preview, get_session_transcript, get_subagent_messages, get_system_status, list_plugins, release_and_resync, rescan_sources, resume_session, search_sessions, soft_delete_project, soft_delete_sessions,
 };
 use app::state::AppState;
 use store::schema;
@@ -92,6 +92,7 @@ pub fn run() {
             resume_session,
             get_delete_plan,
             destructive_delete_session,
+            list_plugins,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

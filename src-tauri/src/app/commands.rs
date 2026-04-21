@@ -3,6 +3,7 @@ use tauri::State;
 
 use crate::app::errors::AppError;
 use crate::app::state::AppState;
+use crate::domain::plugin;
 use crate::domain::session::SessionRecord;
 use crate::store::sessions::{self, BrowseParams, SearchParams};
 use crate::store::messages;
@@ -200,10 +201,15 @@ fn is_valid_uuid(s: &str) -> bool {
         && b[24..].iter().all(|c| c.is_ascii_hexdigit())
 }
 
-/// Quote a string for safe use as a shell argument (POSIX single-quote style).
-/// Nothing is interpreted inside single quotes except `'` itself.
+/// Quote a string for safe use as a shell argument.
+#[cfg(not(target_os = "windows"))]
 fn shell_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\\''"))
+}
+
+#[cfg(target_os = "windows")]
+fn shell_quote(s: &str) -> String {
+    format!("\"{}\"", s.replace('"', "\\\""))
 }
 
 #[tauri::command]
@@ -239,26 +245,43 @@ pub fn resume_session(
     launch_terminal(&cmd, cwd_ref).map_err(|e| AppError::Internal(e))
 }
 
-/// Detect the running terminal and launch command in it.
-/// Falls back to macOS default Terminal.app via osascript.
-fn launch_terminal(command: &str, cwd: Option<&str>) -> Result<(), String> {
-    if !cfg!(target_os = "macos") {
-        return Err("Terminal resume is only supported on macOS".to_string());
-    }
+// ---------------------------------------------------------------------------
+// Platform dispatch
+// ---------------------------------------------------------------------------
 
+fn launch_terminal(command: &str, cwd: Option<&str>) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        launch_terminal_macos(command, cwd)
+    }
+    #[cfg(target_os = "linux")]
+    {
+        launch_terminal_linux(command, cwd)
+    }
+    #[cfg(target_os = "windows")]
+    {
+        launch_terminal_windows(command, cwd)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// macOS
+// ---------------------------------------------------------------------------
+
+#[cfg(target_os = "macos")]
+fn launch_terminal_macos(command: &str, cwd: Option<&str>) -> Result<(), String> {
     let terminals = ["Ghostty", "iTerm", "Warp", "WezTerm", "kitty", "Alacritty"];
 
-    // Try running terminal first, then installed
     for &name in &terminals {
         if is_app_running(name) || app_exists(name) {
             return launch_with_open(command, name, cwd);
         }
     }
 
-    // Fallback: Terminal.app via osascript
     launch_terminal_app(command, cwd)
 }
 
+#[cfg(target_os = "macos")]
 fn is_app_running(bundle_id: &str) -> bool {
     std::process::Command::new("pgrep")
         .arg("-x")
@@ -268,6 +291,7 @@ fn is_app_running(bundle_id: &str) -> bool {
         .unwrap_or(false)
 }
 
+#[cfg(target_os = "macos")]
 fn app_exists(name: &str) -> bool {
     std::path::Path::new(&format!("/Applications/{}.app", name)).exists()
         || std::path::Path::new(&format!(
@@ -278,6 +302,7 @@ fn app_exists(name: &str) -> bool {
         .exists()
 }
 
+#[cfg(target_os = "macos")]
 fn launch_with_open(command: &str, app_name: &str, cwd: Option<&str>) -> Result<(), String> {
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
     let full_cmd = cwd
@@ -296,7 +321,6 @@ fn launch_with_open(command: &str, app_name: &str, cwd: Option<&str>) -> Result<
                 .map_err(|e| format!("Failed to launch Ghostty: {e}"))?;
         }
         "iTerm" => {
-            // Escape for AppleScript string literal
             let escaped = full_cmd.replace('\\', "\\\\").replace('"', "\\\"");
             let script = format!(
                 r#"tell application "iTerm"
@@ -324,11 +348,11 @@ end tell"#
     Ok(())
 }
 
+#[cfg(target_os = "macos")]
 fn launch_terminal_app(command: &str, cwd: Option<&str>) -> Result<(), String> {
     let full_cmd = cwd
         .map(|d| format!("cd {} && {}", shell_quote(d), command))
         .unwrap_or_else(|| command.to_string());
-    // Escape for AppleScript string literal
     let escaped = full_cmd.replace('\\', "\\\\").replace('"', "\\\"");
     let script = format!(
         r#"tell application "Terminal"
@@ -343,6 +367,122 @@ end tell"#
         .map_err(|e| format!("Failed to launch Terminal: {e}"))?;
 
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Linux
+// ---------------------------------------------------------------------------
+
+#[cfg(target_os = "linux")]
+fn launch_terminal_linux(command: &str, cwd: Option<&str>) -> Result<(), String> {
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
+    let full_cmd = cwd
+        .map(|d| format!("cd {} && {}", shell_quote(d), command))
+        .unwrap_or_else(|| command.to_string());
+
+    let terminals = [
+        ("ghostty", vec!["-e", &shell, "-c", &full_cmd]),
+        ("wezterm", vec!["start", "--", &shell, "-c", &full_cmd]),
+        ("kitty", vec!["-e", &shell, "-c", &full_cmd]),
+        ("alacritty", vec!["-e", &shell, "-c", &full_cmd]),
+        ("gnome-terminal", vec!["--", &shell, "-c", &full_cmd]),
+        ("konsole", vec!["-e", &shell, "-c", &full_cmd]),
+        ("xfce4-terminal", vec!["-e", &format!("{} -c {}", shell, shell_quote(&full_cmd))]),
+    ];
+
+    for (bin, args) in &terminals {
+        if which_exists(bin) {
+            return std::process::Command::new(bin)
+                .args(args.iter().map(|s| s.as_str()))
+                .spawn()
+                .map_err(|e| format!("Failed to launch {}: {e}", bin));
+        }
+    }
+
+    // Fallback: xterm
+    if which_exists("xterm") {
+        return std::process::Command::new("xterm")
+            .args(["-e", &shell, "-c", &full_cmd])
+            .spawn()
+            .map_err(|e| format!("Failed to launch xterm: {e}"));
+    }
+
+    Err("No terminal emulator found. Install ghostty, wezterm, kitty, alacritty, gnome-terminal, konsole, xfce4-terminal, or xterm.".to_string())
+}
+
+#[cfg(target_os = "linux")]
+fn which_exists(bin: &str) -> bool {
+    std::process::Command::new("which")
+        .arg(bin)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+// ---------------------------------------------------------------------------
+// Windows
+// ---------------------------------------------------------------------------
+
+#[cfg(target_os = "windows")]
+fn launch_terminal_windows(command: &str, cwd: Option<&str>) -> Result<(), String> {
+    let full_cmd = cwd
+        .map(|d| format!("cd {}; {}", shell_quote(d), command))
+        .unwrap_or_else(|| command.to_string());
+
+    // Priority: PowerShell 7+, Windows PowerShell, Windows Terminal, cmd
+    let candidates = [
+        // pwsh (PowerShell 7+) — preferred
+        ("pwsh.exe", vec!["-NoExit", "-Command", &full_cmd]),
+        // Windows PowerShell (built-in)
+        ("powershell.exe", vec!["-NoExit", "-Command", &full_cmd]),
+    ];
+
+    for (bin, args) in &candidates {
+        if where_exists(bin) {
+            // Use `start` via cmd to launch in a new window
+            let mut start_args = vec!["/C", "start", bin];
+            for a in args {
+                start_args.push(a.as_str());
+            }
+            return std::process::Command::new("cmd")
+                .args(&start_args)
+                .spawn()
+                .map_err(|e| format!("Failed to launch {}: {e}", bin));
+        }
+    }
+
+    // Fallback: Windows Terminal
+    if where_exists("wt.exe") {
+        let mut wt_args = vec!["-d"];
+        if let Some(d) = cwd {
+            wt_args.push(d);
+        } else {
+            wt_args.push(".");
+        }
+        wt_args.push("pwsh.exe");
+        wt_args.push("-NoExit");
+        wt_args.push("-Command");
+        wt_args.push(&full_cmd);
+        return std::process::Command::new("wt")
+            .args(&wt_args)
+            .spawn()
+            .map_err(|e| format!("Failed to launch Windows Terminal: {e}"));
+    }
+
+    // Last resort: cmd
+    std::process::Command::new("cmd")
+        .args(["/C", "start", "cmd", "/K", &full_cmd])
+        .spawn()
+        .map_err(|e| format!("Failed to launch cmd: {e}"))
+}
+
+#[cfg(target_os = "windows")]
+fn where_exists(bin: &str) -> bool {
+    std::process::Command::new("where")
+        .arg(bin)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
 }
 
 #[derive(Debug, Serialize)]
@@ -508,5 +648,298 @@ pub fn release_and_resync(state: State<'_, AppState>) -> Result<ActionResult, Ap
     Ok(ActionResult {
         success: true,
         affected_count: 0,
+    })
+}
+
+// --- Plugin Helpers ---
+
+fn read_json(path: &std::path::Path) -> Result<serde_json::Value, AppError> {
+    let content = std::fs::read_to_string(path)
+        .map_err(|e| AppError::Internal(format!("Failed to read {}: {}", path.display(), e)))?;
+    serde_json::from_str(&content)
+        .map_err(|e| AppError::ParseError(format!("Invalid JSON in {}: {}", path.display(), e)))
+}
+
+fn read_json_or_default(path: &std::path::Path) -> serde_json::Value {
+    read_json(path).unwrap_or(serde_json::Value::Object(Default::default()))
+}
+
+fn scan_skills(plugin_path: &std::path::Path) -> Vec<plugin::SkillInfo> {
+    let skills_dir = plugin_path.join("skills");
+    if !skills_dir.exists() {
+        return Vec::new();
+    }
+    let mut skills = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&skills_dir) {
+        for entry in entries.flatten() {
+            let skill_md = entry.path().join("SKILL.md");
+            if skill_md.exists() {
+                if let Some(info) = parse_frontmatter(&skill_md, "skill") {
+                    skills.push(info);
+                }
+            }
+        }
+    }
+    skills
+}
+
+fn scan_agents(plugin_path: &std::path::Path) -> Vec<plugin::SkillInfo> {
+    let agents_dir = plugin_path.join("agents");
+    if !agents_dir.exists() {
+        return Vec::new();
+    }
+    let mut agents = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&agents_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().map(|e| e == "md").unwrap_or(false) {
+                if let Some(info) = parse_frontmatter(&path, "agent") {
+                    agents.push(info);
+                }
+            }
+        }
+    }
+    agents
+}
+
+fn has_hooks(plugin_path: &std::path::Path) -> bool {
+    let hooks_file = plugin_path.join("hooks/hooks.json");
+    hooks_file.exists() || plugin_path.join("hooks").join("session-start").exists()
+}
+
+fn parse_frontmatter(path: &std::path::Path, skill_type: &str) -> Option<plugin::SkillInfo> {
+    let content = std::fs::read_to_string(path).ok()?;
+    let content = content.trim_start();
+
+    if !content.starts_with("---") {
+        return None;
+    }
+    let rest = &content[3..];
+    let end = rest.find("---")?;
+    let yaml_str = &rest[..end];
+
+    let yaml: serde_yaml::Value = serde_yaml::from_str(yaml_str).ok()?;
+    let name = yaml["name"].as_str().unwrap_or("").to_string();
+    let description = yaml["description"].as_str().unwrap_or("").to_string();
+    let tools = yaml["tools"].as_str().map(String::from);
+
+    Some(plugin::SkillInfo {
+        name,
+        description,
+        skill_type: skill_type.into(),
+        tools,
+        file_path: path.to_string_lossy().into_owned(),
+        health: "ok".into(),
+        health_detail: None,
+    })
+}
+
+// --- Skills / Plugins ---
+
+#[tauri::command]
+pub fn list_plugins(
+    state: State<'_, AppState>,
+    scope: String,
+) -> Result<plugin::SkillsOverview, AppError> {
+    if scope == "project" {
+        return list_project_plugins(&state);
+    }
+    list_global_plugins()
+}
+
+fn list_global_plugins() -> Result<plugin::SkillsOverview, AppError> {
+    let home = dirs::home_dir().ok_or_else(|| AppError::Internal("No home directory".into()))?;
+    let claude_dir = home.join(".claude");
+
+    // 1. Read plugin registry
+    let registry_path = claude_dir.join("plugins/installed_plugins.json");
+    let registry: serde_json::Value = read_json(&registry_path)?;
+
+    // 2. Read enabled state
+    let settings_path = claude_dir.join("settings.json");
+    let settings: serde_json::Value = read_json(&settings_path)?;
+    let enabled_map = settings.get("enabledPlugins").and_then(|v| v.as_object());
+
+    // 3. Read marketplace metadata
+    let marketplaces_path = claude_dir.join("plugins/known_marketplaces.json");
+    let marketplaces: serde_json::Value = read_json_or_default(&marketplaces_path);
+
+    let plugins_map = registry
+        .get("plugins")
+        .and_then(|v| v.as_object())
+        .ok_or_else(|| AppError::ParseError("Invalid installed_plugins.json".into()))?;
+
+    let mut plugins = Vec::new();
+    let mut total_skills = 0usize;
+    let mut total_agents = 0usize;
+    let mut health_ok = 0usize;
+    let mut health_partial = 0usize;
+    let mut health_hook = 0usize;
+    let mut health_broken = 0usize;
+
+    for (key, entries) in plugins_map {
+        let entries_arr = match entries.as_array() {
+            Some(a) => a,
+            None => continue,
+        };
+        let entry = match entries_arr.first() {
+            Some(e) => e,
+            None => continue,
+        };
+
+        let install_path = entry["installPath"].as_str().unwrap_or("").to_string();
+        let version = entry["version"].as_str().unwrap_or("unknown").to_string();
+        let installed_at = entry["installedAt"].as_str().map(String::from);
+        let last_updated = entry["lastUpdated"].as_str().map(String::from);
+
+        // Parse key: "plugin@marketplace"
+        let parts: Vec<&str> = key.split('@').collect();
+        let plugin_name = parts.first().map(|s| s.to_string()).unwrap_or_default();
+        let market_name = parts.get(1).map(|s| s.to_string());
+
+        // Enabled state
+        let enabled = enabled_map
+            .and_then(|m| m.get(key))
+            .map(|v| v.as_bool().unwrap_or(true))
+            .unwrap_or(true); // absent = enabled
+
+        // Marketplace info
+        let marketplace = market_name.as_ref().and_then(|mn| {
+            let mkt = marketplaces.get(mn)?;
+            let repo = mkt["source"]["repo"].as_str().unwrap_or("").to_string();
+            let last_upd = mkt["lastUpdated"].as_str().map(String::from);
+            Some(plugin::MarketplaceInfo {
+                name: mn.clone(),
+                repo,
+                last_updated: last_upd,
+            })
+        });
+
+        // Health check
+        let path = std::path::Path::new(&install_path);
+        let mut health_issues = Vec::new();
+
+        let (skills, agents, health) = if !path.exists() {
+            health_issues.push("Install path does not exist".into());
+            (Vec::new(), Vec::new(), "broken")
+        } else {
+            let has_manifest = path.join(".claude-plugin/plugin.json").exists();
+            let scanned_skills = scan_skills(path);
+            let scanned_agents = scan_agents(path);
+
+            if !has_manifest && scanned_skills.is_empty() && scanned_agents.is_empty() {
+                if has_hooks(path) {
+                    health_issues.push("Hook-only plugin, no skills or agents".into());
+                    (scanned_skills, scanned_agents, "hook")
+                } else {
+                    health_issues.push("Missing plugin.json and no content".into());
+                    (scanned_skills, scanned_agents, "broken")
+                }
+            } else if !has_manifest {
+                health_issues.push("Missing plugin.json".into());
+                (scanned_skills, scanned_agents, "partial")
+            } else {
+                (scanned_skills, scanned_agents, "ok")
+            }
+        };
+
+        total_skills += skills.len();
+        total_agents += agents.len();
+        match health {
+            "ok" => health_ok += 1,
+            "partial" => health_partial += 1,
+            "hook" => health_hook += 1,
+            _ => health_broken += 1,
+        }
+
+        plugins.push(plugin::PluginInfo {
+            key: key.clone(),
+            name: plugin_name,
+            version,
+            scope: "global".into(),
+            marketplace,
+            install_path,
+            enabled,
+            health: health.into(),
+            health_issues,
+            skills,
+            agents,
+            installed_at,
+            last_updated,
+        });
+    }
+
+    Ok(plugin::SkillsOverview {
+        total_plugins: plugins.len(),
+        total_skills,
+        total_agents,
+        health_summary: plugin::HealthSummary {
+            ok: health_ok,
+            partial: health_partial,
+            hook: health_hook,
+            broken: health_broken,
+        },
+        plugins,
+    })
+}
+
+fn list_project_plugins(state: &AppState) -> Result<plugin::SkillsOverview, AppError> {
+    let db = state.db()?;
+    let mut stmt = db.prepare("SELECT DISTINCT project_path FROM sessions WHERE project_path IS NOT NULL")
+        .map_err(|e| AppError::DbError(e.to_string()))?;
+    let paths: Vec<String> = stmt.query_map([], |row| row.get(0))
+        .map_err(|e| AppError::DbError(e.to_string()))?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    let mut plugins = Vec::new();
+    let mut total_skills = 0usize;
+    let mut total_agents = 0usize;
+
+    for project_path in &paths {
+        let path = std::path::Path::new(project_path);
+        let skills_dir = path.join(".claude/skills");
+        let agents_dir = path.join(".claude/agents");
+
+        let skills = if skills_dir.exists() { scan_skills(path) } else { Vec::new() };
+        let agents = if agents_dir.exists() { scan_agents(path) } else { Vec::new() };
+
+        if skills.is_empty() && agents.is_empty() {
+            continue;
+        }
+
+        total_skills += skills.len();
+        total_agents += agents.len();
+
+        let project_name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+
+        plugins.push(plugin::PluginInfo {
+            key: project_path.clone(),
+            name: project_name,
+            version: String::new(),
+            scope: "project".into(),
+            marketplace: None,
+            install_path: project_path.clone(),
+            enabled: true,
+            health: "ok".into(),
+            health_issues: Vec::new(),
+            skills,
+            agents,
+            installed_at: None,
+            last_updated: None,
+        });
+    }
+
+    Ok(plugin::SkillsOverview {
+        total_plugins: plugins.len(),
+        total_skills,
+        total_agents,
+        health_summary: plugin::HealthSummary {
+            ok: plugins.len(),
+            partial: 0,
+            hook: 0,
+            broken: 0,
+        },
+        plugins,
     })
 }
