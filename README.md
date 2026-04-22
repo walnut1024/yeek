@@ -1,73 +1,75 @@
-# React + TypeScript + Vite
+# Yeek
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A local-first desktop app for managing Claude Code agent sessions.
 
-Currently, two official plugins are available:
+Built with **Tauri v2** (Rust) + **React** + **TypeScript** + **Tailwind CSS**.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Features
 
-## React Compiler
+- **Session Browser** — Browse and inspect Claude Code conversations grouped by project, with full transcript view, message graph, and source file references
+- **Skills & Plugins** — View installed plugins, toggle enable/disable, clean orphaned entries, and reinstall broken ones
+- **Marketplace** — Manage plugin marketplaces (add, update, remove), browse available plugins, and install with one click
+- **System Pulse** — Health checks, sync status, activity log, and index maintenance
+- **Real-time Sync** — File watcher detects new/changed session files automatically via OS-native notifications
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Tech Stack
 
-## Expanding the ESLint configuration
+| Layer | Technology |
+|-------|-----------|
+| Backend | Rust, Tauri v2, rusqlite (SQLite + FTS5) |
+| Frontend | React, TypeScript, Vite, Tailwind CSS v4, shadcn/ui |
+| State | TanStack Query, localStorage |
+| i18n | react-i18next (English + Chinese) |
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Architecture
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+```
+src-tauri/src/
+  adapter/claudecode/   — Claude Code JSONL parser + source discovery
+  app/commands.rs       — Tauri command handlers (22 commands)
+  app/state.rs          — AppState with Mutex<Connection>
+  domain/               — Shared types (SessionRecord, PluginInfo, etc.)
+  service/              — Delete planner, plugin scanner
+  store/                — SQLite store (sessions, messages, sources, actions)
+  sync/                 — Startup sync, background scanner, file watcher
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+src/
+  app/shell/            — Main layout with sidebar navigation
+  pages/                — Sessions, Skills, Marketplace, System pages
+  lib/api.ts            — Typed Tauri command wrappers
+  components/ui/        — shadcn/ui components
+  i18n/                 — English and Chinese locale files
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Getting Started
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### Prerequisites
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+- [Rust](https://rustup.rs/) (stable)
+- [Node.js](https://nodejs.org/) (v20+)
+- macOS / Linux
+
+### Install & Run
+
+```bash
+npm install
+cargo tauri dev
 ```
+
+The app window opens immediately. Vite HMR handles frontend changes; Tauri watches Rust changes.
+
+### Build
+
+```bash
+npm run build       # Frontend typecheck + build
+cargo build         # Rust build
+cargo tauri build   # Production bundle
+```
+
+## Design
+
+Yeek uses the **Hermes Dark** design system — a black-first, warm cream interface inspired by Nous Research's Hermes Agent. See [DESIGN.md](DESIGN.md) for the full specification.
+
+## License
+
+MIT
