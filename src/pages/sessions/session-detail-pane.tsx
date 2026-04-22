@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { getSessionPreview, softDeleteSessions } from "@/lib/api";
-import { invoke } from "@tauri-apps/api/core";
+import { getSessionPreview, softDeleteSessions, resumeSession } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -105,11 +104,7 @@ export default function SessionDetailPane({
                 className="h-7 rounded-md px-2.5 text-[13px]"
                 onClick={async () => {
                   try {
-                    await invoke("resume_session", {
-                      sessionId: record.id,
-                      agent: record.agent,
-                      cwd: record.project_path,
-                    });
+                    await resumeSession(record.id, record.agent, record.project_path);
                   } catch (e) {
                     console.error("Failed to resume session:", e);
                   }

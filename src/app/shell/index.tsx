@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { listen } from "@tauri-apps/api/event";
+import { getEventTransport } from "@/lib/events";
 import {
   browseSessions,
   searchSessions,
@@ -38,7 +38,8 @@ export function AppShell() {
   });
 
   useEffect(() => {
-    const unlistenCompleted = listen("sync-completed", () => {
+    const transport = getEventTransport();
+    const unlistenCompleted = transport.on("sync-completed", () => {
       queryClient.invalidateQueries({ queryKey: ["sessions"] });
       queryClient.invalidateQueries({ queryKey: ["session-detail"] });
       queryClient.invalidateQueries({ queryKey: ["session-preview"] });

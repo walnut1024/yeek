@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { listen } from "@tauri-apps/api/event";
+import { getEventTransport } from "@/lib/events";
 import { useTranslation } from "react-i18next";
 import { getSystemStatus, getActionLog, rescanSources, releaseAndResync } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
@@ -68,13 +68,14 @@ export default function SystemPage() {
 
   // Listen for scan progress and completion events
   useEffect(() => {
-    const unlistenStarted = listen<{ source_count: number }>("sync-started", (event) => {
-      setScanProgress({ processed: 0, total: event.payload.source_count });
+    const transport = getEventTransport();
+    const unlistenStarted = transport.on<{ source_count: number }>("sync-started", (payload) => {
+      setScanProgress({ processed: 0, total: payload.source_count });
     });
-    const unlistenProgress = listen<{ processed: number; total: number }>("sync-progress", (event) => {
-      setScanProgress(event.payload);
+    const unlistenProgress = transport.on<{ processed: number; total: number }>("sync-progress", (payload) => {
+      setScanProgress(payload);
     });
-    const unlistenCompleted = listen("sync-completed", () => {
+    const unlistenCompleted = transport.on("sync-completed", () => {
       setScanProgress(null);
       queryClient.invalidateQueries({ queryKey: ["sessions"] });
       queryClient.invalidateQueries({ queryKey: ["system-status"] });

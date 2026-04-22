@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { getTransport } from "./transport";
 
 // Types
 
@@ -106,57 +106,57 @@ export interface SearchRequest {
 // API functions
 
 export async function getSystemStatus(): Promise<SystemStatusPayload> {
-  return invoke("get_system_status");
+  return getTransport().command<SystemStatusPayload>("get_system_status");
 }
 
 export async function browseSessions(
   params: BrowseRequest = {}
 ): Promise<SessionListResponse> {
-  return invoke("browse_sessions", { request: params });
+  return getTransport().command<SessionListResponse>("browse_sessions", { request: params });
 }
 
 export async function searchSessions(
   params: SearchRequest
 ): Promise<SessionListResponse> {
-  return invoke("search_sessions", { request: params });
+  return getTransport().command<SessionListResponse>("search_sessions", { request: params });
 }
 
 export async function getSessionPreview(
   sessionId: string
 ): Promise<SessionPreviewPayload> {
-  return invoke("get_session_preview", { sessionId });
+  return getTransport().command<SessionPreviewPayload>("get_session_preview", { sessionId });
 }
 
 export async function getSessionDetail(
   sessionId: string
 ): Promise<SessionDetailPayload> {
-  return invoke("get_session_detail", { sessionId });
+  return getTransport().command<SessionDetailPayload>("get_session_detail", { sessionId });
 }
 
 export async function softDeleteSessions(
   ids: string[]
 ): Promise<ActionResult> {
-  return invoke("soft_delete_sessions", { ids });
+  return getTransport().command<ActionResult>("soft_delete_sessions", { ids });
 }
 
 export async function softDeleteProject(
   projectPath: string
 ): Promise<ActionResult> {
-  return invoke("soft_delete_project", { projectPath });
+  return getTransport().command<ActionResult>("soft_delete_project", { projectPath });
 }
 
 export async function rescanSources(): Promise<ActionResult> {
-  return invoke("rescan_sources");
+  return getTransport().command<ActionResult>("rescan_sources");
 }
 
 export async function releaseAndResync(): Promise<ActionResult> {
-  return invoke("release_and_resync");
+  return getTransport().command<ActionResult>("release_and_resync");
 }
 
 export async function getActionLog(
   limit?: number
 ): Promise<{ actions: ActionLogEntry[] }> {
-  return invoke("get_action_log", { limit });
+  return getTransport().command<{ actions: ActionLogEntry[] }>("get_action_log", { limit });
 }
 
 // Delete planning
@@ -185,20 +185,20 @@ export interface DestructiveDeleteResult {
 export async function getDeletePlan(
   sessionId: string
 ): Promise<DeletePlan> {
-  return invoke("get_delete_plan", { sessionId });
+  return getTransport().command<DeletePlan>("get_delete_plan", { sessionId });
 }
 
 export async function destructiveDeleteSession(
   sessionId: string
 ): Promise<DestructiveDeleteResult> {
-  return invoke("destructive_delete_session", { sessionId });
+  return getTransport().command<DestructiveDeleteResult>("destructive_delete_session", { sessionId });
 }
 
 export async function getSubagentMessages(
   sessionId: string,
   subagentId: string
 ): Promise<MessageRecord[]> {
-  return invoke("get_subagent_messages", { sessionId, subagentId });
+  return getTransport().command<MessageRecord[]>("get_subagent_messages", { sessionId, subagentId });
 }
 
 // Transcript (tree-aware)
@@ -223,7 +223,7 @@ export interface TranscriptPayload {
 export async function getSessionTranscript(
   sessionId: string
 ): Promise<TranscriptPayload> {
-  return invoke("get_session_transcript", { sessionId });
+  return getTransport().command<TranscriptPayload>("get_session_transcript", { sessionId });
 }
 
 // ── Skills / Plugins ──────────────────────────────────────────
@@ -276,15 +276,15 @@ export interface SkillsOverview {
 }
 
 export async function listPlugins(scope: string): Promise<SkillsOverview> {
-  return invoke("list_plugins", { scope });
+  return getTransport().command<SkillsOverview>("list_plugins", { scope });
 }
 
 export async function togglePlugin(key: string): Promise<void> {
-  return invoke("toggle_plugin", { key });
+  return getTransport().command<void>("toggle_plugin", { key });
 }
 
 export async function uninstallPlugin(key: string): Promise<void> {
-  return invoke("uninstall_plugin", { key });
+  return getTransport().command<void>("uninstall_plugin", { key });
 }
 
 export interface FixPluginResult {
@@ -293,11 +293,11 @@ export interface FixPluginResult {
 }
 
 export async function cleanPlugin(key: string): Promise<FixPluginResult> {
-  return invoke("clean_plugin", { key });
+  return getTransport().command<FixPluginResult>("clean_plugin", { key });
 }
 
 export async function reinstallPlugin(key: string): Promise<FixPluginResult> {
-  return invoke("reinstall_plugin", { key });
+  return getTransport().command<FixPluginResult>("reinstall_plugin", { key });
 }
 
 // ── Marketplace ───────────────────────────────────────────
@@ -315,19 +315,19 @@ export interface MarketplaceListResult {
 }
 
 export async function listMarketplaces(): Promise<MarketplaceListResult> {
-  return invoke("list_marketplaces");
+  return getTransport().command<MarketplaceListResult>("list_marketplaces");
 }
 
 export async function addMarketplace(name: string, repo: string): Promise<void> {
-  return invoke("add_marketplace", { name, repo });
+  return getTransport().command<void>("add_marketplace", { name, repo });
 }
 
 export async function updateMarketplace(name: string): Promise<void> {
-  return invoke("update_marketplace", { name });
+  return getTransport().command<void>("update_marketplace", { name });
 }
 
 export async function removeMarketplace(name: string, removePlugins: boolean): Promise<void> {
-  return invoke("remove_marketplace", { name, removePlugins });
+  return getTransport().command<void>("remove_marketplace", { name, removePlugins });
 }
 
 export interface MarketplacePlugin {
@@ -340,9 +340,15 @@ export interface MarketplacePlugin {
 }
 
 export async function listMarketplacePlugins(marketplaceName: string): Promise<MarketplacePlugin[]> {
-  return invoke("list_marketplace_plugins", { marketplaceName });
+  return getTransport().command<MarketplacePlugin[]>("list_marketplace_plugins", { marketplaceName });
 }
 
 export async function installMarketplacePlugin(marketplaceName: string, pluginName: string): Promise<void> {
-  return invoke("install_marketplace_plugin", { marketplaceName, pluginName });
+  return getTransport().command<void>("install_marketplace_plugin", { marketplaceName, pluginName });
+}
+
+// ── Resume ────────────────────────────────────────────────
+
+export async function resumeSession(sessionId: string, agent: string, cwd: string | null): Promise<void> {
+  return getTransport().command<void>("resume_session", { sessionId, agent, cwd });
 }

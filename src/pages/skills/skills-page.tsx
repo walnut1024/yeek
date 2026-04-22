@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { listen } from "@tauri-apps/api/event";
+import { getEventTransport } from "@/lib/events";
 import {
   listPlugins,
   togglePlugin,
@@ -58,7 +58,8 @@ export default function SkillsPage() {
   });
 
   useEffect(() => {
-    const unlisten = listen("plugin-config-changed", () => {
+    const transport = getEventTransport();
+    const unlisten = transport.on("plugin-config-changed", () => {
       queryClient.invalidateQueries({ queryKey: ["plugins"] });
     });
     return () => { unlisten.then(f => f()); };

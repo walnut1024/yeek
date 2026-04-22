@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { listen } from "@tauri-apps/api/event";
+import { getEventTransport } from "@/lib/events";
 import {
   listMarketplaces,
   addMarketplace,
@@ -43,7 +43,8 @@ export default function MarketplacePage() {
   });
 
   useEffect(() => {
-    const unlisten = listen("plugin-config-changed", () => {
+    const transport = getEventTransport();
+    const unlisten = transport.on("plugin-config-changed", () => {
       queryClient.invalidateQueries({ queryKey: ["marketplace-plugins"] });
       queryClient.invalidateQueries({ queryKey: ["marketplaces"] });
       queryClient.invalidateQueries({ queryKey: ["plugins"] });
