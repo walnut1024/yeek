@@ -1,21 +1,26 @@
-mod adapter;
-mod app;
-mod domain;
-mod service;
-mod store;
-mod sync;
+pub mod adapter;
+pub mod app;
+pub mod domain;
+pub mod service;
+pub mod store;
+pub mod sync;
+
+#[cfg(feature = "tauri-shell")]
 mod tauri_bridge;
 
-use std::sync::Arc;
+#[cfg(feature = "http-server")]
+pub mod http;
 
-use tauri::Manager;
-
-use app::state::AppState;
-use store::schema;
-use tauri_bridge::TauriEventEmitter;
-
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
+#[cfg(feature = "tauri-shell")]
 pub fn run() {
+    use std::sync::Arc;
+
+    use tauri::Manager;
+
+    use app::state::AppState;
+    use store::schema;
+    use tauri_bridge::TauriEventEmitter;
+
     tauri::Builder::default()
         .setup(|app| {
             // Initialize logging
