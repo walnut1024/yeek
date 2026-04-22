@@ -6,6 +6,15 @@ use yeek_lib::sync::background::ScanGuard;
 
 #[tokio::main]
 async fn main() {
+    let args: Vec<String> = std::env::args().collect();
+
+    // Diagnostic mode: run scan diagnostics and exit
+    if args.len() > 1 && args[1] == "--diagnose-scan" {
+        run_diagnostics(&args);
+        return;
+    }
+
+    // Normal server mode
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     log::info!("yeek-server starting...");
 
@@ -54,4 +63,54 @@ async fn main() {
     log::info!("yeek-server listening on http://{}", addr);
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
+}
+
+fn run_diagnostics(args: &[String]) {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
+
+    let db_dir = dirs::data_local_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("yeek");
+    let db_path = db_dir.join("yeek.db");
+
+    if !db_path.exists() {
+        eprintln!("Database not found at {}. Run yeek-server normally first.", db_path.display());
+        std::process::exit(1);
+    }
+
+    eprintln!("Running diagnostic scan on {}...", db_path.display());
+
+    let use_json = args.iter().any(|a| a == "--json");
+
+    match yeek_lib::adapter::claudecode::diagnostic::run_diagnostic_scan(&db_path) {
+        Ok(result) => {
+            if use_json {
+                println!("{}", serde_json::to_string_pretty(&result).unwrap());
+            } else {
+                println!("=== Scan Diagnostic Report ===");
+                println!("Total discovered: {}", result.total_discovered);
+                println!("Total attempted:  {}", result.total_attempted);
+                println!("Succeeded:        {}", result.total_succeeded);
+                println!("Skipped (cached): {}", result.total_skipped);
+                println!("Failed:           {}", result.total_failed);
+                println!();
+                if result.total_failed > 0 {
+                    println!("--- Failure Summary ---");
+                    for (key, count) in &result.failure_summary {
+                        println!("  {}: {}", key, count);
+                    }
+                    println!();
+                    println!("--- Sample Failures (first 10) ---");
+                    for err in result.failures.iter().take(10) {
+                        println!("  [{:?}] {}", err.stage, err.source_path);
+                        println!("    kind={}, msg={}", err.error_kind, err.message);
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("Diagnostic scan failed: {}", e);
+            std::process::exit(1);
+        }
+    }
 }
