@@ -4,15 +4,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
-use tauri::Emitter;
 
 use crate::adapter::claudecode::{self, source_descriptor_from_path};
 use crate::app::errors::AppError;
-use crate::app::events::SyncCompletedPayload;
+use crate::app::events::{EventEmitter, SyncCompletedPayload};
 use crate::store::schema;
 use crate::sync::background::ScanGuard;
-
-const PLUGIN_CONFIG_CHANGED: &str = "plugin-config-changed";
 
 pub struct FileWatcher {
     _watcher: RecommendedWatcher,
@@ -25,7 +22,7 @@ impl FileWatcher {
     pub fn start(
         watch_dir: PathBuf,
         db_path: PathBuf,
-        app_handle: tauri::AppHandle,
+        emitter: Arc<dyn EventEmitter>,
         scan_guard: Arc<ScanGuard>,
     ) -> Result<Self, AppError> {
         let pending_paths: Arc<std::sync::Mutex<Vec<PathBuf>>> =
@@ -70,7 +67,7 @@ impl FileWatcher {
                 let pp = pending_paths.clone();
                 let sg = scan_guard.clone();
                 let db = db_path_clone.clone();
-                let ah = app_handle.clone();
+                let em = emitter.clone();
                 let da = debounce_active.clone();
 
                 std::thread::Builder::new()
@@ -100,7 +97,7 @@ impl FileWatcher {
                             return;
                         }
 
-                        let result = run_incremental_scan(&db, &paths, &ah);
+                        let result = run_incremental_scan(&db, &paths, em.as_ref());
                         sg.finish();
 
                         if let Err(e) = result {
@@ -126,7 +123,7 @@ impl FileWatcher {
     /// Monitors `~/.claude/plugins/installed_plugins.json` and `~/.claude/settings.json`.
     /// Emits `"plugin-config-changed"` event with 500ms debounce.
     pub fn start_plugin_config_watcher(
-        app_handle: tauri::AppHandle,
+        emitter: Arc<dyn EventEmitter>,
     ) -> Result<Self, AppError> {
         let home = dirs::home_dir()
             .ok_or_else(|| AppError::Internal("No home directory".into()))?;
@@ -157,7 +154,7 @@ impl FileWatcher {
                 }
                 debounce_active.store(true, Ordering::Relaxed);
 
-                let ah = app_handle.clone();
+                let em = emitter.clone();
                 let da = debounce_active.clone();
 
                 std::thread::Builder::new()
@@ -166,7 +163,7 @@ impl FileWatcher {
                         std::thread::sleep(Duration::from_millis(500));
                         da.store(false, Ordering::Relaxed);
 
-                        let _ = ah.emit(PLUGIN_CONFIG_CHANGED, ());
+                        em.emit_plugin_config_changed();
                         log::info!("Plugin config changed, emitted event");
                     })
                     .ok();
@@ -194,7 +191,7 @@ impl FileWatcher {
 fn run_incremental_scan(
     db_path: &Path,
     changed_paths: &[PathBuf],
-    app_handle: &tauri::AppHandle,
+    emitter: &dyn EventEmitter,
 ) -> Result<(), AppError> {
     let conn = rusqlite::Connection::open(db_path)
         .map_err(|e| AppError::DbError(e.to_string()))?;
@@ -242,14 +239,11 @@ fn run_incremental_scan(
 
     let result = claudecode::index_sources(&conn, &new_sources, |_| {})?;
 
-    let _ = app_handle.emit(
-        "sync-completed",
-        SyncCompletedPayload {
-            sessions_indexed: result.indexed,
-            sessions_updated: result.updated,
-            errors: result.errors,
-        },
-    );
+    emitter.emit_sync_completed(SyncCompletedPayload {
+        sessions_indexed: result.indexed,
+        sessions_updated: result.updated,
+        errors: result.errors,
+    });
 
     Ok(())
 }

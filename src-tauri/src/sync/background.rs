@@ -1,11 +1,9 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use tauri::Emitter;
-
 use crate::adapter::claudecode;
 use crate::app::errors::AppError;
-use crate::app::events::{SyncCompletedPayload, SyncProgressPayload, SyncStartedPayload};
+use crate::app::events::{EventEmitter, SyncCompletedPayload, SyncProgressPayload, SyncStartedPayload};
 use crate::store::schema;
 
 /// Prevents concurrent scans via an AtomicBool.
@@ -50,7 +48,7 @@ fn open_sync_connection(db_path: &std::path::Path) -> Result<rusqlite::Connectio
 /// Returns false if a scan is already in progress.
 pub fn spawn_background_scan(
     db_path: std::path::PathBuf,
-    app_handle: tauri::AppHandle,
+    emitter: Arc<dyn EventEmitter>,
     scan_guard: Arc<ScanGuard>,
 ) -> bool {
     if !scan_guard.try_start() {
@@ -61,7 +59,7 @@ pub fn spawn_background_scan(
     std::thread::Builder::new()
         .name("yeek-sync".into())
         .spawn(move || {
-            let result = run_scan(&db_path, &app_handle);
+            let result = run_scan(&db_path, emitter.as_ref());
             scan_guard.finish();
 
             match result {
@@ -75,14 +73,11 @@ pub fn spawn_background_scan(
                 }
                 Err(e) => {
                     log::error!("Background scan failed: {}", e);
-                    let _ = app_handle.emit(
-                        "sync-completed",
-                        SyncCompletedPayload {
-                            sessions_indexed: 0,
-                            sessions_updated: 0,
-                            errors: 1,
-                        },
-                    );
+                    emitter.emit_sync_completed(SyncCompletedPayload {
+                        sessions_indexed: 0,
+                        sessions_updated: 0,
+                        errors: 1,
+                    });
                 }
             }
         })
@@ -93,7 +88,7 @@ pub fn spawn_background_scan(
 
 fn run_scan(
     db_path: &std::path::Path,
-    app_handle: &tauri::AppHandle,
+    emitter: &dyn EventEmitter,
 ) -> Result<SyncSummary, AppError> {
     let conn = open_sync_connection(db_path)?;
 
@@ -101,32 +96,23 @@ fn run_scan(
     let sources = claudecode::discover_sources()?;
     let total = sources.len() as i64;
 
-    let _ = app_handle.emit(
-        "sync-started",
-        SyncStartedPayload {
-            source_count: total,
-        },
-    );
+    emitter.emit_sync_started(SyncStartedPayload {
+        source_count: total,
+    });
 
     // Delegate to incremental indexer with progress callback
     let result = claudecode::index_sources(&conn, &sources, |processed| {
-        let _ = app_handle.emit(
-            "sync-progress",
-            SyncProgressPayload {
-                processed,
-                total,
-            },
-        );
+        emitter.emit_sync_progress(SyncProgressPayload {
+            processed,
+            total,
+        });
     })?;
 
-    let _ = app_handle.emit(
-        "sync-completed",
-        SyncCompletedPayload {
-            sessions_indexed: result.indexed,
-            sessions_updated: result.updated,
-            errors: result.errors,
-        },
-    );
+    emitter.emit_sync_completed(SyncCompletedPayload {
+        sessions_indexed: result.indexed,
+        sessions_updated: result.updated,
+        errors: result.errors,
+    });
 
     Ok(SyncSummary {
         sessions_indexed: result.indexed,
