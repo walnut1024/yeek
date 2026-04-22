@@ -10,6 +10,8 @@ use crate::store::messages::MessageRecord;
 use crate::store::sessions;
 use serde_json::Value;
 
+pub mod diagnostic;
+
 /// Discover all Claude Code session JSONL files (including subagent transcripts).
 pub fn discover_sources() -> Result<Vec<SourceDescriptor>, AppError> {
     let claude_dir = dirs::home_dir()
