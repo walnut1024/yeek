@@ -11,8 +11,8 @@
     "typecheck": "tsc -b --noEmit",
     "preview": "vite preview",
     "electron:compile": "tsc -p electron-app/tsconfig.json",
-    "electron:dev": "npm run electron:compile && concurrently \"npm run dev\" \"electron electron-app/dist/main.js\"",
-    "electron:build": "npm run electron:compile && npm run build && cargo build --release --manifest-path src-tauri/Cargo.toml --bin yeek-server --features http-server && electron-builder --config electron-app/electron-builder.yml",
+    "electron:dev": "npm run electron:compile && concurrently \"npm run dev\" \"electron-app/node_modules/.bin/electron electron-app/dist/main.js\"",
+    "electron:build": "npm run electron:compile && npm run build && cargo build --release --manifest-path src-tauri/Cargo.toml --bin yeek-server --features http-server && electron-app/node_modules/.bin/electron-builder --config electron-app/electron-builder.yml",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build"
   },
