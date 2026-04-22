@@ -4,40 +4,15 @@ mod domain;
 mod service;
 mod store;
 mod sync;
+mod tauri_bridge;
 
 use std::sync::Arc;
-use tauri::{Emitter, Manager};
 
-use app::commands::{
-    add_marketplace, browse_sessions, clean_plugin, destructive_delete_session, get_action_log, get_delete_plan, get_session_detail,
-    get_session_preview, get_session_transcript, get_subagent_messages, get_system_status, install_marketplace_plugin, list_marketplaces, list_marketplace_plugins, list_plugins,
-    reinstall_plugin, release_and_resync, remove_marketplace, rescan_sources, resume_session, search_sessions, soft_delete_project, soft_delete_sessions, toggle_plugin, uninstall_plugin, update_marketplace,
-};
+use tauri::Manager;
+
 use app::state::AppState;
 use store::schema;
-
-// ---------------------------------------------------------------------------
-// TauriEventEmitter — bridges EventEmitter trait to Tauri's AppHandle
-// ---------------------------------------------------------------------------
-
-struct TauriEventEmitter {
-    handle: tauri::AppHandle,
-}
-
-impl app::events::EventEmitter for TauriEventEmitter {
-    fn emit_sync_started(&self, payload: app::events::SyncStartedPayload) {
-        let _ = self.handle.emit("sync-started", payload);
-    }
-    fn emit_sync_progress(&self, payload: app::events::SyncProgressPayload) {
-        let _ = self.handle.emit("sync-progress", payload);
-    }
-    fn emit_sync_completed(&self, payload: app::events::SyncCompletedPayload) {
-        let _ = self.handle.emit("sync-completed", payload);
-    }
-    fn emit_plugin_config_changed(&self) {
-        let _ = self.handle.emit("plugin-config-changed", ());
-    }
-}
+use tauri_bridge::TauriEventEmitter;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -127,32 +102,32 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            get_system_status,
-            browse_sessions,
-            search_sessions,
-            get_session_preview,
-            get_session_detail,
-            get_session_transcript,
-            get_subagent_messages,
-            soft_delete_sessions,
-            soft_delete_project,
-            get_action_log,
-            rescan_sources,
-            release_and_resync,
-            resume_session,
-            get_delete_plan,
-            destructive_delete_session,
-            list_plugins,
-            toggle_plugin,
-            uninstall_plugin,
-            clean_plugin,
-            reinstall_plugin,
-            list_marketplaces,
-            add_marketplace,
-            update_marketplace,
-            remove_marketplace,
-            list_marketplace_plugins,
-            install_marketplace_plugin,
+            tauri_bridge::commands::get_system_status,
+            tauri_bridge::commands::browse_sessions,
+            tauri_bridge::commands::search_sessions,
+            tauri_bridge::commands::get_session_preview,
+            tauri_bridge::commands::get_session_detail,
+            tauri_bridge::commands::get_session_transcript,
+            tauri_bridge::commands::get_subagent_messages,
+            tauri_bridge::commands::soft_delete_sessions,
+            tauri_bridge::commands::soft_delete_project,
+            tauri_bridge::commands::get_action_log,
+            tauri_bridge::commands::rescan_sources,
+            tauri_bridge::commands::release_and_resync,
+            tauri_bridge::commands::resume_session,
+            tauri_bridge::commands::get_delete_plan,
+            tauri_bridge::commands::destructive_delete_session,
+            tauri_bridge::commands::list_plugins,
+            tauri_bridge::commands::toggle_plugin,
+            tauri_bridge::commands::uninstall_plugin,
+            tauri_bridge::commands::clean_plugin,
+            tauri_bridge::commands::reinstall_plugin,
+            tauri_bridge::commands::list_marketplaces,
+            tauri_bridge::commands::add_marketplace,
+            tauri_bridge::commands::update_marketplace,
+            tauri_bridge::commands::remove_marketplace,
+            tauri_bridge::commands::list_marketplace_plugins,
+            tauri_bridge::commands::install_marketplace_plugin,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
