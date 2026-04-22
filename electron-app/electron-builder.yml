@@ -1,0 +1,17 @@
+appId: dev.yeek.app.electron
+productName: Yeek
+directories:
+  output: release
+files:
+  - electron-app/dist/**/*
+  - dist/**/*
+  - package.json
+extraResources:
+  - from: src-tauri/target/release/yeek-server
+    to: yeek-server
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - dmg
+    - zip
+  executableName: Yeek
