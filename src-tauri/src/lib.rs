@@ -66,9 +66,16 @@ pub fn run() {
             )
             .expect("Failed to start file watcher");
 
+            // Start plugin config watcher for install/uninstall status updates
+            let config_watcher = sync::watcher::FileWatcher::start_plugin_config_watcher(
+                app.handle().clone(),
+            )
+            .expect("Failed to start plugin config watcher");
+
             app.manage(AppState::new(conn, db_path.clone())
                 .with_handle(app.handle().clone())
-                .with_watcher(watcher));
+                .with_watcher(watcher)
+                .with_config_watcher(config_watcher));
 
             // Heavy data migrations on background thread (non-blocking)
             if let Some(_target) = pending_heavy {

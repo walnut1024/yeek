@@ -13,6 +13,7 @@ pub struct AppState {
     pub scan_guard: Arc<ScanGuard>,
     pub db_path: PathBuf,
     pub watcher: Option<FileWatcher>,
+    pub config_watcher: Option<FileWatcher>,
 }
 
 impl AppState {
@@ -23,11 +24,17 @@ impl AppState {
             scan_guard: Arc::new(ScanGuard::new()),
             db_path,
             watcher: None,
+            config_watcher: None,
         }
     }
 
     pub fn with_watcher(mut self, watcher: FileWatcher) -> Self {
         self.watcher = Some(watcher);
+        self
+    }
+
+    pub fn with_config_watcher(mut self, watcher: FileWatcher) -> Self {
+        self.config_watcher = Some(watcher);
         self
     }
 

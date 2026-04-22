@@ -12,6 +12,8 @@ use crate::app::events::SyncCompletedPayload;
 use crate::store::schema;
 use crate::sync::background::ScanGuard;
 
+const PLUGIN_CONFIG_CHANGED: &str = "plugin-config-changed";
+
 pub struct FileWatcher {
     _watcher: RecommendedWatcher,
 }
@@ -116,6 +118,74 @@ impl FileWatcher {
             .map_err(|e| AppError::Internal(format!("Failed to start watching: {}", e)))?;
 
         log::info!("File watcher started on {}", watch_dir.display());
+
+        Ok(Self { _watcher: watcher })
+    }
+
+    /// Watch plugin config files for changes.
+    /// Monitors `~/.claude/plugins/installed_plugins.json` and `~/.claude/settings.json`.
+    /// Emits `"plugin-config-changed"` event with 500ms debounce.
+    pub fn start_plugin_config_watcher(
+        app_handle: tauri::AppHandle,
+    ) -> Result<Self, AppError> {
+        let home = dirs::home_dir()
+            .ok_or_else(|| AppError::Internal("No home directory".into()))?;
+        let claude_dir = home.join(".claude");
+        let plugins_dir = claude_dir.join("plugins");
+
+        let installed_plugins = plugins_dir.join("installed_plugins.json");
+        let settings_json = claude_dir.join("settings.json");
+
+        let debounce_active: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
+
+        let mut watcher = RecommendedWatcher::new(
+            move |res: Result<Event, notify::Error>| {
+                let event = match res {
+                    Ok(e) => e,
+                    Err(_) => return,
+                };
+
+                let relevant = event.paths.iter().any(|p| {
+                    p == &installed_plugins || p == &settings_json
+                });
+                if !relevant {
+                    return;
+                }
+
+                if debounce_active.load(Ordering::Relaxed) {
+                    return;
+                }
+                debounce_active.store(true, Ordering::Relaxed);
+
+                let ah = app_handle.clone();
+                let da = debounce_active.clone();
+
+                std::thread::Builder::new()
+                    .name("yeek-plugin-config-debounce".into())
+                    .spawn(move || {
+                        std::thread::sleep(Duration::from_millis(500));
+                        da.store(false, Ordering::Relaxed);
+
+                        let _ = ah.emit(PLUGIN_CONFIG_CHANGED, ());
+                        log::info!("Plugin config changed, emitted event");
+                    })
+                    .ok();
+            },
+            Config::default().with_poll_interval(Duration::from_secs(2)),
+        )
+        .map_err(|e| AppError::Internal(format!("Failed to create plugin config watcher: {}", e)))?;
+
+        // Watch ~/.claude/ (non-recursive) for settings.json
+        watcher
+            .watch(&claude_dir, RecursiveMode::NonRecursive)
+            .map_err(|e| AppError::Internal(format!("Failed to watch ~/.claude/: {}", e)))?;
+
+        // Watch ~/.claude/plugins/ (non-recursive) for installed_plugins.json
+        watcher
+            .watch(&plugins_dir, RecursiveMode::NonRecursive)
+            .map_err(|e| AppError::Internal(format!("Failed to watch ~/.claude/plugins/: {}", e)))?;
+
+        log::info!("Plugin config watcher started");
 
         Ok(Self { _watcher: watcher })
     }

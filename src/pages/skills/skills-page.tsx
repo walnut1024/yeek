@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { listen } from "@tauri-apps/api/event";
 import {
   listPlugins,
   togglePlugin,
@@ -54,8 +55,14 @@ export default function SkillsPage() {
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["plugins", scope],
     queryFn: () => listPlugins(scope),
-    refetchInterval: 30_000,
   });
+
+  useEffect(() => {
+    const unlisten = listen("plugin-config-changed", () => {
+      queryClient.invalidateQueries({ queryKey: ["plugins"] });
+    });
+    return () => { unlisten.then(f => f()); };
+  }, [queryClient]);
 
   const toggleMut = useMutation({
     mutationFn: (key: string) => togglePlugin(key),

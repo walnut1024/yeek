@@ -1129,8 +1129,9 @@ pub fn reinstall_plugin(key: String) -> Result<plugin::FixPluginResult, AppError
     let git_sha = entry["gitCommitSha"].as_str().unwrap_or("");
 
     // 4. Ensure marketplace clone is available
-    let clone_exists = clone_path.join(".git").exists();
-    if clone_exists {
+    let clone_dir_exists = clone_path.exists();
+    let has_git = clone_path.join(".git").exists();
+    if clone_dir_exists && has_git {
         // Fetch latest
         let _ = std::process::Command::new("git")
             .args(["fetch", "origin"])
@@ -1155,6 +1156,10 @@ pub fn reinstall_plugin(key: String) -> Result<plugin::FixPluginResult, AppError
                 .output();
         }
     } else {
+        // Directory exists but no .git (broken clone) — remove it first
+        if clone_dir_exists {
+            let _ = std::fs::remove_dir_all(clone_path);
+        }
         // Clone the repo
         let clone_url = format!("https://github.com/{}.git", repo);
         let out = std::process::Command::new("git")
