@@ -64,6 +64,7 @@ fn cors_layer() -> CorsLayer {
         "http://localhost:1420".parse().unwrap(),  // Vite dev
         "http://localhost:17321".parse().unwrap(), // self
         "tauri://localhost".parse().unwrap(),       // Tauri
+        "yeek://localhost".parse().unwrap(),        // Electron production
     ];
     CorsLayer::new()
         .allow_origin(AllowOrigin::list(origins))
