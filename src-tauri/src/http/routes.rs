@@ -2,12 +2,13 @@ use std::convert::Infallible;
 use std::time::Duration;
 
 use axum::extract::{Path, Query, State};
+use axum::http::{header, Method};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::routing::{delete, get, post};
 use axum::Json;
 use axum::Router;
 use tokio_stream::StreamExt;
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{AllowOrigin, CorsLayer};
 
 use crate::app::commands::*;
 use crate::app::errors::AppError;
@@ -55,7 +56,19 @@ pub fn build_router(state: HttpRuntimeState) -> Router {
 
     Router::new()
         .nest("/api", api)
-        .layer(CorsLayer::permissive())
+        .layer(cors_layer())
+}
+
+fn cors_layer() -> CorsLayer {
+    let origins = vec![
+        "http://localhost:1420".parse().unwrap(),  // Vite dev
+        "http://localhost:17321".parse().unwrap(), // self
+        "tauri://localhost".parse().unwrap(),       // Tauri
+    ];
+    CorsLayer::new()
+        .allow_origin(AllowOrigin::list(origins))
+        .allow_methods([Method::GET, Method::POST, Method::DELETE])
+        .allow_headers([header::CONTENT_TYPE])
 }
 
 // ---------------------------------------------------------------------------

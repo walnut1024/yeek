@@ -149,15 +149,22 @@ const LIGHTWEIGHT_VERSION: i64 = 2;
 /// Latest overall version (including heavy migrations).
 const LATEST_VERSION: i64 = 3;
 
-/// Initialize schema and run lightweight migrations on the main thread.
-/// Returns the target version if heavy migrations are pending, or None if fully up-to-date.
-pub fn init_schema(conn: &rusqlite::Connection) -> Result<Option<i64>, crate::app::errors::AppError> {
+/// Configure a SQLite connection with safe concurrency defaults.
+/// Must be called on every new connection before any other operations.
+pub fn configure_connection(conn: &rusqlite::Connection) -> Result<(), crate::app::errors::AppError> {
     conn.execute_batch(
         "PRAGMA journal_mode=WAL;
          PRAGMA foreign_keys=ON;
          PRAGMA busy_timeout=5000;
          PRAGMA synchronous=NORMAL;",
     )?;
+    Ok(())
+}
+
+/// Initialize schema and run lightweight migrations on the main thread.
+/// Returns the target version if heavy migrations are pending, or None if fully up-to-date.
+pub fn init_schema(conn: &rusqlite::Connection) -> Result<Option<i64>, crate::app::errors::AppError> {
+    configure_connection(conn)?;
     conn.execute_batch(SCHEMA_SQL)?;
 
     let version: i64 = conn
@@ -190,6 +197,7 @@ pub fn init_schema(conn: &rusqlite::Connection) -> Result<Option<i64>, crate::ap
 pub fn run_heavy_migrations(db_path: &std::path::Path) -> Result<(), crate::app::errors::AppError> {
     let conn = rusqlite::Connection::open(db_path)
         .map_err(|e| crate::app::errors::AppError::DbError(e.to_string()))?;
+    configure_connection(&conn)?;
 
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |row| row.get(0))
