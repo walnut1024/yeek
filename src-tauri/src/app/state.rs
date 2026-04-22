@@ -41,8 +41,4 @@ impl AppState {
     pub fn db(&self) -> Result<std::sync::MutexGuard<'_, Connection>, AppError> {
         self.db.lock().map_err(|e| AppError::Internal(e.to_string()))
     }
-
-    pub fn emitter(&self) -> &dyn EventEmitter {
-        self.event_emitter.as_ref()
-    }
 }

@@ -20,7 +20,7 @@ pub struct SystemStatusPayload {
     pub status: String,
 }
 
-pub fn system_status(state: &AppState) -> Result<SystemStatusPayload, AppError> {
+pub fn do_system_status(state: &AppState) -> Result<SystemStatusPayload, AppError> {
     let db = state.db()?;
 
     let total_sessions: i64 = db
@@ -54,7 +54,7 @@ pub fn system_status(state: &AppState) -> Result<SystemStatusPayload, AppError> 
 
 #[tauri::command]
 pub fn get_system_status(state: State<'_, AppState>) -> Result<SystemStatusPayload, AppError> {
-    system_status(&state)
+    do_system_status(&state)
 }
 
 // --- Sessions Browse & Search ---
@@ -73,7 +73,7 @@ pub struct BrowseRequest {
     pub offset: Option<i64>,
 }
 
-pub fn browse_sessions_inner(
+pub fn do_browse_sessions(
     state: &AppState,
     request: BrowseRequest,
 ) -> Result<SessionListResponse, AppError> {
@@ -97,7 +97,7 @@ pub fn browse_sessions(
     state: State<'_, AppState>,
     request: BrowseRequest,
 ) -> Result<SessionListResponse, AppError> {
-    browse_sessions_inner(&state, request)
+    do_browse_sessions(&state, request)
 }
 
 #[derive(Debug, Deserialize)]
@@ -107,7 +107,7 @@ pub struct SearchRequest {
     pub offset: Option<i64>,
 }
 
-pub fn search_sessions_inner(
+pub fn do_search_sessions(
     state: &AppState,
     request: SearchRequest,
 ) -> Result<SessionListResponse, AppError> {
@@ -131,7 +131,7 @@ pub fn search_sessions(
     state: State<'_, AppState>,
     request: SearchRequest,
 ) -> Result<SessionListResponse, AppError> {
-    search_sessions_inner(&state, request)
+    do_search_sessions(&state, request)
 }
 
 // --- Session Detail ---
@@ -143,7 +143,7 @@ pub struct SessionPreviewPayload {
     pub source_count: i64,
 }
 
-pub fn session_preview(
+pub fn do_session_preview(
     state: &AppState,
     session_id: String,
 ) -> Result<SessionPreviewPayload, AppError> {
@@ -171,7 +171,7 @@ pub fn get_session_preview(
     state: State<'_, AppState>,
     session_id: String,
 ) -> Result<SessionPreviewPayload, AppError> {
-    session_preview(&state, session_id)
+    do_session_preview(&state, session_id)
 }
 
 #[derive(Debug, Serialize)]
@@ -181,7 +181,7 @@ pub struct SessionDetailPayload {
     pub sources: Vec<crate::domain::source::SourceRef>,
 }
 
-pub fn session_detail(
+pub fn do_session_detail(
     state: &AppState,
     session_id: String,
 ) -> Result<SessionDetailPayload, AppError> {
@@ -202,12 +202,12 @@ pub fn get_session_detail(
     state: State<'_, AppState>,
     session_id: String,
 ) -> Result<SessionDetailPayload, AppError> {
-    session_detail(&state, session_id)
+    do_session_detail(&state, session_id)
 }
 
 // --- Transcript (tree-aware) ---
 
-pub fn session_transcript(
+pub fn do_session_transcript(
     state: &AppState,
     session_id: String,
 ) -> Result<messages::TranscriptPayload, AppError> {
@@ -220,7 +220,7 @@ pub fn get_session_transcript(
     state: State<'_, AppState>,
     session_id: String,
 ) -> Result<messages::TranscriptPayload, AppError> {
-    session_transcript(&state, session_id)
+    do_session_transcript(&state, session_id)
 }
 
 // --- Session Actions ---
@@ -592,7 +592,7 @@ pub fn soft_delete_project(
 
 // --- Subagent Messages ---
 
-pub fn subagent_messages(
+pub fn do_subagent_messages(
     state: &AppState,
     session_id: String,
     subagent_id: String,
@@ -610,7 +610,7 @@ pub fn get_subagent_messages(
     session_id: String,
     subagent_id: String,
 ) -> Result<Vec<messages::MessageRecord>, AppError> {
-    subagent_messages(&state, session_id, subagent_id)
+    do_subagent_messages(&state, session_id, subagent_id)
 }
 
 // --- Action Log ---
@@ -620,7 +620,7 @@ pub struct ActionLogResponse {
     pub actions: Vec<action_store::ActionLogEntry>,
 }
 
-pub fn action_log(
+pub fn do_action_log(
     state: &AppState,
     limit: Option<i64>,
 ) -> Result<ActionLogResponse, AppError> {
@@ -634,12 +634,12 @@ pub fn get_action_log(
     state: State<'_, AppState>,
     limit: Option<i64>,
 ) -> Result<ActionLogResponse, AppError> {
-    action_log(&state, limit)
+    do_action_log(&state, limit)
 }
 
 // --- Delete Planning ---
 
-pub fn delete_plan(
+pub fn do_delete_plan(
     state: &AppState,
     session_id: String,
 ) -> Result<crate::service::delete_planner::DeletePlan, AppError> {
@@ -653,7 +653,7 @@ pub fn get_delete_plan(
     state: State<'_, AppState>,
     session_id: String,
 ) -> Result<crate::service::delete_planner::DeletePlan, AppError> {
-    delete_plan(&state, session_id)
+    do_delete_plan(&state, session_id)
 }
 
 pub fn do_destructive_delete(
