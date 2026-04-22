@@ -5,7 +5,8 @@ mod service;
 mod store;
 mod sync;
 
-use tauri::Manager;
+use std::sync::Arc;
+use tauri::{Emitter, Manager};
 
 use app::commands::{
     add_marketplace, browse_sessions, clean_plugin, destructive_delete_session, get_action_log, get_delete_plan, get_session_detail,
@@ -14,6 +15,29 @@ use app::commands::{
 };
 use app::state::AppState;
 use store::schema;
+
+// ---------------------------------------------------------------------------
+// TauriEventEmitter — bridges EventEmitter trait to Tauri's AppHandle
+// ---------------------------------------------------------------------------
+
+struct TauriEventEmitter {
+    handle: tauri::AppHandle,
+}
+
+impl app::events::EventEmitter for TauriEventEmitter {
+    fn emit_sync_started(&self, payload: app::events::SyncStartedPayload) {
+        let _ = self.handle.emit("sync-started", payload);
+    }
+    fn emit_sync_progress(&self, payload: app::events::SyncProgressPayload) {
+        let _ = self.handle.emit("sync-progress", payload);
+    }
+    fn emit_sync_completed(&self, payload: app::events::SyncCompletedPayload) {
+        let _ = self.handle.emit("sync-completed", payload);
+    }
+    fn emit_plugin_config_changed(&self) {
+        let _ = self.handle.emit("plugin-config-changed", ());
+    }
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -33,6 +57,10 @@ pub fn run() {
                         .build(),
                 )?;
             }
+
+            // Create event emitter
+            let emitter: Arc<dyn app::events::EventEmitter> =
+                Arc::new(TauriEventEmitter { handle: app.handle().clone() });
 
             // Initialize database
             let app_dir = app
@@ -55,25 +83,24 @@ pub fn run() {
                 .join(".claude")
                 .join("projects");
 
-            let scan_guard = std::sync::Arc::new(sync::background::ScanGuard::new());
+            let scan_guard = Arc::new(sync::background::ScanGuard::new());
 
             // Start file watcher for auto incremental updates
             let watcher = sync::watcher::FileWatcher::start(
                 claude_projects_dir,
                 db_path.clone(),
-                app.handle().clone(),
+                emitter.clone(),
                 scan_guard.clone(),
             )
             .expect("Failed to start file watcher");
 
             // Start plugin config watcher for install/uninstall status updates
             let config_watcher = sync::watcher::FileWatcher::start_plugin_config_watcher(
-                app.handle().clone(),
+                emitter.clone(),
             )
             .expect("Failed to start plugin config watcher");
 
-            app.manage(AppState::new(conn, db_path.clone())
-                .with_handle(app.handle().clone())
+            app.manage(AppState::new(conn, db_path.clone(), emitter.clone())
                 .with_watcher(watcher)
                 .with_config_watcher(config_watcher));
 
@@ -93,7 +120,7 @@ pub fn run() {
             // Startup sync: background thread — window appears immediately
             sync::background::spawn_background_scan(
                 db_path,
-                app.handle().clone(),
+                emitter,
                 scan_guard,
             );
 

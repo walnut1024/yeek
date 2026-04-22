@@ -20,8 +20,7 @@ pub struct SystemStatusPayload {
     pub status: String,
 }
 
-#[tauri::command]
-pub fn get_system_status(state: State<'_, AppState>) -> Result<SystemStatusPayload, AppError> {
+pub fn system_status(state: &AppState) -> Result<SystemStatusPayload, AppError> {
     let db = state.db()?;
 
     let total_sessions: i64 = db
@@ -53,6 +52,11 @@ pub fn get_system_status(state: State<'_, AppState>) -> Result<SystemStatusPaylo
     })
 }
 
+#[tauri::command]
+pub fn get_system_status(state: State<'_, AppState>) -> Result<SystemStatusPayload, AppError> {
+    system_status(&state)
+}
+
 // --- Sessions Browse & Search ---
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -69,9 +73,8 @@ pub struct BrowseRequest {
     pub offset: Option<i64>,
 }
 
-#[tauri::command]
-pub fn browse_sessions(
-    state: State<'_, AppState>,
+pub fn browse_sessions_inner(
+    state: &AppState,
     request: BrowseRequest,
 ) -> Result<SessionListResponse, AppError> {
     let db = state.db()?;
@@ -89,6 +92,14 @@ pub fn browse_sessions(
     })
 }
 
+#[tauri::command]
+pub fn browse_sessions(
+    state: State<'_, AppState>,
+    request: BrowseRequest,
+) -> Result<SessionListResponse, AppError> {
+    browse_sessions_inner(&state, request)
+}
+
 #[derive(Debug, Deserialize)]
 pub struct SearchRequest {
     pub query: String,
@@ -96,9 +107,8 @@ pub struct SearchRequest {
     pub offset: Option<i64>,
 }
 
-#[tauri::command]
-pub fn search_sessions(
-    state: State<'_, AppState>,
+pub fn search_sessions_inner(
+    state: &AppState,
     request: SearchRequest,
 ) -> Result<SessionListResponse, AppError> {
     let db = state.db()?;
@@ -116,6 +126,14 @@ pub fn search_sessions(
     })
 }
 
+#[tauri::command]
+pub fn search_sessions(
+    state: State<'_, AppState>,
+    request: SearchRequest,
+) -> Result<SessionListResponse, AppError> {
+    search_sessions_inner(&state, request)
+}
+
 // --- Session Detail ---
 
 #[derive(Debug, Serialize)]
@@ -125,9 +143,8 @@ pub struct SessionPreviewPayload {
     pub source_count: i64,
 }
 
-#[tauri::command]
-pub fn get_session_preview(
-    state: State<'_, AppState>,
+pub fn session_preview(
+    state: &AppState,
     session_id: String,
 ) -> Result<SessionPreviewPayload, AppError> {
     let db = state.db()?;
@@ -149,6 +166,14 @@ pub fn get_session_preview(
     })
 }
 
+#[tauri::command]
+pub fn get_session_preview(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Result<SessionPreviewPayload, AppError> {
+    session_preview(&state, session_id)
+}
+
 #[derive(Debug, Serialize)]
 pub struct SessionDetailPayload {
     pub record: SessionRecord,
@@ -156,9 +181,8 @@ pub struct SessionDetailPayload {
     pub sources: Vec<crate::domain::source::SourceRef>,
 }
 
-#[tauri::command]
-pub fn get_session_detail(
-    state: State<'_, AppState>,
+pub fn session_detail(
+    state: &AppState,
     session_id: String,
 ) -> Result<SessionDetailPayload, AppError> {
     let db = state.db()?;
@@ -173,15 +197,30 @@ pub fn get_session_detail(
     })
 }
 
+#[tauri::command]
+pub fn get_session_detail(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Result<SessionDetailPayload, AppError> {
+    session_detail(&state, session_id)
+}
+
 // --- Transcript (tree-aware) ---
+
+pub fn session_transcript(
+    state: &AppState,
+    session_id: String,
+) -> Result<messages::TranscriptPayload, AppError> {
+    let db = state.db()?;
+    Ok(messages::get_session_transcript(&db, &session_id)?)
+}
 
 #[tauri::command]
 pub fn get_session_transcript(
     state: State<'_, AppState>,
     session_id: String,
 ) -> Result<messages::TranscriptPayload, AppError> {
-    let db = state.db()?;
-    Ok(messages::get_session_transcript(&db, &session_id)?)
+    session_transcript(&state, session_id)
 }
 
 // --- Session Actions ---
@@ -212,8 +251,7 @@ fn shell_quote(s: &str) -> String {
     format!("\"{}\"", s.replace('"', "\\\""))
 }
 
-#[tauri::command]
-pub fn resume_session(
+pub fn do_resume_session(
     session_id: String,
     agent: String,
     cwd: Option<String>,
@@ -243,6 +281,15 @@ pub fn resume_session(
 
     let cwd_ref = cwd.as_deref().filter(|s| !s.is_empty());
     launch_terminal(&cmd, cwd_ref).map_err(|e| AppError::Internal(e))
+}
+
+#[tauri::command]
+pub fn resume_session(
+    session_id: String,
+    agent: String,
+    cwd: Option<String>,
+) -> Result<(), AppError> {
+    do_resume_session(session_id, agent, cwd)
 }
 
 // ---------------------------------------------------------------------------
@@ -491,9 +538,8 @@ pub struct ActionResult {
     pub affected_count: i64,
 }
 
-#[tauri::command]
-pub fn soft_delete_sessions(
-    state: State<'_, AppState>,
+pub fn do_soft_delete_sessions(
+    state: &AppState,
     ids: Vec<String>,
 ) -> Result<ActionResult, AppError> {
     let db = state.db()?;
@@ -511,8 +557,15 @@ pub fn soft_delete_sessions(
 }
 
 #[tauri::command]
-pub fn soft_delete_project(
+pub fn soft_delete_sessions(
     state: State<'_, AppState>,
+    ids: Vec<String>,
+) -> Result<ActionResult, AppError> {
+    do_soft_delete_sessions(&state, ids)
+}
+
+pub fn do_soft_delete_project(
+    state: &AppState,
     project_path: String,
 ) -> Result<ActionResult, AppError> {
     let db = state.db()?;
@@ -529,11 +582,18 @@ pub fn soft_delete_project(
     })
 }
 
+#[tauri::command]
+pub fn soft_delete_project(
+    state: State<'_, AppState>,
+    project_path: String,
+) -> Result<ActionResult, AppError> {
+    do_soft_delete_project(&state, project_path)
+}
+
 // --- Subagent Messages ---
 
-#[tauri::command]
-pub fn get_subagent_messages(
-    state: State<'_, AppState>,
+pub fn subagent_messages(
+    state: &AppState,
     session_id: String,
     subagent_id: String,
 ) -> Result<Vec<messages::MessageRecord>, AppError> {
@@ -544,6 +604,15 @@ pub fn get_subagent_messages(
     Ok(msgs)
 }
 
+#[tauri::command]
+pub fn get_subagent_messages(
+    state: State<'_, AppState>,
+    session_id: String,
+    subagent_id: String,
+) -> Result<Vec<messages::MessageRecord>, AppError> {
+    subagent_messages(&state, session_id, subagent_id)
+}
+
 // --- Action Log ---
 
 #[derive(Debug, Serialize)]
@@ -551,9 +620,8 @@ pub struct ActionLogResponse {
     pub actions: Vec<action_store::ActionLogEntry>,
 }
 
-#[tauri::command]
-pub fn get_action_log(
-    state: State<'_, AppState>,
+pub fn action_log(
+    state: &AppState,
     limit: Option<i64>,
 ) -> Result<ActionLogResponse, AppError> {
     let db = state.db()?;
@@ -561,11 +629,18 @@ pub fn get_action_log(
     Ok(ActionLogResponse { actions })
 }
 
+#[tauri::command]
+pub fn get_action_log(
+    state: State<'_, AppState>,
+    limit: Option<i64>,
+) -> Result<ActionLogResponse, AppError> {
+    action_log(&state, limit)
+}
+
 // --- Delete Planning ---
 
-#[tauri::command]
-pub fn get_delete_plan(
-    state: State<'_, AppState>,
+pub fn delete_plan(
+    state: &AppState,
     session_id: String,
 ) -> Result<crate::service::delete_planner::DeletePlan, AppError> {
     let db = state.db()?;
@@ -574,8 +649,15 @@ pub fn get_delete_plan(
 }
 
 #[tauri::command]
-pub fn destructive_delete_session(
+pub fn get_delete_plan(
     state: State<'_, AppState>,
+    session_id: String,
+) -> Result<crate::service::delete_planner::DeletePlan, AppError> {
+    delete_plan(&state, session_id)
+}
+
+pub fn do_destructive_delete(
+    state: &AppState,
     session_id: String,
 ) -> Result<crate::service::delete_planner::DestructiveDeleteResult, AppError> {
     let db = state.db()?;
@@ -583,20 +665,24 @@ pub fn destructive_delete_session(
     Ok(result)
 }
 
+#[tauri::command]
+pub fn destructive_delete_session(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Result<crate::service::delete_planner::DestructiveDeleteResult, AppError> {
+    do_destructive_delete(&state, session_id)
+}
+
 // --- Rescan ---
 
-#[tauri::command]
-pub fn rescan_sources(state: State<'_, AppState>) -> Result<ActionResult, AppError> {
-    let app_handle = state
-        .app_handle()
-        .ok_or_else(|| AppError::Internal("No app handle".to_string()))?
-        .clone();
+pub fn do_rescan_sources(state: &AppState) -> Result<ActionResult, AppError> {
+    let emitter = state.event_emitter.clone();
     let db_path = state.db_path.clone();
     let scan_guard = state.scan_guard.clone();
 
     let started = crate::sync::background::spawn_background_scan(
         db_path,
-        app_handle,
+        emitter,
         scan_guard,
     );
 
@@ -610,10 +696,14 @@ pub fn rescan_sources(state: State<'_, AppState>) -> Result<ActionResult, AppErr
     })
 }
 
+#[tauri::command]
+pub fn rescan_sources(state: State<'_, AppState>) -> Result<ActionResult, AppError> {
+    do_rescan_sources(&state)
+}
+
 // --- Release & Resync ---
 
-#[tauri::command]
-pub fn release_and_resync(state: State<'_, AppState>) -> Result<ActionResult, AppError> {
+pub fn do_release_and_resync(state: &AppState) -> Result<ActionResult, AppError> {
     // 1. Clear all indexed data (keep schema and action_log for audit)
     {
         let db = state.db()?;
@@ -629,16 +719,13 @@ pub fn release_and_resync(state: State<'_, AppState>) -> Result<ActionResult, Ap
     }
 
     // 2. Trigger full background rescan
-    let app_handle = state
-        .app_handle()
-        .ok_or_else(|| AppError::Internal("No app handle".to_string()))?
-        .clone();
+    let emitter = state.event_emitter.clone();
     let db_path = state.db_path.clone();
     let scan_guard = state.scan_guard.clone();
 
     let started = crate::sync::background::spawn_background_scan(
         db_path,
-        app_handle,
+        emitter,
         scan_guard,
     );
 
@@ -650,6 +737,11 @@ pub fn release_and_resync(state: State<'_, AppState>) -> Result<ActionResult, Ap
         success: true,
         affected_count: 0,
     })
+}
+
+#[tauri::command]
+pub fn release_and_resync(state: State<'_, AppState>) -> Result<ActionResult, AppError> {
+    do_release_and_resync(&state)
 }
 
 // --- Plugin Helpers ---
@@ -737,15 +829,19 @@ fn parse_frontmatter(path: &std::path::Path, skill_type: &str) -> Option<plugin:
 
 // --- Skills / Plugins ---
 
+pub fn do_list_plugins(state: &AppState, scope: String) -> Result<plugin::SkillsOverview, AppError> {
+    if scope == "project" {
+        return list_project_plugins(state);
+    }
+    list_global_plugins()
+}
+
 #[tauri::command]
 pub fn list_plugins(
     state: State<'_, AppState>,
     scope: String,
 ) -> Result<plugin::SkillsOverview, AppError> {
-    if scope == "project" {
-        return list_project_plugins(&state);
-    }
-    list_global_plugins()
+    do_list_plugins(&state, scope)
 }
 
 fn list_global_plugins() -> Result<plugin::SkillsOverview, AppError> {
@@ -948,8 +1044,7 @@ fn list_project_plugins(state: &AppState) -> Result<plugin::SkillsOverview, AppE
 
 // --- Plugin Toggle & Uninstall ---
 
-#[tauri::command]
-pub fn toggle_plugin(key: String) -> Result<(), AppError> {
+pub fn do_toggle_plugin(key: String) -> Result<(), AppError> {
     let home = dirs::home_dir().ok_or_else(|| AppError::Internal("No home directory".into()))?;
     let settings_path = home.join(".claude/settings.json");
 
@@ -972,7 +1067,11 @@ pub fn toggle_plugin(key: String) -> Result<(), AppError> {
 }
 
 #[tauri::command]
-pub fn uninstall_plugin(key: String) -> Result<(), AppError> {
+pub fn toggle_plugin(key: String) -> Result<(), AppError> {
+    do_toggle_plugin(key)
+}
+
+pub fn do_uninstall_plugin(key: String) -> Result<(), AppError> {
     let home = dirs::home_dir().ok_or_else(|| AppError::Internal("No home directory".into()))?;
     let claude_dir = home.join(".claude");
 
@@ -1018,6 +1117,11 @@ pub fn uninstall_plugin(key: String) -> Result<(), AppError> {
     Ok(())
 }
 
+#[tauri::command]
+pub fn uninstall_plugin(key: String) -> Result<(), AppError> {
+    do_uninstall_plugin(key)
+}
+
 // --- Plugin Fix: Clean & Reinstall ---
 
 fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> Result<(), AppError> {
@@ -1044,8 +1148,7 @@ fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> Result<()
 }
 
 /// Remove orphaned registry entry for a broken plugin (install dir missing/empty).
-#[tauri::command]
-pub fn clean_plugin(key: String) -> Result<plugin::FixPluginResult, AppError> {
+pub fn do_clean_plugin(key: String) -> Result<plugin::FixPluginResult, AppError> {
     let home = dirs::home_dir().ok_or_else(|| AppError::Internal("No home directory".into()))?;
     let claude_dir = home.join(".claude");
 
@@ -1092,9 +1195,13 @@ pub fn clean_plugin(key: String) -> Result<plugin::FixPluginResult, AppError> {
     })
 }
 
-/// Re-download a broken plugin from its marketplace (experimental).
 #[tauri::command]
-pub fn reinstall_plugin(key: String) -> Result<plugin::FixPluginResult, AppError> {
+pub fn clean_plugin(key: String) -> Result<plugin::FixPluginResult, AppError> {
+    do_clean_plugin(key)
+}
+
+/// Re-download a broken plugin from its marketplace (experimental).
+pub fn do_reinstall_plugin(key: String) -> Result<plugin::FixPluginResult, AppError> {
     let home = dirs::home_dir().ok_or_else(|| AppError::Internal("No home directory".into()))?;
     let claude_dir = home.join(".claude");
 
@@ -1219,10 +1326,14 @@ pub fn reinstall_plugin(key: String) -> Result<plugin::FixPluginResult, AppError
     })
 }
 
+#[tauri::command]
+pub fn reinstall_plugin(key: String) -> Result<plugin::FixPluginResult, AppError> {
+    do_reinstall_plugin(key)
+}
+
 // --- Marketplace Management ---
 
-#[tauri::command]
-pub fn list_marketplaces() -> Result<plugin::MarketplaceListResult, AppError> {
+pub fn do_list_marketplaces() -> Result<plugin::MarketplaceListResult, AppError> {
     let home = dirs::home_dir().ok_or_else(|| AppError::Internal("No home directory".into()))?;
     let claude_dir = home.join(".claude");
 
@@ -1264,7 +1375,11 @@ pub fn list_marketplaces() -> Result<plugin::MarketplaceListResult, AppError> {
 }
 
 #[tauri::command]
-pub fn add_marketplace(name: String, repo: String) -> Result<(), AppError> {
+pub fn list_marketplaces() -> Result<plugin::MarketplaceListResult, AppError> {
+    do_list_marketplaces()
+}
+
+pub fn do_add_marketplace(name: String, repo: String) -> Result<(), AppError> {
     let home = dirs::home_dir().ok_or_else(|| AppError::Internal("No home directory".into()))?;
     let claude_dir = home.join(".claude");
     let marketplaces_dir = claude_dir.join("plugins/marketplaces");
@@ -1302,7 +1417,11 @@ pub fn add_marketplace(name: String, repo: String) -> Result<(), AppError> {
 }
 
 #[tauri::command]
-pub fn update_marketplace(name: String) -> Result<(), AppError> {
+pub fn add_marketplace(name: String, repo: String) -> Result<(), AppError> {
+    do_add_marketplace(name, repo)
+}
+
+pub fn do_update_marketplace(name: String) -> Result<(), AppError> {
     let home = dirs::home_dir().ok_or_else(|| AppError::Internal("No home directory".into()))?;
     let claude_dir = home.join(".claude");
 
@@ -1336,7 +1455,11 @@ pub fn update_marketplace(name: String) -> Result<(), AppError> {
 }
 
 #[tauri::command]
-pub fn remove_marketplace(name: String, remove_plugins: bool) -> Result<(), AppError> {
+pub fn update_marketplace(name: String) -> Result<(), AppError> {
+    do_update_marketplace(name)
+}
+
+pub fn do_remove_marketplace(name: String, remove_plugins: bool) -> Result<(), AppError> {
     let home = dirs::home_dir().ok_or_else(|| AppError::Internal("No home directory".into()))?;
     let claude_dir = home.join(".claude");
 
@@ -1418,10 +1541,14 @@ pub fn remove_marketplace(name: String, remove_plugins: bool) -> Result<(), AppE
     Ok(())
 }
 
+#[tauri::command]
+pub fn remove_marketplace(name: String, remove_plugins: bool) -> Result<(), AppError> {
+    do_remove_marketplace(name, remove_plugins)
+}
+
 // --- Marketplace Plugin Browser & Install ---
 
-#[tauri::command]
-pub fn list_marketplace_plugins(marketplace_name: String) -> Result<Vec<plugin::MarketplacePlugin>, AppError> {
+pub fn do_list_marketplace_plugins(marketplace_name: String) -> Result<Vec<plugin::MarketplacePlugin>, AppError> {
     let home = dirs::home_dir().ok_or_else(|| AppError::Internal("No home directory".into()))?;
     let claude_dir = home.join(".claude");
 
@@ -1508,7 +1635,11 @@ pub fn list_marketplace_plugins(marketplace_name: String) -> Result<Vec<plugin::
 }
 
 #[tauri::command]
-pub fn install_marketplace_plugin(marketplace_name: String, plugin_name: String) -> Result<(), AppError> {
+pub fn list_marketplace_plugins(marketplace_name: String) -> Result<Vec<plugin::MarketplacePlugin>, AppError> {
+    do_list_marketplace_plugins(marketplace_name)
+}
+
+pub fn do_install_marketplace_plugin(marketplace_name: String, plugin_name: String) -> Result<(), AppError> {
     let home = dirs::home_dir().ok_or_else(|| AppError::Internal("No home directory".into()))?;
     let claude_dir = home.join(".claude");
 
@@ -1567,4 +1698,9 @@ pub fn install_marketplace_plugin(marketplace_name: String, plugin_name: String)
     }
 
     Ok(())
+}
+
+#[tauri::command]
+pub fn install_marketplace_plugin(marketplace_name: String, plugin_name: String) -> Result<(), AppError> {
+    do_install_marketplace_plugin(marketplace_name, plugin_name)
 }

@@ -3,6 +3,21 @@
 
 use serde::Serialize;
 
+// ---------------------------------------------------------------------------
+// EventEmitter trait — abstracts event emission away from Tauri::AppHandle
+// ---------------------------------------------------------------------------
+
+pub trait EventEmitter: Send + Sync {
+    fn emit_sync_started(&self, payload: SyncStartedPayload);
+    fn emit_sync_progress(&self, payload: SyncProgressPayload);
+    fn emit_sync_completed(&self, payload: SyncCompletedPayload);
+    fn emit_plugin_config_changed(&self);
+}
+
+// ---------------------------------------------------------------------------
+// Payload types
+// ---------------------------------------------------------------------------
+
 #[derive(Debug, Serialize, Clone)]
 #[allow(dead_code)]
 pub struct SyncUpdatedPayload {
