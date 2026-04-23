@@ -1,5 +1,8 @@
 appId: dev.yeek.app.electron
 productName: Yeek
+electronVersion: 35.7.5
+extraMetadata:
+  main: electron-app/dist/main.js
 directories:
   output: release
 files:
@@ -15,3 +18,4 @@ mac:
     - dmg
     - zip
   executableName: Yeek
+  identity: null
