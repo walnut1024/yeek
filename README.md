@@ -4,14 +4,14 @@
 
 **Your Claude Code sessions, organized and inspectable**
 
-A local-first Tauri v2 desktop app for browsing, searching, and managing
+A local-first Electron + Rust desktop app for browsing, searching, and managing
 Claude Code agent sessions — with a built-in plugin marketplace.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Tauri v2](https://img.shields.io/badge/Tauri-v2-blue?logo=tauri)](https://v2.tauri.app)
+[![Electron](https://img.shields.io/badge/Electron-35-47848F?logo=electron)](https://electronjs.org)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev)
 
-[English](#) · [中文](#)
+[Download for macOS](https://github.com/walnut1024/yeek/releases/latest) · [English](#features) · [中文](#features)
 
 </div>
 
@@ -33,8 +33,9 @@ Claude Code agent sessions — with a built-in plugin marketplace.
 
 | Layer | Technology |
 |-------|-----------|
-| Backend | Rust, Tauri v2, rusqlite (SQLite + FTS5) |
-| Frontend | React 19, TypeScript, Vite, Tailwind CSS v4, shadcn/ui (Base UI) |
+| Backend | Rust, Axum, rusqlite (SQLite + FTS5) |
+| Shell | Electron 35 |
+| Frontend | React 19, TypeScript, Vite, Tailwind CSS v4, shadcn/ui |
 | State | TanStack Query, localStorage |
 | i18n | react-i18next (English + 中文) |
 
@@ -42,84 +43,60 @@ Claude Code agent sessions — with a built-in plugin marketplace.
 
 ## Install
 
+### macOS (Apple Silicon)
+
+Download from [Latest Release](https://github.com/walnut1024/yeek/releases/latest):
+
+- **DMG** — `Yeek-*-arm64.dmg` — drag to Applications
+- **ZIP** — `Yeek-*-arm64-mac.zip` — portable, run directly
+
+> Unsigned app. On first launch: right-click → Open to bypass Gatekeeper.
+
 ### From Source
 
 ```bash
 git clone https://github.com/walnut1024/yeek.git
 cd yeek
 npm install
-cargo tauri dev
+
+# Dev mode
+npm run electron:dev
+
+# Production build
+npm run electron:build
 ```
-
-The app window opens immediately. Vite HMR handles frontend changes; Tauri watches Rust changes.
-
-### Production Build
-
-```bash
-npm run build       # Frontend typecheck + build
-cargo tauri build   # Production bundle (.dmg / .deb / .AppImage)
-```
-
----
-
-## 30-Second Tour
-
-### Sessions
-
-| Action | How |
-|--------|-----|
-| Browse sessions | Grouped by project in the left panel |
-| Search | Type in the search bar — matches titles, messages, models |
-| Inspect a session | Click to open transcript, metadata, and source files |
-| Delete sessions | Select → Manage → Delete (soft delete preserves source files) |
-| Destructive delete | Session detail → Sources → Destructive Delete (removes files) |
-
-### Skills & Plugins
-
-| Action | How |
-|--------|-----|
-| View plugins | Skills tab shows all plugins with health status |
-| Toggle plugin | Click the enable/disable switch |
-| Fix broken plugin | Clean (remove orphan) or Reinstall (re-download from marketplace) |
-| Uninstall | Confirm dialog removes plugin from disk and registry |
-
-### Marketplace
-
-| Action | How |
-|--------|-----|
-| Add marketplace | Click "Add" → enter name + `owner/repo` |
-| Update all | "Update All" button pulls latest from each remote |
-| Browse plugins | Click a marketplace row to expand and see available plugins |
-| Install a plugin | Click "Install" on any uninstalled plugin |
-| Remove marketplace | Click "Remove" — optionally remove all its plugins |
 
 ---
 
 ## Architecture
 
 ```
+electron-app/src/
+  main.ts             — Electron main process (server lifecycle, window)
+  preload.ts          — Context bridge
+
 src-tauri/src/
-  adapter/claudecode/   — JSONL parser + source discovery
-  app/commands.rs       — 22 Tauri command handlers
-  app/state.rs          — AppState (Mutex<Connection> + watchers)
-  domain/               — Shared types
-  service/              — Delete planner, plugin scanner
-  store/                — SQLite store (sessions, messages, sources, actions)
-  sync/                 — Startup sync, background scanner, file watchers
+  adapter/claudecode/ — JSONL parser + source discovery
+  app/commands.rs     — Business logic (shared by HTTP routes)
+  http/routes.rs      — Axum HTTP API (REST + SSE)
+  bin/server.rs       — yeek-server binary entry point
+  store/              — SQLite store (sessions, messages, sources, actions)
+  sync/               — Startup sync, background scanner, file watchers
 
 src/
-  app/shell/            — Main layout with sidebar navigation
-  pages/                — Sessions, Skills, Marketplace, System
-  lib/api.ts            — Typed Tauri command wrappers
-  components/ui/        — shadcn/ui components
-  i18n/                 — English and Chinese locale files
+  app/shell/          — Main layout with sidebar navigation
+  pages/              — Sessions, Skills, Marketplace, System
+  lib/transport.ts    — HTTP API client
+  lib/events.ts       — SSE event stream
+  components/ui/      — shadcn/ui components
+  i18n/               — English and Chinese locale files
 ```
 
 ### Data Flow
 
 ```
-~/.claude/projects/ ──file watcher──▶ SQLite ──Tauri commands──▶ React (TanStack Query)
-~/.claude/plugins/  ──config watcher──▶ emit("plugin-config-changed") ──▶ auto-invalidate
+~/.claude/projects/ ──file watcher──▶ SQLite ──HTTP API──▶ Electron ──▶ React (TanStack Query)
+~/.claude/plugins/  ──config watcher──▶ SSE events ──▶ auto-invalidate
 ```
 
 ---
@@ -143,7 +120,7 @@ See [DESIGN.md](DESIGN.md) for the full specification.
 git clone https://github.com/walnut1024/yeek.git
 cd yeek
 npm install
-cargo tauri dev
+npm run electron:dev
 ```
 
 PRs welcome. Keep changes surgical — see [CLAUDE.md](CLAUDE.md) for the coding guidelines used in this project.
