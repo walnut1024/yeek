@@ -1044,6 +1044,16 @@ where
     // Single COMMIT — one fsync for the entire batch
     conn.execute_batch("COMMIT")?;
 
+    // Full FTS rebuild after commit (external-content FTS5 must not be written
+    // to directly inside a transaction — it corrupts the connection).
+    if indexed + updated > 0 {
+        if let Err(e) = conn.execute_batch(
+            "INSERT INTO messages_fts(messages_fts) VALUES ('rebuild');",
+        ) {
+            log::warn!("FTS rebuild failed: {}", e);
+        }
+    }
+
     Ok(IndexResult {
         indexed,
         updated,
@@ -1145,9 +1155,6 @@ fn index_single_source(
             &source.source_type, &source.path, "file_safe",
         )?;
     }
-
-    // Batch rebuild FTS for this session instead of per-message FTS writes
-    crate::store::messages::rebuild_fts_for_session(conn, &session_id)?;
 
     Ok(is_update)
 }
