@@ -1,0 +1,22 @@
+[package]
+name = "vendor-proxy"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { workspace = true }
+axum = { workspace = true }
+reqwest = { version = "0.12", features = ["json", "stream"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = "0.8"
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+thiserror = { workspace = true }
+async-trait = "0.1"
+async-stream = "0.3"
+futures-util = "0.3"
+uuid = { workspace = true }
+
+[dev-dependencies]
+reqwest = { version = "0.12", features = ["json"] }

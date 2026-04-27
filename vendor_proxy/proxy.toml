@@ -1,0 +1,20 @@
+default_provider = "deepseek"
+
+[server]
+listen_addr = "127.0.0.1:8787"
+
+[providers.deepseek]
+format = "chat_completions"
+base_url = "https://api.deepseek.com"
+api_key_env = "DEEPSEEK_API_KEY"
+models = ["deepseek-v4-pro", "deepseek-v4-flash"]
+
+[providers.zhipu]
+format = "anthropic_messages"
+base_url = "https://open.bigmodel.cn/api/anthropic/v1"
+api_key_env = "ZHIPU_API_KEY"
+models = ["glm-5.1"]
+
+[providers.ollama]
+format = "chat_completions"
+base_url = "http://localhost:11434/v1"
