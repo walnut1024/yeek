@@ -1,0 +1,15 @@
+# Cargo audit configuration
+# Run: cargo audit
+
+[advisories]
+ignore = []
+# Add advisory IDs to ignore known false positives
+# Example: ignore = ["RUSTSEC-2020-0071"]
+
+[output]
+deny = ["unsound", "yanked"]
+# Fail on unsound advisories and yanked crates
+
+[database]
+path = "~/.cargo/advisory-db"
+# Auto-fetched from https://github.com/RustSec/advisory-db

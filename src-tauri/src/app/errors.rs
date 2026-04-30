@@ -62,11 +62,7 @@ impl Serialize for AppError {
             AppError::Internal(_) => "internal",
         };
 
-        ErrorResponse {
-            kind: kind.to_string(),
-            message: self.to_string(),
-        }
-        .serialize(serializer)
+        ErrorResponse { kind: kind.to_string(), message: self.to_string() }.serialize(serializer)
     }
 }
 

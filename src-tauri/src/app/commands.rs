@@ -4,9 +4,9 @@ use crate::app::errors::AppError;
 use crate::app::state::AppState;
 use crate::domain::plugin;
 use crate::domain::session::SessionRecord;
-use crate::store::sessions::{self, BrowseParams, SearchParams};
-use crate::store::messages;
 use crate::store::actions as action_store;
+use crate::store::messages;
+use crate::store::sessions::{self, BrowseParams, SearchParams};
 
 // --- System ---
 
@@ -15,23 +15,48 @@ pub struct SystemStatusPayload {
     pub db_path: String,
     pub total_sessions: i64,
     pub total_sources: i64,
+    pub total_projects: i64,
+    pub total_messages: i64,
+    pub active_sessions: i64,
+    pub complete_sessions: i64,
+    pub partial_sessions: i64,
     pub last_sync_at: Option<String>,
     pub status: String,
 }
 
-pub fn do_system_status(state: &AppState) -> Result<SystemStatusPayload, AppError> {
+/// Get system health status including sync state, index size, and activity log.
+///
+/// Returns a [`SystemStatusPayload`] with pulse data for the System dashboard.
+pub(crate) fn do_system_status(state: &AppState) -> Result<SystemStatusPayload, AppError> {
     let db = state.db()?;
 
     let total_sessions: i64 = db
-        .query_row(
-            "SELECT COUNT(*) FROM sessions WHERE parent_session_id IS NULL",
-            [],
-            |row| row.get(0),
-        )
+        .query_row("SELECT COUNT(*) FROM sessions WHERE parent_session_id IS NULL", [], |row| {
+            row.get(0)
+        })
         .unwrap_or(0);
 
-    let total_sources: i64 = db
-        .query_row("SELECT COUNT(*) FROM sources", [], |row| row.get(0))
+    let total_sources: i64 =
+        db.query_row("SELECT COUNT(*) FROM sources", [], |row| row.get(0)).unwrap_or(0);
+
+    let total_projects: i64 = db
+        .query_row("SELECT COUNT(DISTINCT project_path) FROM sessions WHERE project_path IS NOT NULL", [], |row| row.get(0))
+        .unwrap_or(0);
+
+    let total_messages: i64 = db
+        .query_row("SELECT COALESCE(SUM(message_count), 0) FROM sessions WHERE parent_session_id IS NULL", [], |row| row.get(0))
+        .unwrap_or(0);
+
+    let active_sessions: i64 = db
+        .query_row("SELECT COUNT(*) FROM sessions WHERE parent_session_id IS NULL AND status = 'active'", [], |row| row.get(0))
+        .unwrap_or(0);
+
+    let complete_sessions: i64 = db
+        .query_row("SELECT COUNT(*) FROM sessions WHERE parent_session_id IS NULL AND status = 'complete'", [], |row| row.get(0))
+        .unwrap_or(0);
+
+    let partial_sessions: i64 = db
+        .query_row("SELECT COUNT(*) FROM sessions WHERE parent_session_id IS NULL AND status = 'partial'", [], |row| row.get(0))
         .unwrap_or(0);
 
     let last_sync_at: Option<String> = db
@@ -46,6 +71,11 @@ pub fn do_system_status(state: &AppState) -> Result<SystemStatusPayload, AppErro
         db_path: "local".to_string(),
         total_sessions,
         total_sources,
+        total_projects,
+        total_messages,
+        active_sessions,
+        complete_sessions,
+        partial_sessions,
         last_sync_at,
         status: "idle".to_string(),
     })
@@ -67,7 +97,10 @@ pub struct BrowseRequest {
     pub offset: Option<i64>,
 }
 
-pub fn do_browse_sessions(
+/// Browse top-level sessions with sorting, pagination, and optional project filter.
+///
+/// Returns [`SessionListResponse`] with enriched session cards.
+pub(crate) fn do_browse_sessions(
     state: &AppState,
     request: BrowseRequest,
 ) -> Result<SessionListResponse, AppError> {
@@ -93,7 +126,11 @@ pub struct SearchRequest {
     pub offset: Option<i64>,
 }
 
-pub fn do_search_sessions(
+/// Full-text search across all sessions.
+///
+/// Uses FTS5 to search titles, messages, and model names. Results include
+/// highlighted preview snippets.
+pub(crate) fn do_search_sessions(
     state: &AppState,
     request: SearchRequest,
 ) -> Result<SessionListResponse, AppError> {
@@ -121,7 +158,7 @@ pub struct SessionPreviewPayload {
     pub source_count: i64,
 }
 
-pub fn do_session_preview(
+pub(crate) fn do_session_preview(
     state: &AppState,
     session_id: String,
 ) -> Result<SessionPreviewPayload, AppError> {
@@ -137,11 +174,7 @@ pub fn do_session_preview(
         )
         .unwrap_or(0);
 
-    Ok(SessionPreviewPayload {
-        record,
-        preview_messages,
-        source_count,
-    })
+    Ok(SessionPreviewPayload { record, preview_messages, source_count })
 }
 
 #[derive(Debug, Serialize)]
@@ -151,7 +184,10 @@ pub struct SessionDetailPayload {
     pub sources: Vec<crate::domain::source::SourceRef>,
 }
 
-pub fn do_session_detail(
+/// Get full session detail including message tree and source file references.
+///
+/// Returns [`SessionDetailResponse`] for the session inspector view.
+pub(crate) fn do_session_detail(
     state: &AppState,
     session_id: String,
 ) -> Result<SessionDetailPayload, AppError> {
@@ -160,21 +196,20 @@ pub fn do_session_detail(
     let msgs = messages::get_session_messages(&db, &session_id)?;
     let sources = crate::store::sources::get_session_sources(&db, &session_id)?;
 
-    Ok(SessionDetailPayload {
-        record,
-        messages: msgs,
-        sources,
-    })
+    Ok(SessionDetailPayload { record, messages: msgs, sources })
 }
 
 // --- Transcript (tree-aware) ---
 
-pub fn do_session_transcript(
+/// Get the complete transcript of a session as a flat message list.
+///
+/// Returns [`TranscriptPayload`] suitable for export or copy.
+pub(crate) fn do_session_transcript(
     state: &AppState,
     session_id: String,
 ) -> Result<messages::TranscriptPayload, AppError> {
     let db = state.db()?;
-    Ok(messages::get_session_transcript(&db, &session_id)?)
+    messages::get_session_transcript(&db, &session_id)
 }
 
 // --- Session Actions ---
@@ -195,6 +230,12 @@ fn is_valid_uuid(s: &str) -> bool {
 }
 
 /// Quote a string for safe use as a shell argument.
+///
+/// On Unix: wraps in single quotes, escaping embedded single quotes.
+/// On Windows: wraps in double quotes, escaping embedded double quotes.
+///
+/// Use this to sanitize any user-provided or externally-sourced values
+/// before embedding them in shell commands passed to [`launch_terminal`].
 #[cfg(not(target_os = "windows"))]
 fn shell_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\\''"))
@@ -205,24 +246,26 @@ fn shell_quote(s: &str) -> String {
     format!("\"{}\"", s.replace('"', "\\\""))
 }
 
-pub fn do_resume_session(
+/// Resume a session by launching the agent CLI in a terminal.
+///
+/// Validates the session ID (must be UUID) and opens the appropriate
+/// terminal emulator with the agent resume command.
+///
+/// If `terminal` is provided, it will be tried first; if unavailable,
+/// falls back to the platform-specific priority list.
+pub(crate) fn do_resume_session(
     session_id: String,
     agent: String,
     cwd: Option<String>,
+    terminal: Option<String>,
 ) -> Result<(), AppError> {
     // Validate inputs before constructing any shell command
     if !is_valid_uuid(&session_id) {
-        return Err(AppError::Validation(format!(
-            "Invalid session ID: {}",
-            session_id
-        )));
+        return Err(AppError::Validation(format!("Invalid session ID: {}", session_id)));
     }
     if let Some(ref d) = cwd {
         if !d.is_empty() && !std::path::Path::new(d).is_dir() {
-            return Err(AppError::Validation(format!(
-                "Invalid working directory: {}",
-                d
-            )));
+            return Err(AppError::Validation(format!("Invalid working directory: {}", d)));
         }
     }
 
@@ -234,25 +277,34 @@ pub fn do_resume_session(
     };
 
     let cwd_ref = cwd.as_deref().filter(|s| !s.is_empty());
-    launch_terminal(&cmd, cwd_ref).map_err(|e| AppError::Internal(e))
+    launch_terminal(&cmd, cwd_ref, terminal.as_deref()).map_err(AppError::Internal)
 }
 
 // ---------------------------------------------------------------------------
 // Platform dispatch
 // ---------------------------------------------------------------------------
 
-fn launch_terminal(command: &str, cwd: Option<&str>) -> Result<(), String> {
+/// Launch a terminal emulator with the given shell command.
+///
+/// If `preferred` is provided and the named terminal is available, it is used
+/// directly. Otherwise falls back to the platform-specific priority list.
+///
+/// # Safety
+/// Callers MUST ensure `command` is free of shell injection. Arguments within
+/// `command` should be individually quoted via [`shell_quote`] before assembly.
+/// The `cwd` parameter is automatically quoted.
+fn launch_terminal(command: &str, cwd: Option<&str>, preferred: Option<&str>) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        launch_terminal_macos(command, cwd)
+        launch_terminal_macos(command, cwd, preferred)
     }
     #[cfg(target_os = "linux")]
     {
-        launch_terminal_linux(command, cwd)
+        launch_terminal_linux(command, cwd, preferred)
     }
     #[cfg(target_os = "windows")]
     {
-        launch_terminal_windows(command, cwd)
+        launch_terminal_windows(command, cwd, preferred)
     }
 }
 
@@ -261,7 +313,20 @@ fn launch_terminal(command: &str, cwd: Option<&str>) -> Result<(), String> {
 // ---------------------------------------------------------------------------
 
 #[cfg(target_os = "macos")]
-fn launch_terminal_macos(command: &str, cwd: Option<&str>) -> Result<(), String> {
+fn launch_terminal_macos(command: &str, cwd: Option<&str>, preferred: Option<&str>) -> Result<(), String> {
+    // If user picked a specific terminal, try it first
+    if let Some(name) = preferred {
+        if !name.is_empty() && name != "Terminal.app" {
+            if is_app_running(name) || app_exists(name) {
+                return launch_with_open(command, name, cwd);
+            }
+        }
+        if name == "Terminal.app" {
+            return launch_terminal_app(command, cwd);
+        }
+    }
+
+    // Fallback: priority-based discovery
     let terminals = ["Ghostty", "iTerm", "Warp", "WezTerm", "kitty", "Alacritty"];
 
     for &name in &terminals {
@@ -311,7 +376,7 @@ fn launch_with_open(command: &str, app_name: &str, cwd: Option<&str>) -> Result<
                 .arg(&full_cmd)
                 .spawn()
                 .map_err(|e| format!("Failed to launch Ghostty: {e}"))?;
-        }
+        },
         "iTerm" => {
             let escaped = full_cmd.replace('\\', "\\\\").replace('"', "\\\"");
             let script = format!(
@@ -328,13 +393,13 @@ end tell"#
                 .arg(&script)
                 .spawn()
                 .map_err(|e| format!("Failed to launch iTerm: {e}"))?;
-        }
+        },
         _ => {
             std::process::Command::new("open")
                 .args(["-na", app_name, "--args", "-e", &shell, "-c", &full_cmd])
                 .spawn()
                 .map_err(|e| format!("Failed to launch {}: {e}", app_name))?;
-        }
+        },
     }
 
     Ok(())
@@ -366,23 +431,38 @@ end tell"#
 // ---------------------------------------------------------------------------
 
 #[cfg(target_os = "linux")]
-fn launch_terminal_linux(command: &str, cwd: Option<&str>) -> Result<(), String> {
+fn launch_terminal_linux(command: &str, cwd: Option<&str>, preferred: Option<&str>) -> Result<(), String> {
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
     let full_cmd = cwd
         .map(|d| format!("cd {} && {}", shell_quote(d), command))
         .unwrap_or_else(|| command.to_string());
 
-    let terminals = [
-        ("ghostty", vec!["-e", &shell, "-c", &full_cmd]),
-        ("wezterm", vec!["start", "--", &shell, "-c", &full_cmd]),
-        ("kitty", vec!["-e", &shell, "-c", &full_cmd]),
-        ("alacritty", vec!["-e", &shell, "-c", &full_cmd]),
-        ("gnome-terminal", vec!["--", &shell, "-c", &full_cmd]),
-        ("konsole", vec!["-e", &shell, "-c", &full_cmd]),
-        ("xfce4-terminal", vec!["-e", &format!("{} -c {}", shell, shell_quote(&full_cmd))]),
+    let terminals: &[(&str, &[&str])] = &[
+        ("ghostty", &["-e", &shell, "-c", &full_cmd]),
+        ("wezterm", &["start", "--", &shell, "-c", &full_cmd]),
+        ("kitty", &["-e", &shell, "-c", &full_cmd]),
+        ("alacritty", &["-e", &shell, "-c", &full_cmd]),
+        ("gnome-terminal", &["--", &shell, "-c", &full_cmd]),
+        ("konsole", &["-e", &shell, "-c", &full_cmd]),
+        ("xfce4-terminal", &["-e", &format!("{} -c {}", shell, shell_quote(&full_cmd))]),
     ];
 
-    for (bin, args) in &terminals {
+    // If user picked a specific terminal, try it first
+    if let Some(name) = preferred {
+        if !name.is_empty() {
+            for (bin, args) in terminals {
+                if *bin == name && which_exists(bin) {
+                    return std::process::Command::new(bin)
+                        .args(args.iter().map(|s| s.as_str()))
+                        .spawn()
+                        .map_err(|e| format!("Failed to launch {}: {e}", bin));
+                }
+            }
+        }
+    }
+
+    // Fallback: priority-based discovery
+    for (bin, args) in terminals {
         if which_exists(bin) {
             return std::process::Command::new(bin)
                 .args(args.iter().map(|s| s.as_str()))
@@ -416,22 +496,37 @@ fn which_exists(bin: &str) -> bool {
 // ---------------------------------------------------------------------------
 
 #[cfg(target_os = "windows")]
-fn launch_terminal_windows(command: &str, cwd: Option<&str>) -> Result<(), String> {
+fn launch_terminal_windows(command: &str, cwd: Option<&str>, preferred: Option<&str>) -> Result<(), String> {
     let full_cmd = cwd
         .map(|d| format!("cd {}; {}", shell_quote(d), command))
         .unwrap_or_else(|| command.to_string());
 
-    // Priority: PowerShell 7+, Windows PowerShell, Windows Terminal, cmd
-    let candidates = [
-        // pwsh (PowerShell 7+) — preferred
-        ("pwsh.exe", vec!["-NoExit", "-Command", &full_cmd]),
-        // Windows PowerShell (built-in)
-        ("powershell.exe", vec!["-NoExit", "-Command", &full_cmd]),
+    let candidates: &[(&str, &[&str])] = &[
+        ("pwsh.exe", &["-NoExit", "-Command", &full_cmd]),
+        ("powershell.exe", &["-NoExit", "-Command", &full_cmd]),
     ];
 
-    for (bin, args) in &candidates {
+    // If user picked a specific shell, try it first
+    if let Some(name) = preferred {
+        if !name.is_empty() {
+            for (bin, args) in candidates {
+                if *bin == name && where_exists(bin) {
+                    let mut start_args = vec!["/C", "start", bin];
+                    for a in args {
+                        start_args.push(a.as_str());
+                    }
+                    return std::process::Command::new("cmd")
+                        .args(&start_args)
+                        .spawn()
+                        .map_err(|e| format!("Failed to launch {}: {e}", bin));
+                }
+            }
+        }
+    }
+
+    // Fallback: priority-based discovery
+    for (bin, args) in candidates {
         if where_exists(bin) {
-            // Use `start` via cmd to launch in a new window
             let mut start_args = vec!["/C", "start", bin];
             for a in args {
                 start_args.push(a.as_str());
@@ -483,7 +578,10 @@ pub struct ActionResult {
     pub affected_count: i64,
 }
 
-pub fn do_soft_delete_sessions(
+/// Soft-delete one or more sessions.
+///
+/// Marks sessions as deleted without removing data. Reversible via DB restore.
+pub(crate) fn do_soft_delete_sessions(
     state: &AppState,
     ids: Vec<String>,
 ) -> Result<ActionResult, AppError> {
@@ -495,13 +593,10 @@ pub fn do_soft_delete_sessions(
         "soft_delete",
         Some(&format!("{} sessions", ids.len())),
     )?;
-    Ok(ActionResult {
-        success: true,
-        affected_count: ids.len() as i64,
-    })
+    Ok(ActionResult { success: true, affected_count: ids.len() as i64 })
 }
 
-pub fn do_soft_delete_project(
+pub(crate) fn do_soft_delete_project(
     state: &AppState,
     project_path: String,
 ) -> Result<ActionResult, AppError> {
@@ -513,15 +608,12 @@ pub fn do_soft_delete_project(
         "soft_delete_project",
         Some(&format!("{} sessions in {}", count, project_path)),
     )?;
-    Ok(ActionResult {
-        success: true,
-        affected_count: count,
-    })
+    Ok(ActionResult { success: true, affected_count: count })
 }
 
 // --- Subagent Messages ---
 
-pub fn do_subagent_messages(
+pub(crate) fn do_subagent_messages(
     state: &AppState,
     session_id: String,
     subagent_id: String,
@@ -540,7 +632,7 @@ pub struct ActionLogResponse {
     pub actions: Vec<action_store::ActionLogEntry>,
 }
 
-pub fn do_action_log(
+pub(crate) fn do_action_log(
     state: &AppState,
     limit: Option<i64>,
 ) -> Result<ActionLogResponse, AppError> {
@@ -551,7 +643,7 @@ pub fn do_action_log(
 
 // --- Delete Planning ---
 
-pub fn do_delete_plan(
+pub(crate) fn do_delete_plan(
     state: &AppState,
     session_id: String,
 ) -> Result<crate::service::delete_planner::DeletePlan, AppError> {
@@ -560,7 +652,7 @@ pub fn do_delete_plan(
     Ok(plan)
 }
 
-pub fn do_destructive_delete(
+pub(crate) fn do_destructive_delete(
     state: &AppState,
     session_id: String,
 ) -> Result<crate::service::delete_planner::DestructiveDeleteResult, AppError> {
@@ -571,16 +663,12 @@ pub fn do_destructive_delete(
 
 // --- Rescan ---
 
-pub fn do_rescan_sources(state: &AppState) -> Result<ActionResult, AppError> {
+pub(crate) fn do_rescan_sources(state: &AppState) -> Result<ActionResult, AppError> {
     let emitter = state.event_emitter.clone();
     let db_path = state.db_path.clone();
     let scan_guard = state.scan_guard.clone();
 
-    let started = crate::sync::background::spawn_background_scan(
-        db_path,
-        emitter,
-        scan_guard,
-    );
+    let started = crate::sync::background::spawn_background_scan(db_path, emitter, scan_guard);
 
     if !started {
         return Err(AppError::Internal("Scan already in progress".to_string()));
@@ -594,7 +682,7 @@ pub fn do_rescan_sources(state: &AppState) -> Result<ActionResult, AppError> {
 
 // --- Release & Resync ---
 
-pub fn do_release_and_resync(state: &AppState) -> Result<ActionResult, AppError> {
+pub(crate) fn do_release_and_resync(state: &AppState) -> Result<ActionResult, AppError> {
     // 1. Clear all indexed data (keep schema and action_log for audit)
     {
         let db = state.db()?;
@@ -604,7 +692,7 @@ pub fn do_release_and_resync(state: &AppState) -> Result<ActionResult, AppError>
              DELETE FROM session_sources;
              DELETE FROM sources;
              DELETE FROM sessions;
-             DELETE FROM sqlite_sequence;"
+             DELETE FROM sqlite_sequence;",
         )?;
         action_store::record_action(&db, None, "release", Some("Cleared all indexed data"))?;
     }
@@ -614,20 +702,13 @@ pub fn do_release_and_resync(state: &AppState) -> Result<ActionResult, AppError>
     let db_path = state.db_path.clone();
     let scan_guard = state.scan_guard.clone();
 
-    let started = crate::sync::background::spawn_background_scan(
-        db_path,
-        emitter,
-        scan_guard,
-    );
+    let started = crate::sync::background::spawn_background_scan(db_path, emitter, scan_guard);
 
     if !started {
         return Err(AppError::Internal("Scan already in progress".to_string()));
     }
 
-    Ok(ActionResult {
-        success: true,
-        affected_count: 0,
-    })
+    Ok(ActionResult { success: true, affected_count: 0 })
 }
 
 // --- Plugin Helpers ---
@@ -715,7 +796,14 @@ fn parse_frontmatter(path: &std::path::Path, skill_type: &str) -> Option<plugin:
 
 // --- Skills / Plugins ---
 
-pub fn do_list_plugins(state: &AppState, scope: String) -> Result<plugin::SkillsOverview, AppError> {
+/// List all installed plugins with health status.
+///
+/// Scans global and project-local plugin directories, reports broken/missing
+/// installations and orphaned registry entries.
+pub(crate) fn do_list_plugins(
+    state: &AppState,
+    scope: String,
+) -> Result<plugin::SkillsOverview, AppError> {
     if scope == "project" {
         return list_project_plugins(state);
     }
@@ -783,11 +871,7 @@ fn list_global_plugins() -> Result<plugin::SkillsOverview, AppError> {
             let mkt = marketplaces.get(mn)?;
             let repo = mkt["source"]["repo"].as_str().unwrap_or("").to_string();
             let last_upd = mkt["lastUpdated"].as_str().map(String::from);
-            Some(plugin::MarketplaceInfo {
-                name: mn.clone(),
-                repo,
-                last_updated: last_upd,
-            })
+            Some(plugin::MarketplaceInfo { name: mn.clone(), repo, last_updated: last_upd })
         });
 
         // Health check
@@ -860,9 +944,11 @@ fn list_global_plugins() -> Result<plugin::SkillsOverview, AppError> {
 
 fn list_project_plugins(state: &AppState) -> Result<plugin::SkillsOverview, AppError> {
     let db = state.db()?;
-    let mut stmt = db.prepare("SELECT DISTINCT project_path FROM sessions WHERE project_path IS NOT NULL")
+    let mut stmt = db
+        .prepare("SELECT DISTINCT project_path FROM sessions WHERE project_path IS NOT NULL")
         .map_err(|e| AppError::DbError(e.to_string()))?;
-    let paths: Vec<String> = stmt.query_map([], |row| row.get(0))
+    let paths: Vec<String> = stmt
+        .query_map([], |row| row.get(0))
         .map_err(|e| AppError::DbError(e.to_string()))?
         .filter_map(|r| r.ok())
         .collect();
@@ -887,7 +973,8 @@ fn list_project_plugins(state: &AppState) -> Result<plugin::SkillsOverview, AppE
         total_skills += skills.len();
         total_agents += agents.len();
 
-        let project_name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let project_name =
+            path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
 
         plugins.push(plugin::PluginInfo {
             key: project_path.clone(),
@@ -910,19 +997,14 @@ fn list_project_plugins(state: &AppState) -> Result<plugin::SkillsOverview, AppE
         total_plugins: plugins.len(),
         total_skills,
         total_agents,
-        health_summary: plugin::HealthSummary {
-            ok: plugins.len(),
-            partial: 0,
-            hook: 0,
-            broken: 0,
-        },
+        health_summary: plugin::HealthSummary { ok: plugins.len(), partial: 0, hook: 0, broken: 0 },
         plugins,
     })
 }
 
 // --- Plugin Toggle & Uninstall ---
 
-pub fn do_toggle_plugin(key: String) -> Result<(), AppError> {
+pub(crate) fn do_toggle_plugin(key: String) -> Result<(), AppError> {
     let home = dirs::home_dir().ok_or_else(|| AppError::Internal("No home directory".into()))?;
     let settings_path = home.join(".claude/settings.json");
 
@@ -944,7 +1026,7 @@ pub fn do_toggle_plugin(key: String) -> Result<(), AppError> {
     Ok(())
 }
 
-pub fn do_uninstall_plugin(key: String) -> Result<(), AppError> {
+pub(crate) fn do_uninstall_plugin(key: String) -> Result<(), AppError> {
     let home = dirs::home_dir().ok_or_else(|| AppError::Internal("No home directory".into()))?;
     let claude_dir = home.join(".claude");
 
@@ -963,8 +1045,9 @@ pub fn do_uninstall_plugin(key: String) -> Result<(), AppError> {
 
     let path = std::path::Path::new(&install_path);
     if path.exists() {
-        std::fs::remove_dir_all(path)
-            .map_err(|e| AppError::DeleteFailed(format!("Failed to remove {}: {}", install_path, e)))?;
+        std::fs::remove_dir_all(path).map_err(|e| {
+            AppError::DeleteFailed(format!("Failed to remove {}: {}", install_path, e))
+        })?;
     }
 
     // 2. Remove from registry
@@ -993,8 +1076,9 @@ pub fn do_uninstall_plugin(key: String) -> Result<(), AppError> {
 // --- Plugin Fix: Clean & Reinstall ---
 
 fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> Result<(), AppError> {
-    std::fs::create_dir_all(dst)
-        .map_err(|e| AppError::Internal(format!("Failed to create dir {}: {}", dst.display(), e)))?;
+    std::fs::create_dir_all(dst).map_err(|e| {
+        AppError::Internal(format!("Failed to create dir {}: {}", dst.display(), e))
+    })?;
     for entry in std::fs::read_dir(src)
         .map_err(|e| AppError::Internal(format!("Failed to read dir {}: {}", src.display(), e)))?
     {
@@ -1008,15 +1092,16 @@ fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> Result<()
         if src_path.is_dir() {
             copy_dir_recursive(&src_path, &dst_path)?;
         } else {
-            std::fs::copy(&src_path, &dst_path)
-                .map_err(|e| AppError::Internal(format!("Failed to copy {}: {}", src_path.display(), e)))?;
+            std::fs::copy(&src_path, &dst_path).map_err(|e| {
+                AppError::Internal(format!("Failed to copy {}: {}", src_path.display(), e))
+            })?;
         }
     }
     Ok(())
 }
 
 /// Remove orphaned registry entry for a broken plugin (install dir missing/empty).
-pub fn do_clean_plugin(key: String) -> Result<plugin::FixPluginResult, AppError> {
+pub(crate) fn do_clean_plugin(key: String) -> Result<plugin::FixPluginResult, AppError> {
     let home = dirs::home_dir().ok_or_else(|| AppError::Internal("No home directory".into()))?;
     let claude_dir = home.join(".claude");
 
@@ -1064,13 +1149,14 @@ pub fn do_clean_plugin(key: String) -> Result<plugin::FixPluginResult, AppError>
 }
 
 /// Re-download a broken plugin from its marketplace (experimental).
-pub fn do_reinstall_plugin(key: String) -> Result<plugin::FixPluginResult, AppError> {
+pub(crate) fn do_reinstall_plugin(key: String) -> Result<plugin::FixPluginResult, AppError> {
     let home = dirs::home_dir().ok_or_else(|| AppError::Internal("No home directory".into()))?;
     let claude_dir = home.join(".claude");
 
     // 1. Parse key: "pluginName@marketplace"
     let parts: Vec<&str> = key.splitn(2, '@').collect();
-    let plugin_name = parts.first().ok_or_else(|| AppError::Validation("Invalid plugin key".into()))?;
+    let plugin_name =
+        parts.first().ok_or_else(|| AppError::Validation("Invalid plugin key".into()))?;
     let market_name = parts.get(1).ok_or_else(|| {
         AppError::Validation(format!("Plugin key '{}' missing marketplace suffix", key))
     })?;
@@ -1078,9 +1164,11 @@ pub fn do_reinstall_plugin(key: String) -> Result<plugin::FixPluginResult, AppEr
     // 2. Read marketplace metadata
     let marketplaces_path = claude_dir.join("plugins/known_marketplaces.json");
     let marketplaces: serde_json::Value = read_json(&marketplaces_path)?;
-    let mkt = marketplaces.get(market_name)
+    let mkt = marketplaces
+        .get(market_name)
         .ok_or_else(|| AppError::NotFound(format!("Marketplace '{}' not found", market_name)))?;
-    let repo = mkt["source"]["repo"].as_str()
+    let repo = mkt["source"]["repo"]
+        .as_str()
         .ok_or_else(|| AppError::NotFound(format!("No repo for marketplace '{}'", market_name)))?;
     let clone_path_str = mkt["installLocation"].as_str().unwrap_or("");
     let clone_path = std::path::Path::new(clone_path_str);
@@ -1094,7 +1182,8 @@ pub fn do_reinstall_plugin(key: String) -> Result<plugin::FixPluginResult, AppEr
         .and_then(|v| v.as_array())
         .and_then(|a| a.first())
         .ok_or_else(|| AppError::NotFound(format!("Plugin '{}' not found in registry", key)))?;
-    let install_path_str = entry["installPath"].as_str()
+    let install_path_str = entry["installPath"]
+        .as_str()
         .ok_or_else(|| AppError::NotFound(format!("No installPath for '{}'", key)))?;
     let git_sha = entry["gitCommitSha"].as_str().unwrap_or("");
 
@@ -1115,7 +1204,8 @@ pub fn do_reinstall_plugin(key: String) -> Result<plugin::FixPluginResult, AppEr
                 .map_err(|e| AppError::Internal(format!("git checkout failed: {}", e)))?;
             if !out.status.success() {
                 return Err(AppError::Internal(format!(
-                    "git checkout {} failed: {}", git_sha,
+                    "git checkout {} failed: {}",
+                    git_sha,
                     String::from_utf8_lossy(&out.stderr)
                 )));
             }
@@ -1138,7 +1228,8 @@ pub fn do_reinstall_plugin(key: String) -> Result<plugin::FixPluginResult, AppEr
             .map_err(|e| AppError::Internal(format!("git clone failed: {}", e)))?;
         if !out.status.success() {
             return Err(AppError::Internal(format!(
-                "git clone failed: {}", String::from_utf8_lossy(&out.stderr)
+                "git clone failed: {}",
+                String::from_utf8_lossy(&out.stderr)
             )));
         }
         if !git_sha.is_empty() {
@@ -1156,10 +1247,13 @@ pub fn do_reinstall_plugin(key: String) -> Result<plugin::FixPluginResult, AppEr
         clone_path.join(format!("skills/{}", plugin_name)),
         clone_path.join(format!("agents/{}", plugin_name)),
     ];
-    let source_dir = candidates.iter().find(|p| p.exists() && p.is_dir())
+    let source_dir = candidates
+        .iter()
+        .find(|p| p.exists() && p.is_dir())
         .or_else(|| {
             // Single-plugin repo: use clone root if it has plugin-like content
-            let has_skill = clone_path.join("skills").is_dir() || clone_path.join("SKILL.md").exists();
+            let has_skill =
+                clone_path.join("skills").is_dir() || clone_path.join("SKILL.md").exists();
             let has_plugin_json = clone_path.join(".claude-plugin/plugin.json").exists();
             if has_skill || has_plugin_json {
                 Some(&clone_path_buf)
@@ -1167,9 +1261,12 @@ pub fn do_reinstall_plugin(key: String) -> Result<plugin::FixPluginResult, AppEr
                 None
             }
         })
-        .ok_or_else(|| AppError::NotFound(format!(
-            "Could not find plugin '{}' in marketplace '{}'", plugin_name, market_name
-        )))?;
+        .ok_or_else(|| {
+            AppError::NotFound(format!(
+                "Could not find plugin '{}' in marketplace '{}'",
+                plugin_name, market_name
+            ))
+        })?;
 
     // 6. Remove old install dir, copy fresh source
     let install_path = std::path::Path::new(install_path_str);
@@ -1191,7 +1288,10 @@ pub fn do_reinstall_plugin(key: String) -> Result<plugin::FixPluginResult, AppEr
 
 // --- Marketplace Management ---
 
-pub fn do_list_marketplaces() -> Result<plugin::MarketplaceListResult, AppError> {
+/// List configured plugin marketplaces.
+///
+/// Returns marketplace metadata including name, URL, and last update timestamp.
+pub(crate) fn do_list_marketplaces() -> Result<plugin::MarketplaceListResult, AppError> {
     let home = dirs::home_dir().ok_or_else(|| AppError::Internal("No home directory".into()))?;
     let claude_dir = home.join(".claude");
 
@@ -1201,10 +1301,11 @@ pub fn do_list_marketplaces() -> Result<plugin::MarketplaceListResult, AppError>
         read_json_or_default(&claude_dir.join("plugins/installed_plugins.json"));
 
     // Count plugins per marketplace from registry
-    let mut plugin_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    let mut plugin_counts: std::collections::HashMap<String, usize> =
+        std::collections::HashMap::new();
     if let Some(plugins) = registry.get("plugins").and_then(|v| v.as_object()) {
         for key in plugins.keys() {
-            let market_name = key.split('@').last().unwrap_or("");
+            let market_name = key.split('@').next_back().unwrap_or("");
             if !market_name.is_empty() {
                 *plugin_counts.entry(market_name.to_string()).or_insert(0) += 1;
             }
@@ -1232,7 +1333,7 @@ pub fn do_list_marketplaces() -> Result<plugin::MarketplaceListResult, AppError>
     Ok(plugin::MarketplaceListResult { marketplaces: entries })
 }
 
-pub fn do_add_marketplace(name: String, repo: String) -> Result<(), AppError> {
+pub(crate) fn do_add_marketplace(name: String, repo: String) -> Result<(), AppError> {
     let home = dirs::home_dir().ok_or_else(|| AppError::Internal("No home directory".into()))?;
     let claude_dir = home.join(".claude");
     let marketplaces_dir = claude_dir.join("plugins/marketplaces");
@@ -1248,7 +1349,8 @@ pub fn do_add_marketplace(name: String, repo: String) -> Result<(), AppError> {
         .map_err(|e| AppError::Internal(format!("git clone failed: {}", e)))?;
     if !out.status.success() {
         return Err(AppError::Internal(format!(
-            "git clone failed: {}", String::from_utf8_lossy(&out.stderr)
+            "git clone failed: {}",
+            String::from_utf8_lossy(&out.stderr)
         )));
     }
 
@@ -1269,13 +1371,14 @@ pub fn do_add_marketplace(name: String, repo: String) -> Result<(), AppError> {
     Ok(())
 }
 
-pub fn do_update_marketplace(name: String) -> Result<(), AppError> {
+pub(crate) fn do_update_marketplace(name: String) -> Result<(), AppError> {
     let home = dirs::home_dir().ok_or_else(|| AppError::Internal("No home directory".into()))?;
     let claude_dir = home.join(".claude");
 
     let path = claude_dir.join("plugins/known_marketplaces.json");
     let mut marketplaces: serde_json::Value = read_json(&path)?;
-    let mkt = marketplaces.get_mut(&name)
+    let mkt = marketplaces
+        .get_mut(&name)
         .ok_or_else(|| AppError::NotFound(format!("Marketplace '{}' not found", name)))?;
     let clone_path = mkt["installLocation"].as_str().unwrap_or("");
 
@@ -1287,7 +1390,8 @@ pub fn do_update_marketplace(name: String) -> Result<(), AppError> {
         .map_err(|e| AppError::Internal(format!("git pull failed: {}", e)))?;
     if !out.status.success() {
         return Err(AppError::Internal(format!(
-            "git pull failed: {}", String::from_utf8_lossy(&out.stderr)
+            "git pull failed: {}",
+            String::from_utf8_lossy(&out.stderr)
         )));
     }
 
@@ -1302,13 +1406,14 @@ pub fn do_update_marketplace(name: String) -> Result<(), AppError> {
     Ok(())
 }
 
-pub fn do_remove_marketplace(name: String, remove_plugins: bool) -> Result<(), AppError> {
+pub(crate) fn do_remove_marketplace(name: String, remove_plugins: bool) -> Result<(), AppError> {
     let home = dirs::home_dir().ok_or_else(|| AppError::Internal("No home directory".into()))?;
     let claude_dir = home.join(".claude");
 
     let path = claude_dir.join("plugins/known_marketplaces.json");
     let mut marketplaces: serde_json::Value = read_json(&path)?;
-    let install_location = marketplaces.get(&name)
+    let install_location = marketplaces
+        .get(&name)
         .and_then(|v| v["installLocation"].as_str())
         .unwrap_or("")
         .to_string();
@@ -1330,7 +1435,7 @@ pub fn do_remove_marketplace(name: String, remove_plugins: bool) -> Result<(), A
                 .and_then(|v| v.as_object())
                 .map(|obj| {
                     obj.keys()
-                        .filter(|k| k.split('@').last() == Some(&name))
+                        .filter(|k| k.split('@').next_back() == Some(&name))
                         .cloned()
                         .collect()
                 })
@@ -1339,7 +1444,8 @@ pub fn do_remove_marketplace(name: String, remove_plugins: bool) -> Result<(), A
             if let Some(plugins) = registry.get_mut("plugins").and_then(|v| v.as_object_mut()) {
                 for key in &keys_to_remove {
                     // Remove install dir
-                    if let Some(entry) = plugins.get(key)
+                    if let Some(entry) = plugins
+                        .get(key)
                         .and_then(|v| v.as_array())
                         .and_then(|a| a.first())
                         .and_then(|e| e["installPath"].as_str())
@@ -1357,9 +1463,12 @@ pub fn do_remove_marketplace(name: String, remove_plugins: bool) -> Result<(), A
         // Clean enabledPlugins
         let settings_path = claude_dir.join("settings.json");
         if let Ok(mut settings) = read_json(&settings_path) {
-            if let Some(enabled) = settings.get_mut("enabledPlugins").and_then(|v| v.as_object_mut()) {
-                let keys: Vec<String> = enabled.keys()
-                    .filter(|k| k.split('@').last() == Some(&name))
+            if let Some(enabled) =
+                settings.get_mut("enabledPlugins").and_then(|v| v.as_object_mut())
+            {
+                let keys: Vec<String> = enabled
+                    .keys()
+                    .filter(|k| k.split('@').next_back() == Some(&name))
                     .cloned()
                     .collect();
                 for key in keys {
@@ -1386,25 +1495,32 @@ pub fn do_remove_marketplace(name: String, remove_plugins: bool) -> Result<(), A
 
 // --- Marketplace Plugin Browser & Install ---
 
-pub fn do_list_marketplace_plugins(marketplace_name: String) -> Result<Vec<plugin::MarketplacePlugin>, AppError> {
+pub(crate) fn do_list_marketplace_plugins(
+    marketplace_name: String,
+) -> Result<Vec<plugin::MarketplacePlugin>, AppError> {
     let home = dirs::home_dir().ok_or_else(|| AppError::Internal("No home directory".into()))?;
     let claude_dir = home.join(".claude");
 
-    let marketplaces: serde_json::Value = read_json(&claude_dir.join("plugins/known_marketplaces.json"))?;
-    let clone_path_str = marketplaces[&marketplace_name]["installLocation"]
-        .as_str().unwrap_or("");
+    let marketplaces: serde_json::Value =
+        read_json(&claude_dir.join("plugins/known_marketplaces.json"))?;
+    let clone_path_str = marketplaces[&marketplace_name]["installLocation"].as_str().unwrap_or("");
     let clone_path = std::path::Path::new(clone_path_str);
     if !clone_path.exists() {
         return Ok(Vec::new());
     }
 
-    let registry: serde_json::Value = read_json_or_default(&claude_dir.join("plugins/installed_plugins.json"));
+    let registry: serde_json::Value =
+        read_json_or_default(&claude_dir.join("plugins/installed_plugins.json"));
     let installed_names: std::collections::HashSet<String> = registry
-        .get("plugins").and_then(|v| v.as_object())
-        .map(|obj| obj.keys()
-            .filter(|k| k.split('@').last() == Some(marketplace_name.as_str()))
-            .filter_map(|k| k.split('@').next())
-            .map(|s| s.to_string()).collect())
+        .get("plugins")
+        .and_then(|v| v.as_object())
+        .map(|obj| {
+            obj.keys()
+                .filter(|k| k.split('@').next_back() == Some(marketplace_name.as_str()))
+                .filter_map(|k| k.split('@').next())
+                .map(|s| s.to_string())
+                .collect()
+        })
         .unwrap_or_default();
 
     let mut result = Vec::new();
@@ -1417,16 +1533,24 @@ pub fn do_list_marketplace_plugins(marketplace_name: String) -> Result<Vec<plugi
         if let Ok(entries) = std::fs::read_dir(&plugins_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if !path.is_dir() { continue; }
+                if !path.is_dir() {
+                    continue;
+                }
                 let name = entry.file_name().to_string_lossy().into_owned();
                 let skills = scan_skills(&path);
                 let agents = scan_agents(&path);
-                let desc = skills.iter().chain(agents.iter())
-                    .next().map(|s| s.description.clone()).unwrap_or_else(|| name.clone());
+                let desc = skills
+                    .iter()
+                    .chain(agents.iter())
+                    .next()
+                    .map(|s| s.description.clone())
+                    .unwrap_or_else(|| name.clone());
                 result.push(plugin::MarketplacePlugin {
                     installed: installed_names.contains(&name),
-                    name, description: desc,
-                    skill_count: skills.len(), agent_count: agents.len(),
+                    name,
+                    description: desc,
+                    skill_count: skills.len(),
+                    agent_count: agents.len(),
                     has_hooks: has_hooks(&path),
                 });
             }
@@ -1437,15 +1561,24 @@ pub fn do_list_marketplace_plugins(marketplace_name: String) -> Result<Vec<plugi
         if let Ok(entries) = std::fs::read_dir(&skills_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if !path.is_dir() { continue; }
+                if !path.is_dir() {
+                    continue;
+                }
                 let name = entry.file_name().to_string_lossy().into_owned();
-                let desc = path.join("SKILL.md").exists()
+                let desc = path
+                    .join("SKILL.md")
+                    .exists()
                     .then(|| parse_frontmatter(&path.join("SKILL.md"), "skill"))
-                    .flatten().map(|s| s.description).unwrap_or_else(|| name.clone());
+                    .flatten()
+                    .map(|s| s.description)
+                    .unwrap_or_else(|| name.clone());
                 result.push(plugin::MarketplacePlugin {
                     installed: installed_names.contains(&name),
-                    name, description: desc,
-                    skill_count: 1, agent_count: 0, has_hooks: false,
+                    name,
+                    description: desc,
+                    skill_count: 1,
+                    agent_count: 0,
+                    has_hooks: false,
                 });
             }
         }
@@ -1454,17 +1587,29 @@ pub fn do_list_marketplace_plugins(marketplace_name: String) -> Result<Vec<plugi
     else if let Ok(entries) = std::fs::read_dir(clone_path) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if !path.is_dir() { continue; }
+            if !path.is_dir() {
+                continue;
+            }
             let name = entry.file_name().to_string_lossy().into_owned();
             // Skip common non-plugin directories
-            if ["node_modules", ".git", "dist", "src", "test", "tests", "__tests__"].contains(&name.as_str()) { continue; }
-            if !path.join("SKILL.md").exists() { continue; }
+            if ["node_modules", ".git", "dist", "src", "test", "tests", "__tests__"]
+                .contains(&name.as_str())
+            {
+                continue;
+            }
+            if !path.join("SKILL.md").exists() {
+                continue;
+            }
             let desc = parse_frontmatter(&path.join("SKILL.md"), "skill")
-                .map(|s| s.description).unwrap_or_else(|| name.clone());
+                .map(|s| s.description)
+                .unwrap_or_else(|| name.clone());
             result.push(plugin::MarketplacePlugin {
                 installed: installed_names.contains(&name),
-                name, description: desc,
-                skill_count: 1, agent_count: 0, has_hooks: false,
+                name,
+                description: desc,
+                skill_count: 1,
+                agent_count: 0,
+                has_hooks: false,
             });
         }
     }
@@ -1472,29 +1617,44 @@ pub fn do_list_marketplace_plugins(marketplace_name: String) -> Result<Vec<plugi
     Ok(result)
 }
 
-pub fn do_install_marketplace_plugin(marketplace_name: String, plugin_name: String) -> Result<(), AppError> {
+pub(crate) fn do_install_marketplace_plugin(
+    marketplace_name: String,
+    plugin_name: String,
+) -> Result<(), AppError> {
     let home = dirs::home_dir().ok_or_else(|| AppError::Internal("No home directory".into()))?;
     let claude_dir = home.join(".claude");
 
-    let marketplaces: serde_json::Value = read_json(&claude_dir.join("plugins/known_marketplaces.json"))?;
-    let clone_path_str = marketplaces[&marketplace_name]["installLocation"]
-        .as_str().unwrap_or("");
+    let marketplaces: serde_json::Value =
+        read_json(&claude_dir.join("plugins/known_marketplaces.json"))?;
+    let clone_path_str = marketplaces[&marketplace_name]["installLocation"].as_str().unwrap_or("");
     let clone_path = std::path::Path::new(clone_path_str);
 
     let source = clone_path.join(format!("plugins/{}", plugin_name));
-    let source = if source.is_dir() { source } else { clone_path.join(format!("skills/{}", plugin_name)) };
+    let source =
+        if source.is_dir() { source } else { clone_path.join(format!("skills/{}", plugin_name)) };
     if !source.is_dir() {
-        return Err(AppError::NotFound(format!("Plugin '{}' not found in '{}'", plugin_name, marketplace_name)));
+        return Err(AppError::NotFound(format!(
+            "Plugin '{}' not found in '{}'",
+            plugin_name, marketplace_name
+        )));
     }
 
     let git_sha = std::process::Command::new("git")
         .args(["rev-parse", "--short", "HEAD"])
         .current_dir(clone_path)
-        .output().ok()
-        .and_then(|o| if o.status.success() { Some(String::from_utf8_lossy(&o.stdout).trim().to_string()) } else { None })
+        .output()
+        .ok()
+        .and_then(|o| {
+            if o.status.success() {
+                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+            } else {
+                None
+            }
+        })
         .unwrap_or_else(|| "unknown".to_string());
 
-    let install_path = claude_dir.join(format!("plugins/cache/{}/{}/{}", marketplace_name, plugin_name, git_sha));
+    let install_path =
+        claude_dir.join(format!("plugins/cache/{}/{}/{}", marketplace_name, plugin_name, git_sha));
     std::fs::create_dir_all(&install_path)
         .map_err(|e| AppError::Internal(format!("Failed to create dir: {}", e)))?;
     copy_dir_recursive(&source, &install_path)?;
@@ -1504,16 +1664,21 @@ pub fn do_install_marketplace_plugin(marketplace_name: String, plugin_name: Stri
     let key = format!("{}@{}", plugin_name, marketplace_name);
     let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
 
-    let plugins = registry.get_mut("plugins").and_then(|v| v.as_object_mut())
+    let plugins = registry
+        .get_mut("plugins")
+        .and_then(|v| v.as_object_mut())
         .ok_or_else(|| AppError::Internal("Invalid registry".into()))?;
-    plugins.insert(key.clone(), serde_json::json!([{
-        "scope": "user",
-        "installPath": install_path.to_string_lossy(),
-        "version": git_sha,
-        "installedAt": now,
-        "lastUpdated": now,
-        "gitCommitSha": git_sha,
-    }]));
+    plugins.insert(
+        key.clone(),
+        serde_json::json!([{
+            "scope": "user",
+            "installPath": install_path.to_string_lossy(),
+            "version": git_sha,
+            "installedAt": now,
+            "lastUpdated": now,
+            "gitCommitSha": git_sha,
+        }]),
+    );
 
     let output = serde_json::to_string_pretty(&registry)
         .map_err(|e| AppError::Internal(format!("Serialize: {}", e)))?;
@@ -1531,4 +1696,45 @@ pub fn do_install_marketplace_plugin(marketplace_name: String, plugin_name: Stri
     }
 
     Ok(())
+}
+
+// --- Proxy ---
+
+use crate::app::proxy::{ProxyConfig, ProxyStatus};
+
+pub(crate) fn do_proxy_status(state: &AppState) -> Result<ProxyStatus, AppError> {
+    Ok(state.proxy_manager.status())
+}
+
+pub(crate) fn do_start_proxy(state: &AppState) -> Result<(), AppError> {
+    state.proxy_manager.start()
+}
+
+pub(crate) fn do_stop_proxy(state: &AppState) -> Result<(), AppError> {
+    state.proxy_manager.stop()
+}
+
+pub(crate) fn do_restart_proxy(state: &AppState) -> Result<(), AppError> {
+    state.proxy_manager.restart()
+}
+
+pub(crate) fn do_get_proxy_config(state: &AppState) -> Result<ProxyConfig, AppError> {
+    state.proxy_manager.read_config()
+}
+
+pub(crate) fn do_update_proxy_config(
+    state: &AppState,
+    config: ProxyConfig,
+) -> Result<(), AppError> {
+    state.proxy_manager.write_config(&config)
+}
+
+pub(crate) fn do_get_proxy_logs(state: &AppState, lines: usize) -> Result<String, AppError> {
+    state.proxy_manager.get_logs(lines)
+}
+
+pub(crate) fn do_get_proxy_metrics(
+    state: &AppState,
+) -> Result<crate::app::proxy::ProxyMetrics, AppError> {
+    state.proxy_manager.get_metrics()
 }

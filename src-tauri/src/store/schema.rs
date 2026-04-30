@@ -74,6 +74,11 @@ CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
     content='messages',
     content_rowid='rowid'
 );
+
+CREATE TABLE IF NOT EXISTS proxy_config (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    config_json TEXT NOT NULL
+);
 "#;
 
 /// Add a column to a table, ignoring "duplicate column" errors (column already exists).
@@ -93,7 +98,7 @@ fn add_column_if_not_exists(
             } else {
                 Err(crate::app::errors::AppError::DbError(msg))
             }
-        }
+        },
     }
 }
 
@@ -151,7 +156,9 @@ const LATEST_VERSION: i64 = 3;
 
 /// Configure a SQLite connection with safe concurrency defaults.
 /// Must be called on every new connection before any other operations.
-pub fn configure_connection(conn: &rusqlite::Connection) -> Result<(), crate::app::errors::AppError> {
+pub(crate) fn configure_connection(
+    conn: &rusqlite::Connection,
+) -> Result<(), crate::app::errors::AppError> {
     conn.execute_batch(
         "PRAGMA journal_mode=WAL;
          PRAGMA foreign_keys=ON;
@@ -163,13 +170,13 @@ pub fn configure_connection(conn: &rusqlite::Connection) -> Result<(), crate::ap
 
 /// Initialize schema and run lightweight migrations on the main thread.
 /// Returns the target version if heavy migrations are pending, or None if fully up-to-date.
-pub fn init_schema(conn: &rusqlite::Connection) -> Result<Option<i64>, crate::app::errors::AppError> {
+pub fn init_schema(
+    conn: &rusqlite::Connection,
+) -> Result<Option<i64>, crate::app::errors::AppError> {
     configure_connection(conn)?;
     conn.execute_batch(SCHEMA_SQL)?;
 
-    let version: i64 = conn
-        .query_row("PRAGMA user_version", [], |row| row.get(0))
-        .unwrap_or(0);
+    let version: i64 = conn.query_row("PRAGMA user_version", [], |row| row.get(0)).unwrap_or(0);
 
     // Lightweight migrations (safe on main thread)
     if version < 1 {
@@ -185,11 +192,7 @@ pub fn init_schema(conn: &rusqlite::Connection) -> Result<Option<i64>, crate::ap
     }
 
     // Signal if heavy migrations are needed
-    Ok(if version < LATEST_VERSION {
-        Some(LATEST_VERSION)
-    } else {
-        None
-    })
+    Ok(if version < LATEST_VERSION { Some(LATEST_VERSION) } else { None })
 }
 
 /// Run heavy data migrations on a background thread.
@@ -199,15 +202,13 @@ pub fn run_heavy_migrations(db_path: &std::path::Path) -> Result<(), crate::app:
         .map_err(|e| crate::app::errors::AppError::DbError(e.to_string()))?;
     configure_connection(&conn)?;
 
-    let version: i64 = conn
-        .query_row("PRAGMA user_version", [], |row| row.get(0))
-        .unwrap_or(0);
+    let version: i64 = conn.query_row("PRAGMA user_version", [], |row| row.get(0)).unwrap_or(0);
 
     if version < 3 {
-        log::info!("Running heavy migration v3 (FTS rebuild)...");
+        tracing::info!("Running heavy migration v3 (FTS rebuild)...");
         migrate_v3(&conn)?;
         conn.execute_batch("PRAGMA user_version = 3;")?;
-        log::info!("Heavy migration v3 completed");
+        tracing::info!("Heavy migration v3 completed");
     }
 
     Ok(())

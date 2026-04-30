@@ -29,7 +29,7 @@ pub struct MessagePreview {
     pub content_preview: String,
 }
 
-pub fn upsert_message(
+pub(crate) fn upsert_message(
     conn: &rusqlite::Connection,
     msg: &MessageRecord,
 ) -> Result<(), AppError> {
@@ -68,7 +68,8 @@ pub fn upsert_message(
 }
 
 /// Rebuild FTS index for all messages of a given session (batch operation).
-pub fn rebuild_fts_for_session(
+#[allow(dead_code)]
+pub(crate) fn rebuild_fts_for_session(
     conn: &rusqlite::Connection,
     session_id: &str,
 ) -> Result<(), AppError> {
@@ -86,7 +87,7 @@ pub fn rebuild_fts_for_session(
     Ok(())
 }
 
-pub fn get_session_messages(
+pub(crate) fn get_session_messages(
     conn: &rusqlite::Connection,
     session_id: &str,
 ) -> Result<Vec<MessageRecord>, AppError> {
@@ -96,7 +97,7 @@ pub fn get_session_messages(
          FROM messages WHERE session_id = ? ORDER BY timestamp ASC",
     )?;
 
-    let messages = stmt
+    let messages: Vec<MessageRecord> = stmt
         .query_map(params![session_id], |row| {
             Ok(MessageRecord {
                 id: row.get(0)?,
@@ -104,7 +105,7 @@ pub fn get_session_messages(
                 parent_id: row.get(2)?,
                 role: row.get(3)?,
                 kind: row.get(4)?,
-                content_preview: row.get(5)?,
+                content_preview: strip_ansi_codes(row.get::<_, String>(5)?.as_str()),
                 timestamp: row.get(6)?,
                 is_sidechain: row.get::<_, i64>(7)? != 0,
                 entry_type: row.get(8)?,
@@ -121,7 +122,38 @@ pub fn get_session_messages(
     Ok(messages)
 }
 
-pub fn get_preview_messages(
+/// Strip ANSI CSI/OSC escape sequences from a string.
+/// Works at the char level to preserve multi-byte UTF-8 characters.
+fn strip_ansi_codes(s: &str) -> String {
+    let mut chars = s.chars();
+    let mut result = String::with_capacity(s.len());
+    while let Some(ch) = chars.next() {
+        if ch == '\x1b' {
+            match chars.as_str().chars().next() {
+                Some('[') => {
+                    chars.next(); // consume '['
+                    while let Some(c) = chars.next() {
+                        if c.is_ascii_alphabetic() || c == 'H' || c == 'J' || c == 'K' {
+                            break;
+                        }
+                    }
+                }
+                Some(']') => {
+                    chars.next(); // consume ']'
+                    while let Some(c) = chars.next() {
+                        if c == '\x07' || c == '\\' { break; }
+                    }
+                }
+                _ => {}
+            }
+        } else {
+            result.push(ch);
+        }
+    }
+    result
+}
+
+pub(crate) fn get_preview_messages(
     conn: &rusqlite::Connection,
     session_id: &str,
     limit: i64,
@@ -132,11 +164,11 @@ pub fn get_preview_messages(
          ORDER BY timestamp ASC LIMIT ?",
     )?;
 
-    let previews = stmt
+    let previews: Vec<MessagePreview> = stmt
         .query_map(params![session_id, limit], |row| {
             Ok(MessagePreview {
                 role: row.get(0)?,
-                content_preview: row.get(1)?,
+                content_preview: strip_ansi_codes(row.get::<_, String>(1)?.as_str()),
             })
         })?
         .filter_map(|r| r.ok())
@@ -185,7 +217,11 @@ fn branch_label(msg: &MessageRecord) -> String {
 }
 
 fn truncate_str(s: &str, max: usize) -> &str {
-    if s.len() <= max { s } else { &s[..s.char_indices().take(max).last().map(|(i, _)| i).unwrap_or(s.len())] }
+    if s.len() <= max {
+        s
+    } else {
+        &s[..s.char_indices().take(max).last().map(|(i, _)| i).unwrap_or(s.len())]
+    }
 }
 
 /// Build the conversation tree and extract main path + branches.
@@ -195,27 +231,19 @@ fn truncate_str(s: &str, max: usize) -> &str {
 /// - If the tree is fragmented (path covers < 50% of non-sidechain messages),
 ///   fall back to flat chronological list of all non-sidechain messages
 /// - Branch points are identified from the tree where possible
-pub fn get_session_transcript(
+pub(crate) fn get_session_transcript(
     conn: &rusqlite::Connection,
     session_id: &str,
 ) -> Result<TranscriptPayload, AppError> {
     let messages = get_session_messages(conn, session_id)?;
 
     if messages.is_empty() {
-        return Ok(TranscriptPayload {
-            messages,
-            main_path: Vec::new(),
-            branches: Vec::new(),
-        });
+        return Ok(TranscriptPayload { messages, main_path: Vec::new(), branches: Vec::new() });
     }
 
     let non_sidechain_count = messages.iter().filter(|m| !m.is_sidechain).count();
     if non_sidechain_count == 0 {
-        return Ok(TranscriptPayload {
-            messages,
-            main_path: Vec::new(),
-            branches: Vec::new(),
-        });
+        return Ok(TranscriptPayload { messages, main_path: Vec::new(), branches: Vec::new() });
     }
 
     // 1. Build id_map and children_map
@@ -225,10 +253,7 @@ pub fn get_session_transcript(
     for (i, msg) in messages.iter().enumerate() {
         id_map.insert(msg.id.clone(), i);
         if let Some(ref parent_id) = msg.parent_id {
-            children_map
-                .entry(parent_id.clone())
-                .or_default()
-                .push(msg.id.clone());
+            children_map.entry(parent_id.clone()).or_default().push(msg.id.clone());
         }
     }
 
@@ -241,11 +266,7 @@ pub fn get_session_transcript(
         tree_path
     } else {
         // Tree is fragmented — fall back to flat chronological list
-        messages
-            .iter()
-            .filter(|m| !m.is_sidechain)
-            .map(|m| m.id.clone())
-            .collect()
+        messages.iter().filter(|m| !m.is_sidechain).map(|m| m.id.clone()).collect()
     };
 
     // 4. Identify branch points along the main path
@@ -270,20 +291,12 @@ pub fn get_session_transcript(
                     }
                 }
 
-                branches.push(BranchPoint {
-                    parent_id: path_id.clone(),
-                    siblings,
-                    active_index,
-                });
+                branches.push(BranchPoint { parent_id: path_id.clone(), siblings, active_index });
             }
         }
     }
 
-    Ok(TranscriptPayload {
-        messages,
-        main_path: path,
-        branches,
-    })
+    Ok(TranscriptPayload { messages, main_path: path, branches })
 }
 
 /// Extract main path by backtracking from the latest leaf to root.
@@ -298,10 +311,7 @@ fn extract_main_path(
         .filter(|m| !children_map.contains_key(&m.id))
         .filter(|m| !m.is_sidechain)
         .max_by(|a, b| {
-            a.timestamp
-                .as_deref()
-                .unwrap_or("")
-                .cmp(&b.timestamp.as_deref().unwrap_or(""))
+            a.timestamp.as_deref().unwrap_or("").cmp(b.timestamp.as_deref().unwrap_or(""))
         })
         .map(|m| m.id.clone());
 
@@ -323,7 +333,7 @@ fn extract_main_path(
             match parent {
                 Some(pid) if id_map.contains_key(pid) => {
                     current = Some(pid.clone());
-                }
+                },
                 _ => break, // null parent or dangling — stop
             }
         } else {

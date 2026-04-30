@@ -7,13 +7,15 @@ Local-first Tauri v2 desktop app for managing Claude Code agent sessions.
 - **Backend**: Rust (Tauri v2, rusqlite bundled, SQLite + FTS5)
 - **Frontend**: React + TypeScript + Vite + Tailwind CSS v4 + shadcn/ui (Base UI)
 - **Data**: TanStack Query for async state, localStorage for UI preferences
+- **Proxy**: vendor_proxy — OpenAI Responses API → multi-provider LLM proxy (DeepSeek, Zhipu, Ollama)
 
 ## Commands
 
 - `cargo tauri dev` — start dev server (launch once, HMR handles rest)
 - `npm run build` — frontend typecheck + build
-- `cargo build` — Rust build
+- `cargo build` — Rust build (workspace: yeek + vendor_proxy)
 - `cargo check` — fast Rust typecheck
+- `cargo test -p vendor-proxy` — run vendor_proxy tests
 
 ## Architecture
 
@@ -28,6 +30,12 @@ src-tauri/src/
   service/delete_planner.rs — Delete plan resolution + execution
   store/                — SQLite store (sessions, messages, sources, actions)
   sync/planner.rs       — Startup sync pipeline
+
+vendor_proxy/src/       — LLM proxy (Cargo workspace member)
+  adapters/             — Provider format adapters (Anthropic, Chat Completions)
+  bridge/               — Responses ↔ Chat Completions bidirectional conversion
+  stream/               — SSE streaming translation (Anthropic/Chat → Responses)
+  types/                — Responses API, Chat Completions, Anthropic types
 
 src/
   app/shell/index.tsx   — Main UI (AppShell, SessionsPage, MemoryPage, SystemPage)

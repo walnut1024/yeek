@@ -3,7 +3,9 @@ use std::sync::Arc;
 
 use crate::adapter::claudecode;
 use crate::app::errors::AppError;
-use crate::app::events::{EventEmitter, SyncCompletedPayload, SyncProgressPayload, SyncStartedPayload};
+use crate::app::events::{
+    EventEmitter, SyncCompletedPayload, SyncProgressPayload, SyncStartedPayload,
+};
 use crate::store::schema;
 
 /// Prevents concurrent scans via an AtomicBool.
@@ -13,19 +15,15 @@ pub struct ScanGuard {
 
 impl ScanGuard {
     pub fn new() -> Self {
-        Self {
-            running: AtomicBool::new(false),
-        }
+        Self { running: AtomicBool::new(false) }
     }
 
     /// Try to mark a scan as running. Returns false if one is already active.
-    pub fn try_start(&self) -> bool {
-        self.running
-            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-            .is_ok()
+    pub(crate) fn try_start(&self) -> bool {
+        self.running.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_ok()
     }
 
-    pub fn finish(&self) {
+    pub(crate) fn finish(&self) {
         self.running.store(false, Ordering::SeqCst);
     }
 }
@@ -38,8 +36,7 @@ pub struct SyncSummary {
 
 /// Open a second SQLite connection configured identically to the primary.
 fn open_sync_connection(db_path: &std::path::Path) -> Result<rusqlite::Connection, AppError> {
-    let conn = rusqlite::Connection::open(db_path)
-        .map_err(|e| AppError::DbError(e.to_string()))?;
+    let conn = rusqlite::Connection::open(db_path).map_err(|e| AppError::DbError(e.to_string()))?;
     schema::init_schema(&conn)?;
     Ok(conn)
 }
@@ -52,7 +49,7 @@ pub fn spawn_background_scan(
     scan_guard: Arc<ScanGuard>,
 ) -> bool {
     if !scan_guard.try_start() {
-        log::info!("Scan already in progress, skipping");
+        tracing::info!("Scan already in progress, skipping");
         return false;
     }
 
@@ -64,21 +61,21 @@ pub fn spawn_background_scan(
 
             match result {
                 Ok(summary) => {
-                    log::info!(
+                    tracing::info!(
                         "Background scan completed: indexed={}, updated={}, errors={}",
                         summary.sessions_indexed,
                         summary.sessions_updated,
                         summary.errors,
                     );
-                }
+                },
                 Err(e) => {
-                    log::error!("Background scan failed: {}", e);
+                    tracing::error!("Background scan failed: {}", e);
                     emitter.emit_sync_completed(SyncCompletedPayload {
                         sessions_indexed: 0,
                         sessions_updated: 0,
                         errors: 1,
                     });
-                }
+                },
             }
         })
         .expect("Failed to spawn sync thread");
@@ -96,16 +93,11 @@ fn run_scan(
     let sources = claudecode::discover_sources()?;
     let total = sources.len() as i64;
 
-    emitter.emit_sync_started(SyncStartedPayload {
-        source_count: total,
-    });
+    emitter.emit_sync_started(SyncStartedPayload { source_count: total });
 
     // Delegate to incremental indexer with progress callback
     let result = claudecode::index_sources(&conn, &sources, |processed| {
-        emitter.emit_sync_progress(SyncProgressPayload {
-            processed,
-            total,
-        });
+        emitter.emit_sync_progress(SyncProgressPayload { processed, total });
     })?;
 
     emitter.emit_sync_completed(SyncCompletedPayload {

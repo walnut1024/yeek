@@ -1,0 +1,10 @@
+# Clippy configuration for yeek workspace
+# Run: cargo clippy --workspace -- -D warnings
+#
+# CI enforces deny-by-default via `cargo xtask lint` (which passes -D warnings).
+# Developers should run `cargo xtask lint` before pushing.
+
+# Thresholds tuned for this project
+cognitive-complexity-threshold = 30
+type-complexity-threshold = 300
+too-many-arguments-threshold = 8

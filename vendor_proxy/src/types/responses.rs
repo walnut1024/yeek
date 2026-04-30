@@ -126,7 +126,7 @@ pub enum ResponsesOutputItem {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         status: Option<String>,
         role: String,
-        content: Vec<OutputContentBlock>,
+        summary: Vec<ReasoningSummaryBlock>,
     },
     #[serde(other)]
     Other,
@@ -142,9 +142,14 @@ pub enum OutputContentBlock {
         annotations: Vec<serde_json::Value>,
     },
     #[serde(rename = "reasoning_text")]
-    ReasoningText {
-        text: String,
-    },
+    ReasoningText { text: String },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum ReasoningSummaryBlock {
+    #[serde(rename = "summary_text")]
+    SummaryText { text: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

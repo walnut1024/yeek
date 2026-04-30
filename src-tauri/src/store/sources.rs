@@ -3,7 +3,10 @@ use rusqlite::params;
 use crate::app::errors::AppError;
 use crate::domain::source::{DeletePolicy, SourceDescriptor, SourceRef};
 
-pub fn upsert_source(
+/// Insert or update a source file reference.
+///
+/// Sources are files referenced by session messages (e.g., code files).
+pub(crate) fn upsert_source(
     conn: &rusqlite::Connection,
     source: &SourceDescriptor,
 ) -> Result<(), AppError> {
@@ -36,7 +39,10 @@ pub fn upsert_source(
     Ok(())
 }
 
-pub fn link_session_source(
+/// Link a source file to a session.
+///
+/// Creates a many-to-many relationship between sessions and their referenced sources.
+pub(crate) fn link_session_source(
     conn: &rusqlite::Connection,
     session_id: &str,
     source_id: &str,
@@ -61,7 +67,10 @@ pub fn link_session_source(
     Ok(())
 }
 
-pub fn get_session_sources(
+/// Retrieve all source files referenced by a session.
+///
+/// Returns a list of source paths associated with the given session ID.
+pub(crate) fn get_session_sources(
     conn: &rusqlite::Connection,
     session_id: &str,
 ) -> Result<Vec<SourceRef>, AppError> {

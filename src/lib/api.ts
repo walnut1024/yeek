@@ -72,6 +72,11 @@ export interface SystemStatusPayload {
   db_path: string;
   total_sessions: number;
   total_sources: number;
+  total_projects: number;
+  total_messages: number;
+  active_sessions: number;
+  complete_sessions: number;
+  partial_sessions: number;
   last_sync_at: string | null;
   status: string;
 }
@@ -349,6 +354,77 @@ export async function installMarketplacePlugin(marketplaceName: string, pluginNa
 
 // ── Resume ────────────────────────────────────────────────
 
-export async function resumeSession(sessionId: string, agent: string, cwd: string | null): Promise<void> {
-  return getTransport().command<void>("resume_session", { sessionId, agent, cwd });
+export async function resumeSession(sessionId: string, agent: string, cwd: string | null, terminal: string | null): Promise<void> {
+  return getTransport().command<void>("resume_session", { sessionId, agent, cwd, terminal });
+}
+
+// ── Proxy ────────────────────────────────────────────────
+
+export interface ProxyStatus {
+  running: boolean;
+  listen_addr: string | null;
+  uptime_secs: number | null;
+  version: string;
+  unexpected_exit?: boolean;
+}
+
+export interface ProxyServerConfig {
+  listen_addr: string;
+}
+
+export interface ProxyProviderConfig {
+  kind?: string | null;
+  format?: string | null;
+  base_url: string;
+  api_key_env?: string | null;
+  models: string[];
+  enabled?: boolean;
+}
+
+export interface ProxyConfig {
+  server: ProxyServerConfig;
+  default_provider: string;
+  providers: Record<string, ProxyProviderConfig>;
+}
+
+export async function getProxyStatus(): Promise<ProxyStatus> {
+  return getTransport().command<ProxyStatus>("get_proxy_status");
+}
+
+export async function startProxy(): Promise<void> {
+  return getTransport().command<void>("start_proxy");
+}
+
+export async function stopProxy(): Promise<void> {
+  return getTransport().command<void>("stop_proxy");
+}
+
+export async function restartProxy(): Promise<void> {
+  return getTransport().command<void>("restart_proxy");
+}
+
+export async function getProxyConfig(): Promise<ProxyConfig> {
+  return getTransport().command<ProxyConfig>("get_proxy_config");
+}
+
+export async function updateProxyConfig(config: ProxyConfig): Promise<void> {
+  return getTransport().command<void>("update_proxy_config", { config });
+}
+
+export interface ProxyMetrics {
+  version: string;
+  uptime_secs: number;
+  request_count: number;
+  error_count: number;
+  active_connections: number;
+  rps: number;
+  avg_latency_ms: number;
+}
+
+export async function getProxyMetrics(): Promise<ProxyMetrics> {
+  return getTransport().command<ProxyMetrics>("get_proxy_metrics");
+}
+
+export async function getProxyLogs(lines: number): Promise<string> {
+  return getTransport().command<string>("get_proxy_logs", { lines });
 }

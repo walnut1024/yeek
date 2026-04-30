@@ -37,16 +37,9 @@ pub enum AnthropicContentBlock {
     #[serde(rename = "text")]
     Text { text: String },
     #[serde(rename = "tool_use")]
-    ToolUse {
-        id: String,
-        name: String,
-        input: serde_json::Value,
-    },
+    ToolUse { id: String, name: String, input: serde_json::Value },
     #[serde(rename = "tool_result")]
-    ToolResult {
-        tool_use_id: String,
-        content: String,
-    },
+    ToolResult { tool_use_id: String, content: String },
     #[serde(rename = "image")]
     Image { source: AnthropicImageSource },
 }
@@ -92,22 +85,13 @@ pub enum AnthropicSseEvent {
     #[serde(rename = "message_start")]
     MessageStart { message: AnthropicMessageStart },
     #[serde(rename = "content_block_start")]
-    ContentBlockStart {
-        index: u32,
-        content_block: AnthropicSseContentBlock,
-    },
+    ContentBlockStart { index: u32, content_block: AnthropicSseContentBlock },
     #[serde(rename = "content_block_delta")]
-    ContentBlockDelta {
-        index: u32,
-        delta: AnthropicSseDelta,
-    },
+    ContentBlockDelta { index: u32, delta: AnthropicSseDelta },
     #[serde(rename = "content_block_stop")]
     ContentBlockStop { index: u32 },
     #[serde(rename = "message_delta")]
-    MessageDelta {
-        delta: AnthropicMessageDelta,
-        usage: Option<AnthropicMessageUsage>,
-    },
+    MessageDelta { delta: AnthropicMessageDelta, usage: Option<AnthropicMessageUsage> },
     #[serde(rename = "message_stop")]
     MessageStop,
     #[serde(rename = "error")]

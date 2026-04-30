@@ -60,9 +60,7 @@ impl Default for ChatSseToResponsesTranslator {
 
 impl ChatSseToResponsesTranslator {
     pub fn new(echo_req: Option<&ResponsesRequest>) -> Self {
-        let echo_json = echo_req
-            .map(build_echo_json)
-            .unwrap_or(serde_json::json!({}));
+        let echo_json = echo_req.map(build_echo_json).unwrap_or(serde_json::json!({}));
         Self {
             response_id: String::new(),
             model: String::new(),
@@ -146,18 +144,12 @@ impl ChatSseToResponsesTranslator {
 
         // Extract usage before processing choices (needed for response.completed)
         if let Some(usage) = parsed.get("usage") {
-            self.input_tokens = usage
-                .get("prompt_tokens")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0) as u32;
-            self.output_tokens = usage
-                .get("completion_tokens")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0) as u32;
-            self.total_tokens = usage
-                .get("total_tokens")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0) as u32;
+            self.input_tokens =
+                usage.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+            self.output_tokens =
+                usage.get("completion_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+            self.total_tokens =
+                usage.get("total_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
             tracing::info!(
                 "Stream usage: input={}, output={}, total={}",
                 self.input_tokens,
@@ -172,9 +164,8 @@ impl ChatSseToResponsesTranslator {
                 let delta = choice.get("delta");
 
                 // Reasoning content (Task 3) — check before regular content
-                if let Some(reasoning) = delta
-                    .and_then(|d| d.get("reasoning_content"))
-                    .and_then(|v| v.as_str())
+                if let Some(reasoning) =
+                    delta.and_then(|d| d.get("reasoning_content")).and_then(|v| v.as_str())
                 {
                     if !reasoning.is_empty() {
                         events.extend(self.emit_reasoning_start_if_needed());
@@ -191,9 +182,7 @@ impl ChatSseToResponsesTranslator {
                 }
 
                 // Text delta
-                if let Some(content) = delta
-                    .and_then(|d| d.get("content"))
-                    .and_then(|v| v.as_str())
+                if let Some(content) = delta.and_then(|d| d.get("content")).and_then(|v| v.as_str())
                 {
                     if !content.is_empty() {
                         events.extend(self.emit_reasoning_done_if_needed());
@@ -214,9 +203,8 @@ impl ChatSseToResponsesTranslator {
                 }
 
                 // Annotations (Task 5)
-                if let Some(annots) = delta
-                    .and_then(|d| d.get("annotations"))
-                    .and_then(|v| v.as_array())
+                if let Some(annots) =
+                    delta.and_then(|d| d.get("annotations")).and_then(|v| v.as_array())
                 {
                     for annot in annots {
                         let transformed = transform_annotation(annot);
@@ -234,17 +222,12 @@ impl ChatSseToResponsesTranslator {
                 }
 
                 // Tool call delta
-                if let Some(tool_calls) = delta
-                    .and_then(|d| d.get("tool_calls"))
-                    .and_then(|v| v.as_array())
+                if let Some(tool_calls) =
+                    delta.and_then(|d| d.get("tool_calls")).and_then(|v| v.as_array())
                 {
                     for tc in tool_calls {
                         let index = tc.get("index").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
-                        let tc_id = tc
-                            .get("id")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string();
+                        let tc_id = tc.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
                         let func = tc.get("function");
                         let name = func
                             .and_then(|f| f.get("name"))
@@ -264,16 +247,14 @@ impl ChatSseToResponsesTranslator {
                         let name_clone;
                         {
                             let state =
-                                self.tool_calls
-                                    .entry(index)
-                                    .or_insert_with(|| ToolCallState {
-                                        call_id: String::new(),
-                                        name: String::new(),
-                                        arguments: String::new(),
-                                        item_id: format!("fc_{}", uuid::Uuid::new_v4()),
-                                        sent_added: false,
-                                        sent_done: false,
-                                    });
+                                self.tool_calls.entry(index).or_insert_with(|| ToolCallState {
+                                    call_id: String::new(),
+                                    name: String::new(),
+                                    arguments: String::new(),
+                                    item_id: format!("fc_{}", uuid::Uuid::new_v4()),
+                                    sent_added: false,
+                                    sent_done: false,
+                                });
 
                             if !tc_id.is_empty() {
                                 state.call_id = tc_id;
@@ -540,7 +521,7 @@ impl ChatSseToResponsesTranslator {
                 "id": self.reasoning_item_id,
                 "status": status,
                 "role": "assistant",
-                "content": [{
+                "summary": [{
                     "type": "summary_text",
                     "text": self.accumulated_reasoning,
                 }],
@@ -549,13 +530,9 @@ impl ChatSseToResponsesTranslator {
         // Text message item
         if self.sent_output_item_added {
             let mut msg_content = Vec::new();
-            // Embed reasoning as reasoning_text block in message content
-            if self.reasoning_done_emitted && !self.accumulated_reasoning.is_empty() {
-                msg_content.push(serde_json::json!({
-                    "type": "reasoning_text",
-                    "text": self.accumulated_reasoning,
-                }));
-            }
+            // Keep reasoning in its own output item only, not embedded in the
+            // message content. Mixed content blocks (reasoning_text + output_text)
+            // may cause some Clients to fall back to raw-text rendering.
             msg_content.push(serde_json::json!({
                 "type": "output_text",
                 "text": self.accumulated_text,
@@ -620,7 +597,11 @@ impl ChatSseToResponsesTranslator {
     }
 
     fn sse_event(&self, data: serde_json::Value) -> String {
-        format!("data: {}", serde_json::to_string(&data).unwrap())
+        format!(
+            "data: {}",
+            serde_json::to_string(&data)
+                .unwrap_or_else(|_| r#"{"error":"json serialize"}"#.to_string())
+        )
     }
 
     fn emit_reasoning_start_if_needed(&mut self) -> Vec<String> {
@@ -681,7 +662,7 @@ impl ChatSseToResponsesTranslator {
                 "id": item_id,
                 "status": "completed",
                 "role": "assistant",
-                "content": [{
+                "summary": [{
                     "type": "summary_text",
                     "text": self.accumulated_reasoning,
                 }],
@@ -744,14 +725,8 @@ fn transform_annotation(annot: &serde_json::Value) -> serde_json::Value {
     let annot_type = annot.get("type").and_then(|v| v.as_str()).unwrap_or("");
     if annot_type == "url_citation" {
         if let Some(citation) = annot.get("url_citation") {
-            let url = citation
-                .get("url")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-            let title = citation
-                .get("title")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let url = citation.get("url").and_then(|v| v.as_str()).unwrap_or("");
+            let title = citation.get("title").and_then(|v| v.as_str()).unwrap_or("");
             return serde_json::json!({
                 "type": "url_citation",
                 "start_index": 0,
@@ -762,6 +737,32 @@ fn transform_annotation(annot: &serde_json::Value) -> serde_json::Value {
         }
     }
     annot.clone()
+}
+
+/// Split a string into chunks of approximately `chunk_size` characters.
+fn split_into_chunks(s: &str, chunk_size: usize) -> Vec<&str> {
+    if chunk_size == 0 || s.is_empty() {
+        return vec![];
+    }
+    let mut chunks = Vec::new();
+    let mut start = 0;
+    while start < s.len() {
+        let end = std::cmp::min(start + chunk_size, s.len());
+        // Ensure we don't split in the middle of a multi-byte char
+        let end = match s.is_char_boundary(end) {
+            true => end,
+            false => {
+                let mut e = end;
+                while e > start && !s.is_char_boundary(e) {
+                    e -= 1;
+                }
+                e
+            }
+        };
+        chunks.push(&s[start..end]);
+        start = end;
+    }
+    chunks
 }
 
 #[cfg(test)]
@@ -866,13 +867,7 @@ mod tests {
         let mut t = ChatSseToResponsesTranslator::new(None);
         let mut all_events = Vec::new();
 
-        all_events.extend(t.feed(&make_tool_call_chunk(
-            "chat-1",
-            0,
-            "call_1",
-            "get_weather",
-            "",
-        )));
+        all_events.extend(t.feed(&make_tool_call_chunk("chat-1", 0, "call_1", "get_weather", "")));
         all_events.extend(t.feed(&make_tool_call_chunk("chat-1", 0, "", "", r#"{"city""#)));
         all_events.extend(t.feed(&make_tool_call_chunk("chat-1", 0, "", "", r#":"Paris"}"#)));
         all_events.extend(t.feed(&make_finish_chunk("chat-1")));
@@ -925,7 +920,7 @@ mod tests {
         let completed = completed.unwrap();
         let resp = completed.get("response").unwrap();
         assert_eq!(resp.get("status").unwrap().as_str(), Some("completed"));
-        assert!(resp.get("output").unwrap().as_array().unwrap().len() > 0);
+        assert!(!resp.get("output").unwrap().as_array().unwrap().is_empty());
     }
 
     #[test]
@@ -990,14 +985,9 @@ mod tests {
         assert!(types.contains(&"response.output_text.done".to_string()));
 
         // Reasoning output_item.done comes before text output_item.done
-        let reasoning_done_pos = types
-            .iter()
-            .position(|t| t == "response.reasoning_summary_text.done")
-            .unwrap();
-        let text_done_pos = types
-            .iter()
-            .position(|t| t == "response.output_text.done")
-            .unwrap();
+        let reasoning_done_pos =
+            types.iter().position(|t| t == "response.reasoning_summary_text.done").unwrap();
+        let text_done_pos = types.iter().position(|t| t == "response.output_text.done").unwrap();
         assert!(reasoning_done_pos < text_done_pos);
     }
 
@@ -1035,10 +1025,7 @@ mod tests {
         let events = t.feed(&make_finish_chunk_with_reason("chat-1", "length"));
 
         let completed = find_completed(&events);
-        assert_eq!(
-            completed["response"]["status"].as_str(),
-            Some("incomplete")
-        );
+        assert_eq!(completed["response"]["status"].as_str(), Some("incomplete"));
     }
 
     #[test]
@@ -1048,10 +1035,7 @@ mod tests {
         let events = t.feed(&make_finish_chunk_with_reason("chat-1", "stop"));
 
         let completed = find_completed(&events);
-        assert_eq!(
-            completed["response"]["status"].as_str(),
-            Some("completed")
-        );
+        assert_eq!(completed["response"]["status"].as_str(), Some("completed"));
     }
 
     // --- Task 5: Annotations tests ---
@@ -1095,11 +1079,14 @@ mod tests {
         all_events.extend(t.feed(&make_finish_chunk("chat-1")));
 
         // Check annotation.added event
-        let annot_event = all_events.iter().find_map(|e| {
-            let data = e.strip_prefix("data: ")?;
-            let v: serde_json::Value = serde_json::from_str(data).ok()?;
-            (v.get("type")?.as_str()? == "response.output_text.annotation.added").then_some(v)
-        }).unwrap();
+        let annot_event = all_events
+            .iter()
+            .find_map(|e| {
+                let data = e.strip_prefix("data: ")?;
+                let v: serde_json::Value = serde_json::from_str(data).ok()?;
+                (v.get("type")?.as_str()? == "response.output_text.annotation.added").then_some(v)
+            })
+            .unwrap();
 
         let annot = &annot_event["annotation"];
         assert_eq!(annot["type"].as_str(), Some("url_citation"));
@@ -1141,10 +1128,7 @@ mod tests {
         let events = t.feed(&make_text_chunk("chat-1", "Hi"));
 
         let created = find_event_by_type(&events, "response.created");
-        assert_eq!(
-            created["response"]["instructions"].as_str(),
-            Some("Be helpful")
-        );
+        assert_eq!(created["response"]["instructions"].as_str(), Some("Be helpful"));
         assert_eq!(created["response"]["temperature"].as_f64(), Some(0.7));
     }
 
@@ -1203,30 +1187,4 @@ mod tests {
         assert_eq!(split_into_chunks("abc", 5), vec!["abc"]);
         assert_eq!(split_into_chunks("", 5), Vec::<&str>::new());
     }
-}
-
-/// Split a string into chunks of approximately `chunk_size` characters.
-fn split_into_chunks(s: &str, chunk_size: usize) -> Vec<&str> {
-    if chunk_size == 0 || s.is_empty() {
-        return vec![];
-    }
-    let mut chunks = Vec::new();
-    let mut start = 0;
-    while start < s.len() {
-        let end = std::cmp::min(start + chunk_size, s.len());
-        // Ensure we don't split in the middle of a multi-byte char
-        let end = match s.is_char_boundary(end) {
-            true => end,
-            false => {
-                let mut e = end;
-                while e > start && !s.is_char_boundary(e) {
-                    e -= 1;
-                }
-                e
-            }
-        };
-        chunks.push(&s[start..end]);
-        start = end;
-    }
-    chunks
 }

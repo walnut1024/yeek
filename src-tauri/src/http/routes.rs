@@ -50,21 +50,27 @@ pub fn build_router(state: HttpRuntimeState) -> Router {
         .route("/marketplaces/{name}", delete(remove_marketplace))
         .route("/marketplaces/{name}/plugins", get(list_marketplace_plugins))
         .route("/marketplaces/install-plugin", post(install_marketplace_plugin))
+        // Proxy
+        .route("/proxy/status", get(proxy_status))
+        .route("/proxy/start", post(proxy_start))
+        .route("/proxy/stop", post(proxy_stop))
+        .route("/proxy/restart", post(proxy_restart))
+        .route("/proxy/config", get(proxy_get_config).put(proxy_update_config))
+        .route("/proxy/metrics", get(proxy_metrics))
+        .route("/proxy/logs", get(proxy_logs))
         // SSE
         .route("/events", get(sse_handler))
         .with_state(state);
 
-    Router::new()
-        .nest("/api", api)
-        .layer(cors_layer())
+    Router::new().nest("/api", api).layer(cors_layer())
 }
 
 fn cors_layer() -> CorsLayer {
     let origins = vec![
-        "http://localhost:1420".parse().unwrap(),  // Vite dev
-        "http://localhost:17321".parse().unwrap(), // self
-        "tauri://localhost".parse().unwrap(),       // Tauri
-        "yeek://localhost".parse().unwrap(),        // Electron production
+        "http://localhost:1420".parse().expect("invalid Vite dev URL"), // Vite dev
+        "http://localhost:17321".parse().expect("invalid self URL"),    // self
+        "tauri://localhost".parse().unwrap(),                           // Tauri
+        "yeek://localhost".parse().unwrap(),                            // Electron production
     ];
     CorsLayer::new()
         .allow_origin(AllowOrigin::list(origins))
@@ -79,33 +85,27 @@ fn cors_layer() -> CorsLayer {
 async fn system_status(
     State(state): State<HttpRuntimeState>,
 ) -> Result<Json<SystemStatusPayload>, AppError> {
-    let result = tokio::task::spawn_blocking(move || {
-        do_system_status(&state.app_state)
-    })
-    .await
-    .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
+    let result = tokio::task::spawn_blocking(move || do_system_status(&state.app_state))
+        .await
+        .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
     Ok(Json(result))
 }
 
 async fn rescan_sources(
     State(state): State<HttpRuntimeState>,
 ) -> Result<Json<ActionResult>, AppError> {
-    let result = tokio::task::spawn_blocking(move || {
-        do_rescan_sources(&state.app_state)
-    })
-    .await
-    .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
+    let result = tokio::task::spawn_blocking(move || do_rescan_sources(&state.app_state))
+        .await
+        .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
     Ok(Json(result))
 }
 
 async fn release_and_resync(
     State(state): State<HttpRuntimeState>,
 ) -> Result<Json<ActionResult>, AppError> {
-    let result = tokio::task::spawn_blocking(move || {
-        do_release_and_resync(&state.app_state)
-    })
-    .await
-    .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
+    let result = tokio::task::spawn_blocking(move || do_release_and_resync(&state.app_state))
+        .await
+        .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
     Ok(Json(result))
 }
 
@@ -113,11 +113,9 @@ async fn action_log(
     State(state): State<HttpRuntimeState>,
     Query(query): Query<ActionLogQuery>,
 ) -> Result<Json<ActionLogResponse>, AppError> {
-    let result = tokio::task::spawn_blocking(move || {
-        do_action_log(&state.app_state, query.limit)
-    })
-    .await
-    .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
+    let result = tokio::task::spawn_blocking(move || do_action_log(&state.app_state, query.limit))
+        .await
+        .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
     Ok(Json(result))
 }
 
@@ -130,11 +128,10 @@ async fn browse_sessions(
     Query(query): Query<BrowseQuery>,
 ) -> Result<Json<SessionListResponse>, AppError> {
     let result = tokio::task::spawn_blocking(move || {
-        do_browse_sessions(&state.app_state, BrowseRequest {
-            sort: query.sort,
-            limit: query.limit,
-            offset: query.offset,
-        })
+        do_browse_sessions(
+            &state.app_state,
+            BrowseRequest { sort: query.sort, limit: query.limit, offset: query.offset },
+        )
     })
     .await
     .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
@@ -146,11 +143,10 @@ async fn search_sessions(
     Query(query): Query<SearchQuery>,
 ) -> Result<Json<SessionListResponse>, AppError> {
     let result = tokio::task::spawn_blocking(move || {
-        do_search_sessions(&state.app_state, SearchRequest {
-            query: query.q,
-            limit: query.limit,
-            offset: query.offset,
-        })
+        do_search_sessions(
+            &state.app_state,
+            SearchRequest { query: query.q, limit: query.limit, offset: query.offset },
+        )
     })
     .await
     .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
@@ -161,11 +157,9 @@ async fn session_preview(
     State(state): State<HttpRuntimeState>,
     Path(id): Path<String>,
 ) -> Result<Json<SessionPreviewPayload>, AppError> {
-    let result = tokio::task::spawn_blocking(move || {
-        do_session_preview(&state.app_state, id)
-    })
-    .await
-    .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
+    let result = tokio::task::spawn_blocking(move || do_session_preview(&state.app_state, id))
+        .await
+        .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
     Ok(Json(result))
 }
 
@@ -173,11 +167,9 @@ async fn session_detail(
     State(state): State<HttpRuntimeState>,
     Path(id): Path<String>,
 ) -> Result<Json<SessionDetailPayload>, AppError> {
-    let result = tokio::task::spawn_blocking(move || {
-        do_session_detail(&state.app_state, id)
-    })
-    .await
-    .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
+    let result = tokio::task::spawn_blocking(move || do_session_detail(&state.app_state, id))
+        .await
+        .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
     Ok(Json(result))
 }
 
@@ -185,11 +177,9 @@ async fn session_transcript(
     State(state): State<HttpRuntimeState>,
     Path(id): Path<String>,
 ) -> Result<Json<crate::store::messages::TranscriptPayload>, AppError> {
-    let result = tokio::task::spawn_blocking(move || {
-        do_session_transcript(&state.app_state, id)
-    })
-    .await
-    .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
+    let result = tokio::task::spawn_blocking(move || do_session_transcript(&state.app_state, id))
+        .await
+        .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
     Ok(Json(result))
 }
 
@@ -197,11 +187,9 @@ async fn delete_plan(
     State(state): State<HttpRuntimeState>,
     Path(id): Path<String>,
 ) -> Result<Json<crate::service::delete_planner::DeletePlan>, AppError> {
-    let result = tokio::task::spawn_blocking(move || {
-        do_delete_plan(&state.app_state, id)
-    })
-    .await
-    .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
+    let result = tokio::task::spawn_blocking(move || do_delete_plan(&state.app_state, id))
+        .await
+        .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
     Ok(Json(result))
 }
 
@@ -209,11 +197,9 @@ async fn destructive_delete(
     State(state): State<HttpRuntimeState>,
     Path(id): Path<String>,
 ) -> Result<Json<crate::service::delete_planner::DestructiveDeleteResult>, AppError> {
-    let result = tokio::task::spawn_blocking(move || {
-        do_destructive_delete(&state.app_state, id)
-    })
-    .await
-    .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
+    let result = tokio::task::spawn_blocking(move || do_destructive_delete(&state.app_state, id))
+        .await
+        .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
     Ok(Json(result))
 }
 
@@ -221,11 +207,10 @@ async fn soft_delete(
     State(state): State<HttpRuntimeState>,
     Json(body): Json<SoftDeleteRequest>,
 ) -> Result<Json<ActionResult>, AppError> {
-    let result = tokio::task::spawn_blocking(move || {
-        do_soft_delete_sessions(&state.app_state, body.ids)
-    })
-    .await
-    .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
+    let result =
+        tokio::task::spawn_blocking(move || do_soft_delete_sessions(&state.app_state, body.ids))
+            .await
+            .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
     Ok(Json(result))
 }
 
@@ -253,14 +238,10 @@ async fn subagent_messages(
     Ok(Json(result))
 }
 
-async fn resume_session(
-    Json(body): Json<ResumeRequest>,
-) -> Result<Json<()>, AppError> {
-    tokio::task::spawn_blocking(move || {
-        do_resume_session(body.session_id, body.agent, body.cwd)
-    })
-    .await
-    .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
+async fn resume_session(Json(body): Json<ResumeRequest>) -> Result<Json<()>, AppError> {
+    tokio::task::spawn_blocking(move || do_resume_session(body.session_id, body.agent, body.cwd, body.terminal))
+        .await
+        .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
     Ok(Json(()))
 }
 
@@ -272,55 +253,42 @@ async fn list_plugins(
     State(state): State<HttpRuntimeState>,
     Query(query): Query<PluginScopeQuery>,
 ) -> Result<Json<crate::domain::plugin::SkillsOverview>, AppError> {
-    let result = tokio::task::spawn_blocking(move || {
-        do_list_plugins(&state.app_state, query.scope)
-    })
-    .await
-    .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
+    let result =
+        tokio::task::spawn_blocking(move || do_list_plugins(&state.app_state, query.scope))
+            .await
+            .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
     Ok(Json(result))
 }
 
-async fn toggle_plugin(
-    Json(body): Json<PluginActionRequest>,
-) -> Result<Json<()>, AppError> {
-    tokio::task::spawn_blocking(move || {
-        do_toggle_plugin(body.key)
-    })
-    .await
-    .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
+async fn toggle_plugin(Json(body): Json<PluginActionRequest>) -> Result<Json<()>, AppError> {
+    tokio::task::spawn_blocking(move || do_toggle_plugin(body.key))
+        .await
+        .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
     Ok(Json(()))
 }
 
-async fn uninstall_plugin(
-    Json(body): Json<PluginActionRequest>,
-) -> Result<Json<()>, AppError> {
-    tokio::task::spawn_blocking(move || {
-        do_uninstall_plugin(body.key)
-    })
-    .await
-    .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
+async fn uninstall_plugin(Json(body): Json<PluginActionRequest>) -> Result<Json<()>, AppError> {
+    tokio::task::spawn_blocking(move || do_uninstall_plugin(body.key))
+        .await
+        .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
     Ok(Json(()))
 }
 
 async fn clean_plugin(
     Json(body): Json<PluginActionRequest>,
 ) -> Result<Json<crate::domain::plugin::FixPluginResult>, AppError> {
-    let result = tokio::task::spawn_blocking(move || {
-        do_clean_plugin(body.key)
-    })
-    .await
-    .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
+    let result = tokio::task::spawn_blocking(move || do_clean_plugin(body.key))
+        .await
+        .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
     Ok(Json(result))
 }
 
 async fn reinstall_plugin(
     Json(body): Json<PluginActionRequest>,
 ) -> Result<Json<crate::domain::plugin::FixPluginResult>, AppError> {
-    let result = tokio::task::spawn_blocking(move || {
-        do_reinstall_plugin(body.key)
-    })
-    .await
-    .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
+    let result = tokio::task::spawn_blocking(move || do_reinstall_plugin(body.key))
+        .await
+        .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
     Ok(Json(result))
 }
 
@@ -328,35 +296,25 @@ async fn reinstall_plugin(
 // Marketplace handlers
 // ---------------------------------------------------------------------------
 
-async fn list_marketplaces(
-) -> Result<Json<crate::domain::plugin::MarketplaceListResult>, AppError> {
-    let result = tokio::task::spawn_blocking(move || {
-        do_list_marketplaces()
-    })
-    .await
-    .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
+async fn list_marketplaces() -> Result<Json<crate::domain::plugin::MarketplaceListResult>, AppError>
+{
+    let result = tokio::task::spawn_blocking(move || do_list_marketplaces())
+        .await
+        .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
     Ok(Json(result))
 }
 
-async fn add_marketplace(
-    Json(body): Json<AddMarketplaceRequest>,
-) -> Result<Json<()>, AppError> {
-    tokio::task::spawn_blocking(move || {
-        do_add_marketplace(body.name, body.repo)
-    })
-    .await
-    .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
+async fn add_marketplace(Json(body): Json<AddMarketplaceRequest>) -> Result<Json<()>, AppError> {
+    tokio::task::spawn_blocking(move || do_add_marketplace(body.name, body.repo))
+        .await
+        .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
     Ok(Json(()))
 }
 
-async fn update_marketplace(
-    Path(name): Path<String>,
-) -> Result<Json<()>, AppError> {
-    tokio::task::spawn_blocking(move || {
-        do_update_marketplace(name)
-    })
-    .await
-    .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
+async fn update_marketplace(Path(name): Path<String>) -> Result<Json<()>, AppError> {
+    tokio::task::spawn_blocking(move || do_update_marketplace(name))
+        .await
+        .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
     Ok(Json(()))
 }
 
@@ -375,11 +333,9 @@ async fn remove_marketplace(
 async fn list_marketplace_plugins(
     Path(name): Path<String>,
 ) -> Result<Json<Vec<crate::domain::plugin::MarketplacePlugin>>, AppError> {
-    let result = tokio::task::spawn_blocking(move || {
-        do_list_marketplace_plugins(name)
-    })
-    .await
-    .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
+    let result = tokio::task::spawn_blocking(move || do_list_marketplace_plugins(name))
+        .await
+        .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
     Ok(Json(result))
 }
 
@@ -402,13 +358,77 @@ async fn sse_handler(
     State(state): State<HttpRuntimeState>,
 ) -> Sse<impl tokio_stream::Stream<Item = Result<Event, Infallible>>> {
     let rx = state.sse.subscribe();
-    let stream = tokio_stream::wrappers::BroadcastStream::new(rx).filter_map(|msg| {
-        match msg {
-            Ok(data) => Some(Ok(Event::default().data(data))),
-            Err(_) => None,
-        }
+    let stream = tokio_stream::wrappers::BroadcastStream::new(rx).filter_map(|msg| match msg {
+        Ok(data) => Some(Ok(Event::default().data(data))),
+        Err(_) => None,
     });
-    Sse::new(stream).keep_alive(
-        KeepAlive::new().interval(Duration::from_secs(30)),
-    )
+    Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(30)))
+}
+
+// ---------------------------------------------------------------------------
+// Proxy
+// ---------------------------------------------------------------------------
+
+use crate::app::proxy::{ProxyConfig, ProxyMetrics, ProxyStatus};
+
+async fn proxy_status(
+    State(state): State<HttpRuntimeState>,
+) -> Result<Json<ProxyStatus>, AppError> {
+    let result =
+        tokio::task::spawn_blocking(move || do_proxy_status(&state.app_state)).await
+            .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
+    Ok(Json(result))
+}
+
+async fn proxy_start(State(state): State<HttpRuntimeState>) -> Result<(), AppError> {
+    tokio::task::spawn_blocking(move || do_start_proxy(&state.app_state))
+        .await
+        .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))
+}
+
+async fn proxy_stop(State(state): State<HttpRuntimeState>) -> Result<(), AppError> {
+    tokio::task::spawn_blocking(move || do_stop_proxy(&state.app_state))
+        .await
+        .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))
+}
+
+async fn proxy_restart(State(state): State<HttpRuntimeState>) -> Result<(), AppError> {
+    tokio::task::spawn_blocking(move || do_restart_proxy(&state.app_state))
+        .await
+        .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))
+}
+
+async fn proxy_get_config(
+    State(state): State<HttpRuntimeState>,
+) -> Result<Json<ProxyConfig>, AppError> {
+    tokio::task::spawn_blocking(move || do_get_proxy_config(&state.app_state).map(Json))
+        .await
+        .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))
+}
+
+async fn proxy_update_config(
+    State(state): State<HttpRuntimeState>,
+    Json(config): Json<ProxyConfig>,
+) -> Result<(), AppError> {
+    tokio::task::spawn_blocking(move || do_update_proxy_config(&state.app_state, config))
+        .await
+        .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))
+}
+
+async fn proxy_metrics(
+    State(state): State<HttpRuntimeState>,
+) -> Result<Json<ProxyMetrics>, AppError> {
+    tokio::task::spawn_blocking(move || do_get_proxy_metrics(&state.app_state).map(Json))
+        .await
+        .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))
+}
+
+async fn proxy_logs(
+    State(state): State<HttpRuntimeState>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+) -> Result<String, AppError> {
+    let lines: usize = params.get("lines").and_then(|v| v.parse().ok()).unwrap_or(50);
+    tokio::task::spawn_blocking(move || do_get_proxy_logs(&state.app_state, lines))
+        .await
+        .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))
 }

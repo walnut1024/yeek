@@ -1,5 +1,18 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
+function scrollDetailPane(edge: "top" | "bottom") {
+  const vps = document.querySelectorAll<HTMLElement>(
+    '[data-slot="scroll-area-viewport"]',
+  );
+  // Detail pane viewport is the last one in the DOM (after session list)
+  const vp = vps[vps.length - 1];
+  if (!vp) return;
+  vp.scrollTo({
+    top: edge === "top" ? 0 : vp.scrollHeight,
+    behavior: "smooth",
+  });
+}
+
 export function useKeyboardNavigation(
   flatSessionIds: string[],
   selectedId: string | null,
@@ -26,6 +39,8 @@ export function useKeyboardNavigation(
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") return;
 
+      const mod = e.metaKey || e.ctrlKey;
+
       switch (e.key) {
         case "?":
           setShowHelp((v) => !v);
@@ -34,13 +49,27 @@ export function useKeyboardNavigation(
           e.preventDefault();
           searchRef.current?.focus();
           break;
-        case "j":
         case "ArrowDown":
-          navigateList("down");
+          if (mod && selectedId) {
+            e.preventDefault();
+            scrollDetailPane("bottom");
+          } else {
+            navigateList("down");
+          }
+          break;
+        case "ArrowUp":
+          if (mod && selectedId) {
+            e.preventDefault();
+            scrollDetailPane("top");
+          } else {
+            navigateList("up");
+          }
+          break;
+        case "j":
+          if (!mod) navigateList("down");
           break;
         case "k":
-        case "ArrowUp":
-          navigateList("up");
+          if (!mod) navigateList("up");
           break;
         case "Escape":
           if (showHelp) setShowHelp(false);
@@ -51,7 +80,7 @@ export function useKeyboardNavigation(
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [navigateList, showHelp, onSelect]);
+  }, [navigateList, showHelp, onSelect, selectedId]);
 
   return { showHelp, setShowHelp, searchRef };
 }

@@ -1,3 +1,5 @@
+//! HTTP client with JSON and SSE streaming support.
+
 use reqwest::Client;
 use std::time::Duration;
 use thiserror::Error;
@@ -26,10 +28,7 @@ pub struct AuthHeaders {
 
 impl AuthHeaders {
     pub fn bearer(key: Option<&str>) -> Self {
-        Self {
-            bearer_key: key.map(|k| k.to_string()),
-            extra: vec![],
-        }
+        Self { bearer_key: key.map(|k| k.to_string()), extra: vec![] }
     }
 
     pub fn anthropic(api_key: Option<&str>) -> Self {
@@ -37,10 +36,7 @@ impl AuthHeaders {
         if let Some(key) = api_key {
             extra.push(("x-api-key".to_string(), key.to_string()));
         }
-        Self {
-            bearer_key: None,
-            extra,
-        }
+        Self { bearer_key: None, extra }
     }
 }
 
@@ -52,10 +48,11 @@ impl Default for HttpClient {
 
 impl HttpClient {
     pub fn new() -> Self {
-        let inner = Client::builder()
-            .timeout(Duration::from_secs(120))
-            .build()
-            .expect("Failed to create HTTP client");
+        let inner =
+            Client::builder().timeout(Duration::from_secs(120)).build().unwrap_or_else(|e| {
+                tracing::error!("Failed to create HTTP client: {}", e);
+                reqwest::Client::new()
+            });
         Self { inner }
     }
 
@@ -66,8 +63,7 @@ impl HttpClient {
         api_key: Option<&str>,
         body: &T,
     ) -> Result<R, ProxyError> {
-        self.post_json_with_headers(url, &AuthHeaders::bearer(api_key), body)
-            .await
+        self.post_json_with_headers(url, &AuthHeaders::bearer(api_key), body).await
     }
 
     /// POST JSON with custom headers, get JSON back (non-streaming)
@@ -93,10 +89,7 @@ impl HttpClient {
             Ok(resp.json().await?)
         } else {
             let body = resp.text().await.unwrap_or_default();
-            Err(ProxyError::ProviderError {
-                status: status.as_u16(),
-                message: body,
-            })
+            Err(ProxyError::ProviderError { status: status.as_u16(), message: body })
         }
     }
 
@@ -107,8 +100,7 @@ impl HttpClient {
         api_key: Option<&str>,
         body: &T,
     ) -> Result<tokio::sync::mpsc::Receiver<String>, ProxyError> {
-        self.post_streaming_with_headers(url, &AuthHeaders::bearer(api_key), body)
-            .await
+        self.post_streaming_with_headers(url, &AuthHeaders::bearer(api_key), body).await
     }
 
     /// POST JSON with custom headers, get SSE stream back
@@ -120,11 +112,7 @@ impl HttpClient {
     ) -> Result<tokio::sync::mpsc::Receiver<String>, ProxyError> {
         use tokio::sync::mpsc;
 
-        let mut req = self
-            .inner
-            .post(url)
-            .json(body)
-            .header("Accept", "text/event-stream");
+        let mut req = self.inner.post(url).json(body).header("Accept", "text/event-stream");
 
         if let Some(ref key) = auth.bearer_key {
             req = req.header("Authorization", format!("Bearer {}", key));
@@ -137,10 +125,7 @@ impl HttpClient {
         let status = resp.status();
         if !status.is_success() {
             let body = resp.text().await.unwrap_or_default();
-            return Err(ProxyError::ProviderError {
-                status: status.as_u16(),
-                message: body,
-            });
+            return Err(ProxyError::ProviderError { status: status.as_u16(), message: body });
         }
 
         let (tx, rx) = mpsc::channel(64);

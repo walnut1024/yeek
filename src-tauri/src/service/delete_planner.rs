@@ -20,7 +20,7 @@ fn validate_delete_path(path: &std::path::Path) -> Result<(), String> {
         Err(_) => {
             // File doesn't exist yet — validate the parent path
             return Ok(());
-        }
+        },
     };
 
     let allowed_prefix = dirs::home_dir()
@@ -28,14 +28,10 @@ fn validate_delete_path(path: &std::path::Path) -> Result<(), String> {
         .join(".claude")
         .join("projects");
 
-    let allowed_prefix = std::fs::canonicalize(&allowed_prefix)
-        .unwrap_or(allowed_prefix);
+    let allowed_prefix = std::fs::canonicalize(&allowed_prefix).unwrap_or(allowed_prefix);
 
     if !canonical.starts_with(&allowed_prefix) {
-        return Err(format!(
-            "Path is outside allowed directory: {}",
-            canonical.display()
-        ));
+        return Err(format!("Path is outside allowed directory: {}", canonical.display()));
     }
 
     Ok(())
@@ -57,7 +53,7 @@ pub struct SourceDeletePlan {
     pub reason: String,
 }
 
-pub fn resolve_delete_plan(
+pub(crate) fn resolve_delete_plan(
     conn: &rusqlite::Connection,
     session_id: &str,
 ) -> Result<DeletePlan, AppError> {
@@ -77,19 +73,19 @@ pub fn resolve_delete_plan(
                     // File missing — still allow deletion to clean up metadata
                     (true, "Source file no longer exists (metadata cleanup only)".to_string())
                 }
-            }
+            },
             DeletePolicy::NotAllowed => {
                 all_safe = false;
                 (false, "Delete not allowed for this source type".to_string())
-            }
+            },
             DeletePolicy::HideOnly => {
                 all_safe = false;
                 (false, "This source can only be hidden, not deleted".to_string())
-            }
+            },
             DeletePolicy::NeedsReview => {
                 all_safe = false;
                 (false, "Source requires manual review before deletion".to_string())
-            }
+            },
         };
 
         source_plans.push(SourceDeletePlan {
@@ -108,25 +104,17 @@ pub fn resolve_delete_plan(
         (false, "One or more sources cannot be safely deleted".to_string())
     };
 
-    Ok(DeletePlan {
-        session_id: session_id.to_string(),
-        sources: source_plans,
-        allowed,
-        reason,
-    })
+    Ok(DeletePlan { session_id: session_id.to_string(), sources: source_plans, allowed, reason })
 }
 
-pub fn execute_destructive_delete(
+pub(crate) fn execute_destructive_delete(
     conn: &rusqlite::Connection,
     session_id: &str,
 ) -> Result<DestructiveDeleteResult, AppError> {
     let plan = resolve_delete_plan(conn, session_id)?;
 
     if !plan.allowed {
-        return Err(AppError::DeleteNotSafe(format!(
-            "Delete blocked: {}",
-            plan.reason
-        )));
+        return Err(AppError::DeleteNotSafe(format!("Delete blocked: {}", plan.reason)));
     }
 
     let mut deleted_files = 0i64;
@@ -153,7 +141,7 @@ pub fn execute_destructive_delete(
                 Err(e) => {
                     failed_files += 1;
                     errors.push(format!("{}: {}", src_plan.target_path, e));
-                }
+                },
             }
         }
     }
@@ -179,12 +167,7 @@ pub fn execute_destructive_delete(
         )),
     )?;
 
-    Ok(DestructiveDeleteResult {
-        success: failed_files == 0,
-        deleted_files,
-        failed_files,
-        errors,
-    })
+    Ok(DestructiveDeleteResult { success: failed_files == 0, deleted_files, failed_files, errors })
 }
 
 #[derive(Debug, Serialize)]

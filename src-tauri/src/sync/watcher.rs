@@ -38,19 +38,41 @@ impl FileWatcher {
                     Err(_) => return,
                 };
 
-                // Only react to events on .jsonl files
-                let jsonl_paths: Vec<PathBuf> = event
-                    .paths
-                    .into_iter()
-                    .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("jsonl"))
-                    .collect();
+                // Collect all .jsonl paths from the event.
+                // On macOS, FSEvents may report directories (e.g. a parent dir
+                // was touched by an atomic write/rename). Scan directories and
+                // add contained .jsonl files so we never miss an update.
+                let mut jsonl_paths: Vec<PathBuf> = Vec::new();
+                for p in &event.paths {
+                    let ext = p.extension().and_then(|e| e.to_str());
+                    if ext == Some("jsonl") {
+                        jsonl_paths.push(p.clone());
+                    } else if p.is_dir() {
+                        // Directory changed — scan for .jsonl files inside
+                        if let Ok(entries) = std::fs::read_dir(p) {
+                            for entry in entries.flatten() {
+                                let ep = entry.path();
+                                if ep.extension().and_then(|e| e.to_str()) == Some("jsonl") {
+                                    jsonl_paths.push(ep);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                tracing::info!(
+                    "Watcher: {} event paths → {} jsonl files",
+                    event.paths.len(),
+                    jsonl_paths.len()
+                );
+
                 if jsonl_paths.is_empty() {
                     return;
                 }
 
                 // Accumulate paths
                 {
-                    let mut pending = pending_paths.lock().unwrap();
+                    let mut pending = pending_paths.lock().expect("mutex poisoned");
                     for p in jsonl_paths {
                         if !pending.contains(&p) {
                             pending.push(p);
@@ -78,7 +100,7 @@ impl FileWatcher {
 
                         // Drain pending paths
                         let paths: Vec<PathBuf> = {
-                            let mut pending = pp.lock().unwrap();
+                            let mut pending = pp.lock().expect("mutex poisoned");
                             std::mem::take(&mut *pending)
                         };
                         if paths.is_empty() {
@@ -88,7 +110,7 @@ impl FileWatcher {
                         // Try to acquire scan guard
                         if !sg.try_start() {
                             // Another scan is running — put paths back for next cycle
-                            let mut pending = pp.lock().unwrap();
+                            let mut pending = pp.lock().expect("mutex poisoned");
                             for p in paths {
                                 if !pending.contains(&p) {
                                     pending.push(p);
@@ -101,7 +123,7 @@ impl FileWatcher {
                         sg.finish();
 
                         if let Err(e) = result {
-                            log::error!("Watcher incremental scan failed: {}", e);
+                            tracing::error!("Watcher incremental scan failed: {}", e);
                         }
                     })
                     .ok();
@@ -114,7 +136,7 @@ impl FileWatcher {
             .watch(&watch_dir, RecursiveMode::Recursive)
             .map_err(|e| AppError::Internal(format!("Failed to start watching: {}", e)))?;
 
-        log::info!("File watcher started on {}", watch_dir.display());
+        tracing::info!("File watcher started on {}", watch_dir.display());
 
         Ok(Self { _watcher: watcher })
     }
@@ -122,11 +144,9 @@ impl FileWatcher {
     /// Watch plugin config files for changes.
     /// Monitors `~/.claude/plugins/installed_plugins.json` and `~/.claude/settings.json`.
     /// Emits `"plugin-config-changed"` event with 500ms debounce.
-    pub fn start_plugin_config_watcher(
-        emitter: Arc<dyn EventEmitter>,
-    ) -> Result<Self, AppError> {
-        let home = dirs::home_dir()
-            .ok_or_else(|| AppError::Internal("No home directory".into()))?;
+    pub fn start_plugin_config_watcher(emitter: Arc<dyn EventEmitter>) -> Result<Self, AppError> {
+        let home =
+            dirs::home_dir().ok_or_else(|| AppError::Internal("No home directory".into()))?;
         let claude_dir = home.join(".claude");
         let plugins_dir = claude_dir.join("plugins");
 
@@ -142,9 +162,8 @@ impl FileWatcher {
                     Err(_) => return,
                 };
 
-                let relevant = event.paths.iter().any(|p| {
-                    p == &installed_plugins || p == &settings_json
-                });
+                let relevant =
+                    event.paths.iter().any(|p| p == &installed_plugins || p == &settings_json);
                 if !relevant {
                     return;
                 }
@@ -164,13 +183,15 @@ impl FileWatcher {
                         da.store(false, Ordering::Relaxed);
 
                         em.emit_plugin_config_changed();
-                        log::info!("Plugin config changed, emitted event");
+                        tracing::info!("Plugin config changed, emitted event");
                     })
                     .ok();
             },
             Config::default().with_poll_interval(Duration::from_secs(2)),
         )
-        .map_err(|e| AppError::Internal(format!("Failed to create plugin config watcher: {}", e)))?;
+        .map_err(|e| {
+            AppError::Internal(format!("Failed to create plugin config watcher: {}", e))
+        })?;
 
         // Watch ~/.claude/ (non-recursive) for settings.json
         watcher
@@ -178,11 +199,11 @@ impl FileWatcher {
             .map_err(|e| AppError::Internal(format!("Failed to watch ~/.claude/: {}", e)))?;
 
         // Watch ~/.claude/plugins/ (non-recursive) for installed_plugins.json
-        watcher
-            .watch(&plugins_dir, RecursiveMode::NonRecursive)
-            .map_err(|e| AppError::Internal(format!("Failed to watch ~/.claude/plugins/: {}", e)))?;
+        watcher.watch(&plugins_dir, RecursiveMode::NonRecursive).map_err(|e| {
+            AppError::Internal(format!("Failed to watch ~/.claude/plugins/: {}", e))
+        })?;
 
-        log::info!("Plugin config watcher started");
+        tracing::info!("Plugin config watcher started");
 
         Ok(Self { _watcher: watcher })
     }
@@ -193,8 +214,7 @@ fn run_incremental_scan(
     changed_paths: &[PathBuf],
     emitter: &dyn EventEmitter,
 ) -> Result<(), AppError> {
-    let conn = rusqlite::Connection::open(db_path)
-        .map_err(|e| AppError::DbError(e.to_string()))?;
+    let conn = rusqlite::Connection::open(db_path).map_err(|e| AppError::DbError(e.to_string()))?;
     schema::init_schema(&conn)?;
 
     // Build SourceDescriptors from changed paths, skip files over 10MB
@@ -204,7 +224,11 @@ fn run_incremental_scan(
         .filter_map(|p| {
             let meta = std::fs::metadata(p).ok()?;
             if meta.len() > MAX_WATCHER_FILE_SIZE {
-                log::info!("Watcher: skipping large file ({}MB): {}", meta.len() / 1024 / 1024, p.display());
+                tracing::info!(
+                    "Watcher: skipping large file ({}MB): {}",
+                    meta.len() / 1024 / 1024,
+                    p.display()
+                );
                 return None;
             }
             source_descriptor_from_path(p)
@@ -219,23 +243,19 @@ fn run_incremental_scan(
     // The watcher should only index truly new or changed sources.
     let existing: std::collections::HashSet<String> = {
         let mut stmt = conn.prepare("SELECT path FROM sources WHERE status = 'active'")?;
-        let rows: Vec<String> = stmt.query_map([], |row| row.get::<_, String>(0))?
-            .filter_map(|r| r.ok())
-            .collect();
+        let rows: Vec<String> =
+            stmt.query_map([], |row| row.get::<_, String>(0))?.filter_map(|r| r.ok()).collect();
         rows.into_iter().collect()
     };
 
-    let new_sources: Vec<_> = sources
-        .into_iter()
-        .filter(|s| !existing.contains(&s.path))
-        .collect();
+    let new_sources: Vec<_> = sources.into_iter().filter(|s| !existing.contains(&s.path)).collect();
 
     if new_sources.is_empty() {
         return Ok(());
     }
 
     let total = new_sources.len() as i64;
-    log::info!("Watcher: indexing {} new sources", total);
+    tracing::info!("Watcher: indexing {} new sources", total);
 
     let result = claudecode::index_sources(&conn, &new_sources, |_| {})?;
 

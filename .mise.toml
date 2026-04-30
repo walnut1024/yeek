@@ -1,0 +1,39 @@
+[tools]
+node = "25"
+rust = "1.94.1"
+
+[tasks.build]
+run = "npm run build"
+description = "Frontend typecheck + build"
+
+[tasks.dev]
+run = "cargo tauri dev"
+description = "Start Tauri dev server"
+
+[tasks.check]
+run = "cargo check"
+description = "Fast Rust typecheck"
+
+[tasks.lint]
+run = "npm run lint"
+description = "ESLint check"
+[tasks.audit]
+run = "cargo audit"
+description = "Dependency vulnerability scan"
+
+[tasks."xtask:ci"]
+run = "cargo xtask ci"
+description = "Full CI pipeline (fmt + clippy + test)"
+
+[tasks."xtask:fmt"]
+run = "cargo xtask fmt"
+description = "Check code formatting"
+
+[tasks."xtask:lint"]
+run = "cargo xtask lint"
+description = "Run clippy with deny-warnings"
+
+[tasks."xtask:test"]
+run = "cargo xtask test"
+description = "Run all tests"
+

@@ -9,9 +9,7 @@ pub fn responses_to_chat(req: &ResponsesRequest) -> ChatCompletionRequest {
     // instructions -> system message (if present)
     if let Some(ref instructions) = req.instructions {
         if !instructions.is_empty() {
-            messages.push(ChatMessage::System {
-                content: instructions.clone(),
-            });
+            messages.push(ChatMessage::System { content: instructions.clone() });
         }
     }
 
@@ -23,7 +21,11 @@ pub fn responses_to_chat(req: &ResponsesRequest) -> ChatCompletionRequest {
     for (i, msg) in messages.iter().enumerate() {
         if let ChatMessage::Assistant { reasoning_content, .. } = msg {
             let has_rc = reasoning_content.is_some();
-            tracing::info!("Chat msg[{}] assistant reasoning_content: {}", i, if has_rc { "SOME" } else { "NONE" });
+            tracing::info!(
+                "Chat msg[{}] assistant reasoning_content: {}",
+                i,
+                if has_rc { "SOME" } else { "NONE" }
+            );
         }
     }
 
@@ -50,11 +52,7 @@ pub fn responses_to_chat(req: &ResponsesRequest) -> ChatCompletionRequest {
     // `reasoning_content` field (even empty). Codex TUI may not round-trip the
     // reasoning items/text blocks, so backfill missing reasoning_content with "".
     for msg in &mut messages {
-        if let ChatMessage::Assistant {
-            ref mut reasoning_content,
-            ..
-        } = msg
-        {
+        if let ChatMessage::Assistant { ref mut reasoning_content, .. } = msg {
             if reasoning_content.is_none() {
                 *reasoning_content = Some(String::new());
             }
@@ -76,13 +74,7 @@ pub fn responses_to_chat(req: &ResponsesRequest) -> ChatCompletionRequest {
         temperature: req.temperature,
         top_p: req.top_p,
         tool_choice,
-        stream_options: if req.stream {
-            Some(StreamOptions {
-                include_usage: true,
-            })
-        } else {
-            None
-        },
+        stream_options: if req.stream { Some(StreamOptions { include_usage: true }) } else { None },
         response_format,
         reasoning_effort,
         parallel_tool_calls: req.parallel_tool_calls,
@@ -103,25 +95,16 @@ fn transform_content_blocks(blocks: &[serde_json::Value]) -> ChatMessageContent 
         match block_type {
             "input_text" => {
                 if let Some(text) = block.get("text").and_then(|v| v.as_str()) {
-                    parts.push(ContentPart::Text {
-                        text: text.to_string(),
-                    });
+                    parts.push(ContentPart::Text { text: text.to_string() });
                 }
             }
             "input_image" => {
                 has_non_text = true;
                 let url = block
                     .get("image_url")
-                    .map(|v| {
-                        v.as_str()
-                            .map(|s| s.to_string())
-                            .unwrap_or_else(|| v.to_string())
-                    })
+                    .map(|v| v.as_str().map(|s| s.to_string()).unwrap_or_else(|| v.to_string()))
                     .unwrap_or_default();
-                let detail = block
-                    .get("detail")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("auto");
+                let detail = block.get("detail").and_then(|v| v.as_str()).unwrap_or("auto");
                 parts.push(ContentPart::Image {
                     image_url: ImageUrl {
                         url: if detail != "auto" && !url.contains("?detail=") {
@@ -143,16 +126,12 @@ fn transform_content_blocks(blocks: &[serde_json::Value]) -> ChatMessageContent 
                 if let Some(data) = file_data {
                     file_obj.insert("file_data".to_string(), data);
                 }
-                parts.push(ContentPart::File {
-                    file: serde_json::Value::Object(file_obj),
-                });
+                parts.push(ContentPart::File { file: serde_json::Value::Object(file_obj) });
             }
             _ => {
                 // Unknown type with text field -> text content part
                 if let Some(text) = block.get("text").and_then(|v| v.as_str()) {
-                    parts.push(ContentPart::Text {
-                        text: text.to_string(),
-                    });
+                    parts.push(ContentPart::Text { text: text.to_string() });
                 }
             }
         }
@@ -179,9 +158,7 @@ fn transform_input(input: &serde_json::Value) -> Vec<ChatMessage> {
 
     match input {
         serde_json::Value::String(text) => {
-            messages.push(ChatMessage::User {
-                content: ChatMessageContent::String(text.clone()),
-            });
+            messages.push(ChatMessage::User { content: ChatMessageContent::String(text.clone()) });
         }
         serde_json::Value::Array(items) => {
             let mut pending_tool_calls: Vec<ChatToolCall> = Vec::new();
@@ -193,34 +170,44 @@ fn transform_input(input: &serde_json::Value) -> Vec<ChatMessage> {
                 let item_type = item.get("type").and_then(|v| v.as_str()).unwrap_or("");
                 match item_type {
                     "message" => {
-                        flush_tool_calls(&mut pending_tool_calls, &mut messages, &mut pending_reasoning);
+                        flush_tool_calls(
+                            &mut pending_tool_calls,
+                            &mut messages,
+                            &mut pending_reasoning,
+                        );
                         let role = item.get("role").and_then(|v| v.as_str()).unwrap_or("");
 
                         // Extract reasoning_text from content blocks before transforming
-                        let content_blocks = item
-                            .get("content")
-                            .and_then(|v| v.as_array());
-                        let (reasoning_text_from_content, non_reasoning_blocks): (Option<String>, Vec<&serde_json::Value>) =
-                            match content_blocks {
-                                Some(blocks) => {
-                                    let mut reasoning = None;
-                                    let mut others = Vec::new();
-                                    for block in blocks {
-                                        if block.get("type").and_then(|v| v.as_str()) == Some("reasoning_text") {
-                                            if let Some(text) = block.get("text").and_then(|v| v.as_str()) {
-                                                reasoning = Some(text.to_string());
-                                            }
-                                        } else {
-                                            others.push(block);
+                        let content_blocks = item.get("content").and_then(|v| v.as_array());
+                        let (reasoning_text_from_content, non_reasoning_blocks): (
+                            Option<String>,
+                            Vec<&serde_json::Value>,
+                        ) = match content_blocks {
+                            Some(blocks) => {
+                                let mut reasoning = None;
+                                let mut others = Vec::new();
+                                for block in blocks {
+                                    if block.get("type").and_then(|v| v.as_str())
+                                        == Some("reasoning_text")
+                                    {
+                                        if let Some(text) =
+                                            block.get("text").and_then(|v| v.as_str())
+                                        {
+                                            reasoning = Some(text.to_string());
                                         }
+                                    } else {
+                                        others.push(block);
                                     }
-                                    (reasoning, others)
                                 }
-                                None => (None, vec![]),
-                            };
+                                (reasoning, others)
+                            }
+                            None => (None, vec![]),
+                        };
 
                         let content = if !non_reasoning_blocks.is_empty() {
-                            transform_content_blocks(&non_reasoning_blocks.iter().cloned().cloned().collect::<Vec<_>>())
+                            transform_content_blocks(
+                                &non_reasoning_blocks.iter().cloned().cloned().collect::<Vec<_>>(),
+                            )
                         } else if content_blocks.is_some() {
                             // All blocks were reasoning_text, content is empty
                             ChatMessageContent::String(String::new())
@@ -243,7 +230,11 @@ fn transform_input(input: &serde_json::Value) -> Vec<ChatMessage> {
                             "assistant" => {
                                 let text = match &content {
                                     ChatMessageContent::String(s) => {
-                                        if s.is_empty() { None } else { Some(s.clone()) }
+                                        if s.is_empty() {
+                                            None
+                                        } else {
+                                            Some(s.clone())
+                                        }
                                     }
                                     ChatMessageContent::Parts(parts) => {
                                         let text: String = parts
@@ -254,7 +245,11 @@ fn transform_input(input: &serde_json::Value) -> Vec<ChatMessage> {
                                             })
                                             .collect::<Vec<_>>()
                                             .join("");
-                                        if text.is_empty() { None } else { Some(text) }
+                                        if text.is_empty() {
+                                            None
+                                        } else {
+                                            Some(text)
+                                        }
                                     }
                                 };
                                 // If the last message is an Assistant with tool_calls (just
@@ -265,8 +260,7 @@ fn transform_input(input: &serde_json::Value) -> Vec<ChatMessage> {
                                         content: ref mut existing_content,
                                         tool_calls: ref existing_tc,
                                         ref mut reasoning_content,
-                                    }) if existing_tc.is_some() && existing_content.is_none() =>
-                                    {
+                                    }) if existing_tc.is_some() && existing_content.is_none() => {
                                         *existing_content = text.clone();
                                         if reasoning.is_some() {
                                             *reasoning_content = reasoning.clone();
@@ -289,16 +283,10 @@ fn transform_input(input: &serde_json::Value) -> Vec<ChatMessage> {
                         }
                     }
                     "function_call" => {
-                        let call_id = item
-                            .get("call_id")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string();
-                        let name = item
-                            .get("name")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string();
+                        let call_id =
+                            item.get("call_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                        let name =
+                            item.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
                         let arguments = item
                             .get("arguments")
                             .and_then(|v| v.as_str())
@@ -319,37 +307,26 @@ fn transform_input(input: &serde_json::Value) -> Vec<ChatMessage> {
                         });
                     }
                     "function_call_output" => {
-                        flush_tool_calls(&mut pending_tool_calls, &mut messages, &mut pending_reasoning);
-                        let call_id = item
-                            .get("call_id")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string();
+                        flush_tool_calls(
+                            &mut pending_tool_calls,
+                            &mut messages,
+                            &mut pending_reasoning,
+                        );
+                        let call_id =
+                            item.get("call_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
                         if call_id.is_empty() {
                             continue;
                         }
                         let content = normalize_tool_output(&item["output"]);
-                        messages.push(ChatMessage::Tool {
-                            content,
-                            tool_call_id: call_id,
-                        });
+                        messages.push(ChatMessage::Tool { content, tool_call_id: call_id });
                     }
                     "custom_tool_call" => {
-                        let call_id = item
-                            .get("call_id")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string();
-                        let name = item
-                            .get("name")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string();
-                        let input = item
-                            .get("input")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string();
+                        let call_id =
+                            item.get("call_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                        let name =
+                            item.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                        let input =
+                            item.get("input").and_then(|v| v.as_str()).unwrap_or("").to_string();
 
                         if !call_id.is_empty() && seen_call_ids.contains(&call_id) {
                             continue;
@@ -361,43 +338,37 @@ fn transform_input(input: &serde_json::Value) -> Vec<ChatMessage> {
                         pending_tool_calls.push(ChatToolCall {
                             id: call_id,
                             call_type: "function".to_string(),
-                            function: ChatFunctionCall {
-                                name,
-                                arguments: input,
-                            },
+                            function: ChatFunctionCall { name, arguments: input },
                         });
                     }
                     "custom_tool_call_output" => {
-                        flush_tool_calls(&mut pending_tool_calls, &mut messages, &mut pending_reasoning);
-                        let call_id = item
-                            .get("call_id")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string();
+                        flush_tool_calls(
+                            &mut pending_tool_calls,
+                            &mut messages,
+                            &mut pending_reasoning,
+                        );
+                        let call_id =
+                            item.get("call_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
                         if call_id.is_empty() {
                             continue;
                         }
                         let content = normalize_tool_output(&item["output"]);
-                        messages.push(ChatMessage::Tool {
-                            content,
-                            tool_call_id: call_id,
-                        });
+                        messages.push(ChatMessage::Tool { content, tool_call_id: call_id });
                     }
                     "local_shell_call" => {
-                        flush_tool_calls(&mut pending_tool_calls, &mut messages, &mut pending_reasoning);
-                        let status = item
-                            .get("status")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("unknown");
+                        flush_tool_calls(
+                            &mut pending_tool_calls,
+                            &mut messages,
+                            &mut pending_reasoning,
+                        );
+                        let status =
+                            item.get("status").and_then(|v| v.as_str()).unwrap_or("unknown");
                         let cmd = item
                             .get("action")
                             .and_then(|v| v.get("command"))
                             .and_then(|v| v.as_array())
                             .map(|a| {
-                                a.iter()
-                                    .filter_map(|s| s.as_str())
-                                    .collect::<Vec<_>>()
-                                    .join(" ")
+                                a.iter().filter_map(|s| s.as_str()).collect::<Vec<_>>().join(" ")
                             })
                             .unwrap_or_else(|| "?".to_string());
                         messages.push(ChatMessage::User {
@@ -433,12 +404,7 @@ fn flush_tool_calls(
         return;
     }
     // If the last message is already an assistant with tool_calls, merge into it
-    if let Some(ChatMessage::Assistant {
-        content,
-        tool_calls,
-        ..
-    }) = messages.last_mut()
-    {
+    if let Some(ChatMessage::Assistant { content, tool_calls, .. }) = messages.last_mut() {
         if tool_calls.is_some() || content.is_none() {
             let merged = std::mem::take(pending);
             match tool_calls {
@@ -503,9 +469,7 @@ fn normalize_tool_output(output: &serde_json::Value) -> ChatMessageContent {
                         "input_text" | "output_text" | "text" => {
                             if let Some(text) = obj.get("text").and_then(|v| v.as_str()) {
                                 text_parts.push(text.to_string());
-                                content_parts.push(ContentPart::Text {
-                                    text: text.to_string(),
-                                });
+                                content_parts.push(ContentPart::Text { text: text.to_string() });
                             }
                         }
                         "input_image" | "image_url" => {
@@ -519,9 +483,7 @@ fn normalize_tool_output(output: &serde_json::Value) -> ChatMessageContent {
                                         .unwrap_or_else(|| v.to_string())
                                 })
                                 .unwrap_or_default();
-                            content_parts.push(ContentPart::Image {
-                                image_url: ImageUrl { url },
-                            });
+                            content_parts.push(ContentPart::Image { image_url: ImageUrl { url } });
                         }
                         _ => {}
                     }
@@ -582,12 +544,10 @@ fn extract_reasoning_effort(reasoning: &Option<serde_json::Value>) -> Option<ser
     let effort = match reasoning {
         None => return None,
         Some(serde_json::Value::String(s)) => s.clone(),
-        Some(serde_json::Value::Object(obj)) => {
-            match obj.get("effort").and_then(|v| v.as_str()) {
-                Some(s) => s.to_string(),
-                None => return None,
-            }
-        }
+        Some(serde_json::Value::Object(obj)) => match obj.get("effort").and_then(|v| v.as_str()) {
+            Some(s) => s.to_string(),
+            None => return None,
+        },
         Some(v) => return Some(v.clone()),
     };
     if effort == "none" {
@@ -604,10 +564,7 @@ pub fn text_to_response_format(text: &Option<serde_json::Value>) -> Option<serde
         Some(serde_json::Value::Object(obj)) => {
             let format_param = obj.get("format")?;
             let format_obj = format_param.as_object()?;
-            let format_type = format_obj
-                .get("type")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let format_type = format_obj.get("type").and_then(|v| v.as_str()).unwrap_or("");
 
             match format_type {
                 "json_schema" => Some(serde_json::json!({
@@ -638,10 +595,7 @@ pub fn ensure_object_type(params: Option<serde_json::Value>) -> serde_json::Valu
         Some(mut v) => {
             if let Some(obj) = v.as_object_mut() {
                 if !obj.contains_key("type") {
-                    obj.insert(
-                        "type".to_string(),
-                        serde_json::Value::String("object".to_string()),
-                    );
+                    obj.insert("type".to_string(), serde_json::Value::String("object".to_string()));
                 }
             }
             v
@@ -709,11 +663,7 @@ mod tests {
         let chat = responses_to_chat(&req);
         assert_eq!(chat.messages.len(), 2);
         match &chat.messages[0] {
-            ChatMessage::Assistant {
-                content,
-                tool_calls,
-                ..
-            } => {
+            ChatMessage::Assistant { content, tool_calls, .. } => {
                 assert!(content.is_none());
                 assert_eq!(tool_calls.as_ref().unwrap().len(), 1);
                 assert_eq!(tool_calls.as_ref().unwrap()[0].function.name, "get_weather");
@@ -721,10 +671,7 @@ mod tests {
             _ => panic!("Expected assistant message"),
         }
         match &chat.messages[1] {
-            ChatMessage::Tool {
-                content,
-                tool_call_id,
-            } => {
+            ChatMessage::Tool { content, tool_call_id } => {
                 assert_eq!(content, &ChatMessageContent::String("Sunny".to_string()));
                 assert_eq!(tool_call_id, "call_1");
             }
@@ -839,20 +786,16 @@ mod tests {
             extract_reasoning_effort(&Some(serde_json::json!("high"))),
             Some(serde_json::json!("high"))
         );
-        assert_eq!(
-            extract_reasoning_effort(&Some(serde_json::json!("none"))),
-            None
-        );
+        assert_eq!(extract_reasoning_effort(&Some(serde_json::json!("none"))), None);
         assert_eq!(
             extract_reasoning_effort(&Some(serde_json::json!({"effort": "medium"}))),
             Some(serde_json::json!("medium"))
         );
+        assert_eq!(extract_reasoning_effort(&Some(serde_json::json!({"effort": "none"}))), None);
         assert_eq!(
-            extract_reasoning_effort(&Some(serde_json::json!({"effort": "none"}))),
-            None
-        );
-        assert_eq!(
-            extract_reasoning_effort(&Some(serde_json::json!({"effort": "high", "summary": "detailed"}))),
+            extract_reasoning_effort(&Some(
+                serde_json::json!({"effort": "high", "summary": "detailed"})
+            )),
             Some(serde_json::json!("high"))
         );
     }
@@ -915,10 +858,7 @@ mod tests {
             _ => panic!("Expected assistant with tool_calls"),
         }
         match &chat.messages[1] {
-            ChatMessage::Tool {
-                content,
-                tool_call_id,
-            } => {
+            ChatMessage::Tool { content, tool_call_id } => {
                 assert_eq!(content, &ChatMessageContent::String("file content here".to_string()));
                 assert_eq!(tool_call_id, "mcp_1");
             }
@@ -967,15 +907,8 @@ mod tests {
         let chat = responses_to_chat(&req);
         assert_eq!(chat.messages.len(), 1);
         match &chat.messages[0] {
-            ChatMessage::Assistant {
-                content,
-                tool_calls,
-                reasoning_content,
-            } => {
-                assert_eq!(
-                    content.as_deref(),
-                    Some("Let me check the weather.")
-                );
+            ChatMessage::Assistant { content, tool_calls, reasoning_content } => {
+                assert_eq!(content.as_deref(), Some("Let me check the weather."));
                 assert_eq!(
                     reasoning_content.as_deref(),
                     Some("I need to check the weather first.")

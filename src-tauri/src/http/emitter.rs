@@ -1,6 +1,6 @@
+use crate::app::events::*;
 use std::sync::Arc;
 use tokio::sync::broadcast;
-use crate::app::events::*;
 
 #[derive(Clone)]
 pub struct SseEventEmitter {
@@ -13,11 +13,11 @@ impl SseEventEmitter {
         Self { tx }
     }
 
-    pub fn subscribe(&self) -> broadcast::Receiver<String> {
+    pub(crate) fn subscribe(&self) -> broadcast::Receiver<String> {
         self.tx.subscribe()
     }
 
-    pub fn into_arc(self) -> Arc<dyn EventEmitter> {
+    pub(crate) fn into_arc(self) -> Arc<dyn EventEmitter> {
         Arc::new(self)
     }
 }

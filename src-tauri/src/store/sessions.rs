@@ -2,9 +2,7 @@ use chrono::Utc;
 use rusqlite::params;
 
 use crate::app::errors::AppError;
-use crate::domain::session::{
-    DeleteMode, SessionRecord, SessionStatus, VisibilityStatus,
-};
+use crate::domain::session::{DeleteMode, SessionRecord, SessionStatus, VisibilityStatus};
 
 pub struct SessionListResult {
     pub sessions: Vec<SessionRecord>,
@@ -21,11 +19,7 @@ pub struct BrowseParams {
 
 impl Default for BrowseParams {
     fn default() -> Self {
-        Self {
-            sort: "updated_at".to_string(),
-            limit: 50,
-            offset: 0,
-        }
+        Self { sort: "updated_at".to_string(), limit: 50, offset: 0 }
     }
 }
 
@@ -38,11 +32,7 @@ pub struct SearchParams {
 
 impl Default for SearchParams {
     fn default() -> Self {
-        Self {
-            query: String::new(),
-            limit: 50,
-            offset: 0,
-        }
+        Self { query: String::new(), limit: 50, offset: 0 }
     }
 }
 
@@ -80,6 +70,10 @@ fn row_to_session(row: &rusqlite::Row) -> rusqlite::Result<SessionRecord> {
     })
 }
 
+/// Browse top-level sessions with sorting and pagination.
+///
+/// Returns a [`SessionListResult`] with sessions, total count, and a `has_more` flag.
+/// Filters out sub-agent sessions (parent_session_id IS NULL).
 pub fn browse_sessions(
     conn: &rusqlite::Connection,
     params: &BrowseParams,
@@ -108,19 +102,20 @@ pub fn browse_sessions(
         .filter_map(|r| r.ok())
         .collect();
 
-    Ok(SessionListResult {
-        sessions,
-        total,
-        has_more: (params.offset + params.limit) < total,
-    })
+    Ok(SessionListResult { sessions, total, has_more: (params.offset + params.limit) < total })
 }
 
+/// Full-text search sessions using FTS5.
+///
+/// Searches across session titles, message content, and model names.
+/// Results are ranked by FTS5 relevance.
 pub fn search_sessions(
     conn: &rusqlite::Connection,
     params: &SearchParams,
 ) -> Result<SessionListResult, AppError> {
     let like_pattern = format!("%{}%", params.query);
-    let fts_query = params.query
+    let fts_query = params
+        .query
         .split_whitespace()
         .filter(|w| !w.is_empty())
         .map(|w| format!("\"{}\"", w.replace('"', "")))
@@ -129,10 +124,8 @@ pub fn search_sessions(
 
     let where_sql = "(s.title LIKE ?1 OR s.project_path LIKE ?1 OR s.id IN (SELECT fts.session_id FROM messages_fts fts WHERE messages_fts MATCH ?2)) AND s.parent_session_id IS NULL";
 
-    let param_values: Vec<Box<dyn rusqlite::types::ToSql>> = vec![
-        Box::new(like_pattern),
-        Box::new(fts_query),
-    ];
+    let param_values: Vec<Box<dyn rusqlite::types::ToSql>> =
+        vec![Box::new(like_pattern), Box::new(fts_query)];
 
     let count_sql = format!("SELECT COUNT(DISTINCT s.id) FROM sessions s WHERE {}", where_sql);
     let total: i64 = conn
@@ -160,28 +153,24 @@ pub fn search_sessions(
         .filter_map(|r| r.ok())
         .collect();
 
-    Ok(SessionListResult {
-        sessions,
-        total,
-        has_more: (params.offset + params.limit) < total,
-    })
+    Ok(SessionListResult { sessions, total, has_more: (params.offset + params.limit) < total })
 }
 
-pub fn get_session(
-    conn: &rusqlite::Connection,
-    id: &str,
-) -> Result<SessionRecord, AppError> {
-    conn.query_row(
-        "SELECT * FROM sessions WHERE id = ?",
-        params![id],
-        row_to_session,
+/// Fetch a single session by its unique ID.
+///
+/// Returns the full [`SessionRecord`] or an error if not found.
+pub fn get_session(conn: &rusqlite::Connection, id: &str) -> Result<SessionRecord, AppError> {
+    conn.query_row("SELECT * FROM sessions WHERE id = ?", params![id], row_to_session).map_err(
+        |e| match e {
+            rusqlite::Error::QueryReturnedNoRows => AppError::NotFound(id.to_string()),
+            e => AppError::DbError(e.to_string()),
+        },
     )
-    .map_err(|e| match e {
-        rusqlite::Error::QueryReturnedNoRows => AppError::NotFound(id.to_string()),
-        e => AppError::DbError(e.to_string()),
-    })
 }
 
+/// Insert or update a session record.
+///
+/// Uses INSERT OR REPLACE semantics. The `updated_at` timestamp is refreshed.
 pub fn upsert_session(
     conn: &rusqlite::Connection,
     session: &SessionRecord,
@@ -224,13 +213,14 @@ pub fn upsert_session(
     Ok(())
 }
 
-pub fn set_session_field(
+pub(crate) fn set_session_field(
     conn: &rusqlite::Connection,
     ids: &[String],
     field: &str,
     value: &str,
 ) -> Result<(), AppError> {
-    let placeholders: Vec<String> = ids.iter().enumerate().map(|(i, _)| format!("?{}", i + 2)).collect();
+    let placeholders: Vec<String> =
+        ids.iter().enumerate().map(|(i, _)| format!("?{}", i + 2)).collect();
     let sql = format!(
         "UPDATE sessions SET {} = ?1, updated_at = ?0 WHERE id IN ({})",
         field,
@@ -244,17 +234,15 @@ pub fn set_session_field(
         params_vec.push(Box::new(id.clone()));
     }
 
-    conn.execute(
-        &sql,
-        rusqlite::params_from_iter(params_vec.iter().map(|p| p.as_ref())),
-    )?;
+    conn.execute(&sql, rusqlite::params_from_iter(params_vec.iter().map(|p| p.as_ref())))?;
     Ok(())
 }
 
-pub fn soft_delete_sessions(
-    conn: &rusqlite::Connection,
-    ids: &[String],
-) -> Result<(), AppError> {
+/// Soft-delete one or more sessions by ID.
+///
+/// Sets `delete_mode = SoftDeleted` and records `deleted_at`.
+/// Sessions are not physically removed; they are hidden from normal browsing.
+pub fn soft_delete_sessions(conn: &rusqlite::Connection, ids: &[String]) -> Result<(), AppError> {
     if ids.is_empty() {
         return Ok(());
     }
@@ -272,13 +260,14 @@ pub fn soft_delete_sessions(
         params.push(Box::new(id.clone()));
     }
 
-    conn.execute(
-        &sql,
-        rusqlite::params_from_iter(params.iter().map(|p| p.as_ref())),
-    )?;
+    conn.execute(&sql, rusqlite::params_from_iter(params.iter().map(|p| p.as_ref())))?;
     Ok(())
 }
 
+/// Soft-delete all sessions belonging to a project path.
+///
+/// Convenience wrapper that finds and soft-deletes all sessions under the given
+/// project directory.
 pub fn soft_delete_by_project(
     conn: &rusqlite::Connection,
     project_path: &str,

@@ -2,6 +2,7 @@ use tauri::State;
 
 use crate::app::commands::*;
 use crate::app::errors::AppError;
+use crate::app::proxy::{ProxyConfig, ProxyMetrics, ProxyStatus};
 use crate::app::state::AppState;
 
 #[tauri::command]
@@ -97,8 +98,9 @@ pub fn resume_session(
     session_id: String,
     agent: String,
     cwd: Option<String>,
+    terminal: Option<String>,
 ) -> Result<(), AppError> {
-    do_resume_session(session_id, agent, cwd)
+    do_resume_session(session_id, agent, cwd, terminal)
 }
 
 #[tauri::command]
@@ -146,8 +148,7 @@ pub fn reinstall_plugin(key: String) -> Result<crate::domain::plugin::FixPluginR
 }
 
 #[tauri::command]
-pub fn list_marketplaces(
-) -> Result<crate::domain::plugin::MarketplaceListResult, AppError> {
+pub fn list_marketplaces() -> Result<crate::domain::plugin::MarketplaceListResult, AppError> {
     do_list_marketplaces()
 }
 
@@ -179,4 +180,51 @@ pub fn install_marketplace_plugin(
     plugin_name: String,
 ) -> Result<(), AppError> {
     do_install_marketplace_plugin(marketplace_name, plugin_name)
+}
+
+// --- Proxy ---
+
+#[tauri::command]
+pub fn get_proxy_status(state: State<'_, AppState>) -> Result<ProxyStatus, AppError> {
+    do_proxy_status(&state)
+}
+
+#[tauri::command]
+pub fn start_proxy(state: State<'_, AppState>) -> Result<(), AppError> {
+    do_start_proxy(&state)
+}
+
+#[tauri::command]
+pub fn stop_proxy(state: State<'_, AppState>) -> Result<(), AppError> {
+    do_stop_proxy(&state)
+}
+
+#[tauri::command]
+pub fn restart_proxy(state: State<'_, AppState>) -> Result<(), AppError> {
+    do_restart_proxy(&state)
+}
+
+#[tauri::command]
+pub fn get_proxy_config(state: State<'_, AppState>) -> Result<ProxyConfig, AppError> {
+    do_get_proxy_config(&state)
+}
+
+#[tauri::command]
+pub fn update_proxy_config(
+    state: State<'_, AppState>,
+    config: ProxyConfig,
+) -> Result<(), AppError> {
+    do_update_proxy_config(&state, config)
+}
+
+#[tauri::command]
+pub fn get_proxy_logs(state: State<'_, AppState>, lines: usize) -> Result<String, AppError> {
+    do_get_proxy_logs(&state, lines)
+}
+
+#[tauri::command]
+pub fn get_proxy_metrics(
+    state: State<'_, AppState>,
+) -> Result<ProxyMetrics, AppError> {
+    do_get_proxy_metrics(&state)
 }

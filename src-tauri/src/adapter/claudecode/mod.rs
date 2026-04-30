@@ -1,19 +1,19 @@
 use std::io::BufRead;
 use std::path::{Path, PathBuf};
 
-use chrono::{DateTime, Utc};
-use rusqlite::params;
 use crate::app::errors::AppError;
 use crate::domain::session::{DeleteMode, SessionRecord, SessionStatus, VisibilityStatus};
 use crate::domain::source::SourceDescriptor;
 use crate::store::messages::MessageRecord;
 use crate::store::sessions;
+use chrono::{DateTime, Utc};
+use rusqlite::params;
 use serde_json::Value;
 
 pub mod diagnostic;
 
 /// Discover all Claude Code session JSONL files (including subagent transcripts).
-pub fn discover_sources() -> Result<Vec<SourceDescriptor>, AppError> {
+pub(crate) fn discover_sources() -> Result<Vec<SourceDescriptor>, AppError> {
     let claude_dir = dirs::home_dir()
         .ok_or_else(|| AppError::Internal("Cannot find home directory".to_string()))?
         .join(".claude");
@@ -59,9 +59,7 @@ pub fn discover_sources() -> Result<Vec<SourceDescriptor>, AppError> {
                 .ok()
                 .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                 .map(|d| {
-                    DateTime::from_timestamp(d.as_secs() as i64, 0)
-                        .unwrap_or_default()
-                        .to_rfc3339()
+                    DateTime::from_timestamp(d.as_secs() as i64, 0).unwrap_or_default().to_rfc3339()
                 })
                 .unwrap_or_default();
 
@@ -128,7 +126,7 @@ enum RawEntry {
         content: String,
         has_tool_result: bool,
         is_sidechain: bool,
-        subagent_id: Option<String>,   // agentId from toolUseResult
+        subagent_id: Option<String>, // agentId from toolUseResult
     },
     Assistant {
         uuid: String,
@@ -137,7 +135,7 @@ enum RawEntry {
         session_id: String,
         text_parts: Vec<String>,
         tool_names: Vec<String>,
-        tool_inputs: Vec<String>,      // JSON string of tool input
+        tool_inputs: Vec<String>, // JSON string of tool input
         is_sidechain: bool,
         model: Option<String>,
     },
@@ -170,12 +168,15 @@ enum RawEntry {
 }
 
 /// Resolve parent_id: prefer parentUuid, fall back to logicalParentUuid for compaction gaps.
-fn resolve_parent_id(parent_uuid: Option<String>, logical_parent_uuid: Option<String>) -> Option<String> {
+fn resolve_parent_id(
+    parent_uuid: Option<String>,
+    logical_parent_uuid: Option<String>,
+) -> Option<String> {
     parent_uuid.or(logical_parent_uuid)
 }
 
 /// Parse a Claude Code session JSONL file into a session record and messages.
-pub fn parse_session(
+pub(crate) fn parse_session(
     path: &str,
     project_path: Option<&str>,
 ) -> Result<(SessionRecord, Vec<MessageRecord>), AppError> {
@@ -183,11 +184,8 @@ pub fn parse_session(
         .map_err(|e| AppError::ParseError(format!("Failed to open {}: {}", path, e)))?;
     let reader = std::io::BufReader::new(file);
 
-    let file_name = Path::new(path)
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("unknown")
-        .to_string();
+    let file_name =
+        Path::new(path).file_stem().and_then(|s| s.to_str()).unwrap_or("unknown").to_string();
 
     let mut first_human_message: Option<String> = None;
     let mut custom_title: Option<String> = None;
@@ -212,33 +210,15 @@ pub fn parse_session(
         };
 
         let msg_type = entry.get("type").and_then(|t| t.as_str()).unwrap_or("");
-        let timestamp = entry
-            .get("timestamp")
-            .and_then(|t| t.as_str())
-            .map(|s| s.to_string());
-        let uuid = entry
-            .get("uuid")
-            .and_then(|u| u.as_str())
-            .unwrap_or("")
-            .to_string();
-        let session_id = entry
-            .get("sessionId")
-            .and_then(|s| s.as_str())
-            .unwrap_or(&file_name)
-            .to_string();
-        let parent_uuid = entry
-            .get("parentUuid")
-            .and_then(|p| p.as_str())
-            .map(|s| s.to_string());
+        let timestamp = entry.get("timestamp").and_then(|t| t.as_str()).map(|s| s.to_string());
+        let uuid = entry.get("uuid").and_then(|u| u.as_str()).unwrap_or("").to_string();
+        let session_id =
+            entry.get("sessionId").and_then(|s| s.as_str()).unwrap_or(&file_name).to_string();
+        let parent_uuid = entry.get("parentUuid").and_then(|p| p.as_str()).map(|s| s.to_string());
         // logicalParentUuid bridges compaction gaps when parentUuid is null
-        let logical_parent_uuid = entry
-            .get("logicalParentUuid")
-            .and_then(|p| p.as_str())
-            .map(|s| s.to_string());
-        let is_sidechain = entry
-            .get("isSidechain")
-            .and_then(|s| s.as_bool())
-            .unwrap_or(false);
+        let logical_parent_uuid =
+            entry.get("logicalParentUuid").and_then(|p| p.as_str()).map(|s| s.to_string());
+        let is_sidechain = entry.get("isSidechain").and_then(|s| s.as_bool()).unwrap_or(false);
 
         if started_at.is_none() && timestamp.is_some() {
             started_at = timestamp.clone();
@@ -248,26 +228,19 @@ pub fn parse_session(
         }
 
         if git_branch.is_none() {
-            git_branch = entry
-                .get("gitBranch")
-                .and_then(|b| b.as_str())
-                .map(|s| s.to_string());
+            git_branch = entry.get("gitBranch").and_then(|b| b.as_str()).map(|s| s.to_string());
         }
 
         let parent_uuid = resolve_parent_id(parent_uuid, logical_parent_uuid);
 
         match msg_type {
             "user" => {
-                let is_meta = entry
-                    .get("isMeta")
-                    .and_then(|m| m.as_bool())
-                    .unwrap_or(false);
+                let is_meta = entry.get("isMeta").and_then(|m| m.as_bool()).unwrap_or(false);
                 if is_meta {
                     continue;
                 }
 
-                let (content, has_tool_result, subagent_id) =
-                    extract_user_content_v2(&entry);
+                let (content, has_tool_result, subagent_id) = extract_user_content_v2(&entry);
 
                 if first_human_message.is_none() && !content.is_empty() && !has_tool_result {
                     first_human_message = Some(content.clone());
@@ -283,7 +256,7 @@ pub fn parse_session(
                     is_sidechain,
                     subagent_id,
                 });
-            }
+            },
             "assistant" => {
                 if let Some(msg) = entry.get("message") {
                     if model.is_none() {
@@ -309,7 +282,7 @@ pub fn parse_session(
                         model: msg.get("model").and_then(|m| m.as_str()).map(|s| s.to_string()),
                     });
                 }
-            }
+            },
             "attachment" => {
                 // Subtype is nested inside the attachment object
                 let subtype = entry
@@ -339,13 +312,10 @@ pub fn parse_session(
                     content,
                     is_sidechain,
                 });
-            }
+            },
             "system" => {
-                let subtype = entry
-                    .get("subtype")
-                    .and_then(|s| s.as_str())
-                    .unwrap_or("unknown")
-                    .to_string();
+                let subtype =
+                    entry.get("subtype").and_then(|s| s.as_str()).unwrap_or("unknown").to_string();
                 let content = extract_system_content(&entry, &subtype);
 
                 raw_entries.push(RawEntry::System {
@@ -357,7 +327,7 @@ pub fn parse_session(
                     content,
                     is_sidechain,
                 });
-            }
+            },
             "summary" => {
                 let content = entry
                     .get("summary")
@@ -375,13 +345,10 @@ pub fn parse_session(
                         is_sidechain,
                     });
                 }
-            }
+            },
             "custom-title" => {
-                custom_title = entry
-                    .get("title")
-                    .and_then(|t| t.as_str())
-                    .map(|s| s.to_string());
-            }
+                custom_title = entry.get("title").and_then(|t| t.as_str()).map(|s| s.to_string());
+            },
             "compact_boundary" => {
                 // Top-level compact_boundary type (some versions use type=system+subtype=compact_boundary instead)
                 raw_entries.push(RawEntry::System {
@@ -393,49 +360,59 @@ pub fn parse_session(
                     content: "Conversation compacted".to_string(),
                     is_sidechain,
                 });
-            }
+            },
             // file-history-snapshot, last-prompt, queue-operation, agent-name, permission-mode: skip
-            _ => {}
+            _ => {},
         }
     }
 
     // Phase 1.5: Fix dangling parent_ids from compaction
     // Collect all known UUIDs and build ordered list
-    let all_ids: std::collections::HashSet<String> = raw_entries.iter().map(|e| match e {
-        RawEntry::User { uuid, .. } => uuid.clone(),
-        RawEntry::Assistant { uuid, .. } => uuid.clone(),
-        RawEntry::Attachment { uuid, .. } => uuid.clone(),
-        RawEntry::System { uuid, .. } => uuid.clone(),
-        RawEntry::Summary { uuid, .. } => uuid.clone(),
-    }).collect();
+    let all_ids: std::collections::HashSet<String> = raw_entries
+        .iter()
+        .map(|e| match e {
+            RawEntry::User { uuid, .. } => uuid.clone(),
+            RawEntry::Assistant { uuid, .. } => uuid.clone(),
+            RawEntry::Attachment { uuid, .. } => uuid.clone(),
+            RawEntry::System { uuid, .. } => uuid.clone(),
+            RawEntry::Summary { uuid, .. } => uuid.clone(),
+        })
+        .collect();
 
-    let ordered_ids: Vec<String> = raw_entries.iter().map(|e| match e {
-        RawEntry::User { uuid, .. } => uuid.clone(),
-        RawEntry::Assistant { uuid, .. } => uuid.clone(),
-        RawEntry::Attachment { uuid, .. } => uuid.clone(),
-        RawEntry::System { uuid, .. } => uuid.clone(),
-        RawEntry::Summary { uuid, .. } => uuid.clone(),
-    }).collect();
+    let ordered_ids: Vec<String> = raw_entries
+        .iter()
+        .map(|e| match e {
+            RawEntry::User { uuid, .. } => uuid.clone(),
+            RawEntry::Assistant { uuid, .. } => uuid.clone(),
+            RawEntry::Attachment { uuid, .. } => uuid.clone(),
+            RawEntry::System { uuid, .. } => uuid.clone(),
+            RawEntry::Summary { uuid, .. } => uuid.clone(),
+        })
+        .collect();
 
     // Fix dangling parents: collect repairs first, then apply
-    let repairs: Vec<(usize, Option<String>)> = ordered_ids.iter().enumerate().filter_map(|(i, _id)| {
-        let entry = &raw_entries[i];
-        let parent_id = match entry {
-            RawEntry::User { parent_uuid, .. } => parent_uuid.as_ref(),
-            RawEntry::Assistant { parent_uuid, .. } => parent_uuid.as_ref(),
-            RawEntry::Attachment { parent_uuid, .. } => parent_uuid.as_ref(),
-            RawEntry::System { parent_uuid, .. } => parent_uuid.as_ref(),
-            RawEntry::Summary { parent_uuid, .. } => parent_uuid.as_ref(),
-        };
-        match parent_id {
-            Some(pid) if !all_ids.contains(pid) => {
-                // Dangling — re-parent to preceding entry
-                let new_parent = if i > 0 { Some(ordered_ids[i - 1].clone()) } else { None };
-                Some((i, new_parent))
+    let repairs: Vec<(usize, Option<String>)> = ordered_ids
+        .iter()
+        .enumerate()
+        .filter_map(|(i, _id)| {
+            let entry = &raw_entries[i];
+            let parent_id = match entry {
+                RawEntry::User { parent_uuid, .. } => parent_uuid.as_ref(),
+                RawEntry::Assistant { parent_uuid, .. } => parent_uuid.as_ref(),
+                RawEntry::Attachment { parent_uuid, .. } => parent_uuid.as_ref(),
+                RawEntry::System { parent_uuid, .. } => parent_uuid.as_ref(),
+                RawEntry::Summary { parent_uuid, .. } => parent_uuid.as_ref(),
+            };
+            match parent_id {
+                Some(pid) if !all_ids.contains(pid) => {
+                    // Dangling — re-parent to preceding entry
+                    let new_parent = if i > 0 { Some(ordered_ids[i - 1].clone()) } else { None };
+                    Some((i, new_parent))
+                },
+                _ => None,
             }
-            _ => None,
-        }
-    }).collect();
+        })
+        .collect();
 
     for (idx, new_parent) in repairs {
         match &mut raw_entries[idx] {
@@ -452,7 +429,16 @@ pub fn parse_session(
 
     for raw in &raw_entries {
         match raw {
-            RawEntry::User { uuid, parent_uuid, timestamp, session_id, content, has_tool_result, is_sidechain, subagent_id } => {
+            RawEntry::User {
+                uuid,
+                parent_uuid,
+                timestamp,
+                session_id,
+                content,
+                has_tool_result,
+                is_sidechain,
+                subagent_id,
+            } => {
                 if *has_tool_result {
                     // Store tool_result as separate message with kind "tool_result"
                     messages.push(MessageRecord {
@@ -489,8 +475,18 @@ pub fn parse_session(
                         metadata: None,
                     });
                 }
-            }
-            RawEntry::Assistant { uuid, parent_uuid, timestamp, session_id, text_parts, tool_names, tool_inputs, is_sidechain, model: assistant_model } => {
+            },
+            RawEntry::Assistant {
+                uuid,
+                parent_uuid,
+                timestamp,
+                session_id,
+                text_parts,
+                tool_names,
+                tool_inputs,
+                is_sidechain,
+                model: assistant_model,
+            } => {
                 let (kind, preview) = if !tool_names.is_empty() {
                     let tools_preview = format!("Tool: {}", tool_names.join(", "));
                     if text_parts.is_empty() {
@@ -507,9 +503,12 @@ pub fn parse_session(
 
                 // Build metadata JSON with tool inputs
                 let metadata = if !tool_inputs.is_empty() {
-                    Some(serde_json::json!({
-                        "tool_inputs": tool_inputs,
-                    }).to_string())
+                    Some(
+                        serde_json::json!({
+                            "tool_inputs": tool_inputs,
+                        })
+                        .to_string(),
+                    )
                 } else {
                     None
                 };
@@ -538,8 +537,16 @@ pub fn parse_session(
                     model: assistant_model.clone(),
                     metadata,
                 });
-            }
-            RawEntry::Attachment { uuid, parent_uuid, timestamp, session_id, subtype, content, is_sidechain } => {
+            },
+            RawEntry::Attachment {
+                uuid,
+                parent_uuid,
+                timestamp,
+                session_id,
+                subtype,
+                content,
+                is_sidechain,
+            } => {
                 // Hook noise is already filtered in Phase 1; no skip needed here.
 
                 messages.push(MessageRecord {
@@ -558,8 +565,16 @@ pub fn parse_session(
                     model: None,
                     metadata: None,
                 });
-            }
-            RawEntry::System { uuid, parent_uuid, timestamp, session_id, subtype, content, is_sidechain } => {
+            },
+            RawEntry::System {
+                uuid,
+                parent_uuid,
+                timestamp,
+                session_id,
+                subtype,
+                content,
+                is_sidechain,
+            } => {
                 messages.push(MessageRecord {
                     id: uuid.clone(),
                     session_id: session_id.clone(),
@@ -576,8 +591,15 @@ pub fn parse_session(
                     model: None,
                     metadata: None,
                 });
-            }
-            RawEntry::Summary { uuid, parent_uuid, timestamp, session_id, content, is_sidechain } => {
+            },
+            RawEntry::Summary {
+                uuid,
+                parent_uuid,
+                timestamp,
+                session_id,
+                content,
+                is_sidechain,
+            } => {
                 messages.push(MessageRecord {
                     id: uuid.clone(),
                     session_id: session_id.clone(),
@@ -594,7 +616,7 @@ pub fn parse_session(
                     model: None,
                     metadata: None,
                 });
-            }
+            },
         }
     }
 
@@ -637,7 +659,7 @@ pub fn parse_session(
 
 /// Parse a subagent transcript. Returns (SessionRecord, Vec<MessageRecord>).
 /// The session_id is "{parent_session_id}:{agentId}" and parent_session_id is set.
-pub fn parse_subagent_session(
+pub(crate) fn parse_subagent_session(
     path: &str,
     parent_session_id: &str,
     agent_id: &str,
@@ -706,13 +728,13 @@ fn extract_user_content_v2(entry: &Value) -> (String, bool, Option<String>) {
                             }
                         }
                     }
-                }
+                },
                 Some("text") => {
                     if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
                         text_parts.push(text.to_string());
                     }
-                }
-                _ => {}
+                },
+                _ => {},
             }
         }
 
@@ -788,10 +810,7 @@ fn extract_attachment_content(entry: &Value, subtype: &str) -> String {
                 .or_else(|| att.get("filePath"))
                 .and_then(|p| p.as_str())
                 .unwrap_or("");
-            let content = att
-                .get("content")
-                .and_then(|c| c.as_str())
-                .unwrap_or("");
+            let content = att.get("content").and_then(|c| c.as_str()).unwrap_or("");
             if path.is_empty() {
                 truncate_preview(content, 500).to_string()
             } else if content.is_empty() {
@@ -799,35 +818,25 @@ fn extract_attachment_content(entry: &Value, subtype: &str) -> String {
             } else {
                 format!("{}: {}", path, truncate_preview(content, 300))
             }
-        }
-        "plan_mode" | "plan_mode_exit" | "plan_mode_reentry" => {
-            att.get("reason")
-                .or_else(|| att.get("content"))
-                .and_then(|r| r.as_str())
-                .unwrap_or(subtype)
-                .to_string()
-        }
-        "date_change" => {
-            att.get("newDate")
-                .and_then(|d| d.as_str())
-                .unwrap_or(subtype)
-                .to_string()
-        }
+        },
+        "plan_mode" | "plan_mode_exit" | "plan_mode_reentry" => att
+            .get("reason")
+            .or_else(|| att.get("content"))
+            .and_then(|r| r.as_str())
+            .unwrap_or(subtype)
+            .to_string(),
+        "date_change" => att.get("newDate").and_then(|d| d.as_str()).unwrap_or(subtype).to_string(),
         "task_reminder" => {
-            att.get("content")
-                .and_then(|c| c.as_str())
-                .unwrap_or(subtype)
-                .to_string()
-        }
+            att.get("content").and_then(|c| c.as_str()).unwrap_or(subtype).to_string()
+        },
         // hook_success, async_hook_response, hook_additional_context are filtered
         // in Phase 1 before this function is called; these branches are unreachable.
-        _ => {
-            att.get("content")
-                .and_then(|c| c.as_str())
-                .or_else(|| att.get("text").and_then(|t| t.as_str()))
-                .map(|s| truncate_preview(s, 500).to_string())
-                .unwrap_or_else(|| subtype.to_string())
-        }
+        _ => att
+            .get("content")
+            .and_then(|c| c.as_str())
+            .or_else(|| att.get("text").and_then(|t| t.as_str()))
+            .map(|s| truncate_preview(s, 500).to_string())
+            .unwrap_or_else(|| subtype.to_string()),
     }
 }
 
@@ -841,9 +850,7 @@ fn extract_system_content(entry: &Value, subtype: &str) -> String {
                 .map(|arr| {
                     arr.iter()
                         .filter_map(|h| {
-                            h.get("command")
-                                .and_then(|c| c.as_str())
-                                .map(|s| s.to_string())
+                            h.get("command").and_then(|c| c.as_str()).map(|s| s.to_string())
                         })
                         .collect::<Vec<_>>()
                         .join(", ")
@@ -854,51 +861,40 @@ fn extract_system_content(entry: &Value, subtype: &str) -> String {
             } else {
                 format!("Stop hooks: {}", hooks)
             }
-        }
+        },
         "turn_duration" => {
-            let duration_ms = entry
-                .get("durationMs")
-                .and_then(|d| d.as_i64())
-                .unwrap_or(0);
+            let duration_ms = entry.get("durationMs").and_then(|d| d.as_i64()).unwrap_or(0);
             let cost = entry.get("costUsd").and_then(|c| c.as_f64());
             let mut s = format!("Turn: {}ms", duration_ms);
             if let Some(c) = cost {
                 s.push_str(&format!(" (${:.4})", c));
             }
             s
-        }
+        },
         "local_command" => {
-            entry
-                .get("content")
-                .and_then(|c| c.as_str())
-                .unwrap_or(subtype)
-                .to_string()
-        }
-        "compact_boundary" => {
-            "Conversation compacted".to_string()
-        }
-        _ => {
-            entry
-                .get("content")
-                .and_then(|c| c.as_str())
-                .or_else(|| entry.get("text").and_then(|t| t.as_str()))
-                .map(|s| truncate_preview(s, 500).to_string())
-                .unwrap_or_else(|| subtype.to_string())
-        }
+            entry.get("content").and_then(|c| c.as_str()).unwrap_or(subtype).to_string()
+        },
+        "compact_boundary" => "Conversation compacted".to_string(),
+        _ => entry
+            .get("content")
+            .and_then(|c| c.as_str())
+            .or_else(|| entry.get("text").and_then(|t| t.as_str()))
+            .map(|s| truncate_preview(s, 500).to_string())
+            .unwrap_or_else(|| subtype.to_string()),
     }
 }
 
 /// Decode a Claude projects directory name back to a path.
 fn decode_project_dir(name: &str) -> String {
-    if name.starts_with('-') {
-        format!("/{}", &name[1..].replace('-', "/"))
+    if let Some(stripped) = name.strip_prefix('-') {
+        format!("/{}", &stripped.replace('-', "/"))
     } else {
         name.replace('-', "/")
     }
 }
 
 /// Compute a simple fingerprint for change detection.
-pub fn compute_fingerprint(path: &Path) -> String {
+pub(crate) fn compute_fingerprint(path: &Path) -> String {
     let metadata = std::fs::metadata(path);
     match metadata {
         Ok(m) => {
@@ -910,14 +906,14 @@ pub fn compute_fingerprint(path: &Path) -> String {
                 .map(|d| d.as_millis())
                 .unwrap_or(0);
             format!("{}:{}", len, modified)
-        }
+        },
         Err(_) => "unknown".to_string(),
     }
 }
 
 /// Construct a SourceDescriptor from a file path.
 /// Returns None if the path is not a .jsonl file or metadata can't be read.
-pub fn source_descriptor_from_path(path: &Path) -> Option<SourceDescriptor> {
+pub(crate) fn source_descriptor_from_path(path: &Path) -> Option<SourceDescriptor> {
     if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
         return None;
     }
@@ -934,11 +930,7 @@ pub fn source_descriptor_from_path(path: &Path) -> Option<SourceDescriptor> {
         .modified()
         .ok()
         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-        .map(|d| {
-            DateTime::from_timestamp(d.as_secs() as i64, 0)
-                .unwrap_or_default()
-                .to_rfc3339()
-        })
+        .map(|d| DateTime::from_timestamp(d.as_secs() as i64, 0).unwrap_or_default().to_rfc3339())
         .unwrap_or_default();
 
     Some(SourceDescriptor {
@@ -950,19 +942,49 @@ pub fn source_descriptor_from_path(path: &Path) -> Option<SourceDescriptor> {
     })
 }
 
+/// Strip ANSI CSI/OSC escape sequences from a string.
+/// Works at the char level to preserve multi-byte UTF-8 characters.
+fn strip_ansi(s: &str) -> String {
+    let mut chars = s.chars();
+    let mut result = String::with_capacity(s.len());
+    while let Some(ch) = chars.next() {
+        if ch == '\x1b' {
+            match chars.as_str().chars().next() {
+                Some('[') => {
+                    chars.next(); // consume '['
+                    while let Some(c) = chars.next() {
+                        if c.is_ascii_alphabetic() { break; }
+                    }
+                }
+                Some(']') => {
+                    chars.next(); // consume ']'
+                    while let Some(c) = chars.next() {
+                        if c == '\x07' || c == '\\' { break; }
+                    }
+                }
+                _ => {}
+            }
+        } else {
+            result.push(ch);
+        }
+    }
+    result
+}
+
 fn truncate_preview(s: &str, max_len: usize) -> String {
     // Use the larger of the caller's hint or 50_000 chars.
     // This preserves essentially all real content while preventing
     // pathological multi-MB tool outputs from stalling the indexer.
     let limit = max_len.max(50_000);
-    if s.len() <= limit {
-        s.to_string()
+    let cleaned = strip_ansi(s);
+    if cleaned.len() <= limit {
+        cleaned
     } else {
         let mut end = limit.saturating_sub(3);
-        while !s.is_char_boundary(end) && end > 0 {
+        while !cleaned.is_char_boundary(end) && end > 0 {
             end -= 1;
         }
-        format!("{}...", &s[..end])
+        format!("{}...", &cleaned[..end])
     }
 }
 
@@ -970,7 +992,7 @@ fn truncate_preview(s: &str, max_len: usize) -> String {
 /// Uses a single transaction with SAVEPOINTs for per-source isolation —
 /// one COMMIT (one fsync) instead of N.
 /// The `on_progress` callback receives the count of sources processed so far.
-pub fn index_sources<F>(
+pub(crate) fn index_sources<F>(
     conn: &rusqlite::Connection,
     sources: &[SourceDescriptor],
     on_progress: F,
@@ -984,10 +1006,10 @@ where
 
     // Load existing fingerprints for incremental skip
     let existing_fingerprints: std::collections::HashMap<String, String> = {
-        let mut stmt = conn.prepare("SELECT path, fingerprint FROM sources WHERE status = 'active'")?;
-        let rows = stmt.query_map([], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-        })?;
+        let mut stmt =
+            conn.prepare("SELECT path, fingerprint FROM sources WHERE status = 'active'")?;
+        let rows =
+            stmt.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?;
         rows.filter_map(|r| r.ok()).collect()
     };
 
@@ -1015,12 +1037,12 @@ where
                 } else {
                     indexed += 1;
                 }
-            }
+            },
             Err(e) => {
-                log::error!("Failed to index source {}: {}", source.path, e);
+                tracing::error!("Failed to index source {}: {}", source.path, e);
                 conn.execute_batch(&format!("ROLLBACK TO {}", sp))?;
                 errors += 1;
-            }
+            },
         }
 
         on_progress((i + 1) as i64);
@@ -1028,17 +1050,14 @@ where
 
     // Post-index cleanup (still inside the transaction)
     if let Err(e) = fix_project_paths(conn) {
-        log::warn!("project_path fix-up failed: {}", e);
+        tracing::warn!("project_path fix-up failed: {}", e);
     }
 
     crate::store::actions::record_action(
         conn,
         None,
         "sync_completed",
-        Some(&format!(
-            "indexed={}, updated={}, errors={}",
-            indexed, updated, errors
-        )),
+        Some(&format!("indexed={}, updated={}, errors={}", indexed, updated, errors)),
     )?;
 
     // Single COMMIT — one fsync for the entire batch
@@ -1047,18 +1066,14 @@ where
     // Full FTS rebuild after commit (external-content FTS5 must not be written
     // to directly inside a transaction — it corrupts the connection).
     if indexed + updated > 0 {
-        if let Err(e) = conn.execute_batch(
-            "INSERT INTO messages_fts(messages_fts) VALUES ('rebuild');",
-        ) {
-            log::warn!("FTS rebuild failed: {}", e);
+        if let Err(e) =
+            conn.execute_batch("INSERT INTO messages_fts(messages_fts) VALUES ('rebuild');")
+        {
+            tracing::warn!("FTS rebuild failed: {}", e);
         }
     }
 
-    Ok(IndexResult {
-        indexed,
-        updated,
-        errors,
-    })
+    Ok(IndexResult { indexed, updated, errors })
 }
 
 /// Repair project_path for every session that has NULL or the sentinel
@@ -1070,10 +1085,8 @@ fn fix_project_paths(conn: &rusqlite::Connection) -> Result<(), AppError> {
          WHERE s.project_path IS NULL OR s.project_path = 'subagents'",
     )?;
 
-    let rows: Vec<(String, String)> = stmt
-        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
-        .filter_map(|r| r.ok())
-        .collect();
+    let rows: Vec<(String, String)> =
+        stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?.filter_map(|r| r.ok()).collect();
 
     for (session_id, source_path) in &rows {
         if let Some(correct_path) = extract_project_path_from_source(source_path) {
@@ -1085,7 +1098,7 @@ fn fix_project_paths(conn: &rusqlite::Connection) -> Result<(), AppError> {
     }
 
     if !rows.is_empty() {
-        log::info!("Fixed project_path for {} sessions", rows.len());
+        tracing::info!("Fixed project_path for {} sessions", rows.len());
     }
 
     Ok(())
@@ -1093,6 +1106,7 @@ fn fix_project_paths(conn: &rusqlite::Connection) -> Result<(), AppError> {
 
 /// Remove duplicate session_sources entries caused by fingerprint changes.
 /// For each (session_id, path) pair, keep only the row with the latest source_id (fingerprint).
+#[allow(dead_code)]
 fn dedup_session_sources(conn: &rusqlite::Connection) -> Result<(), AppError> {
     let removed = conn.execute(
         "DELETE FROM session_sources WHERE rowid NOT IN (
@@ -1108,7 +1122,7 @@ fn dedup_session_sources(conn: &rusqlite::Connection) -> Result<(), AppError> {
     )?;
 
     if removed > 0 {
-        log::info!("Cleaned up {} duplicate session_sources entries", removed);
+        tracing::info!("Cleaned up {} duplicate session_sources entries", removed);
     }
 
     Ok(())
@@ -1131,7 +1145,8 @@ fn index_single_source(
             .zip(agent_id)
             .ok_or_else(|| AppError::Internal(format!("Invalid subagent path: {}", source.path)))?;
 
-        let (record, messages) = parse_subagent_session(&source.path, &parent_id, &agent_id, project_path.as_deref())?;
+        let (record, messages) =
+            parse_subagent_session(&source.path, &parent_id, &agent_id, project_path.as_deref())?;
         session_id = record.id.clone();
         sessions::upsert_session(conn, &record)?;
         for msg in &messages {
@@ -1139,8 +1154,12 @@ fn index_single_source(
         }
         crate::store::sources::upsert_source(conn, source)?;
         crate::store::sources::link_session_source(
-            conn, &session_id, &source.fingerprint,
-            &source.source_type, &source.path, "file_safe",
+            conn,
+            &session_id,
+            &source.fingerprint,
+            &source.source_type,
+            &source.path,
+            "file_safe",
         )?;
     } else {
         let (record, messages) = parse_session(&source.path, project_path.as_deref())?;
@@ -1151,8 +1170,12 @@ fn index_single_source(
         }
         crate::store::sources::upsert_source(conn, source)?;
         crate::store::sources::link_session_source(
-            conn, &session_id, &source.fingerprint,
-            &source.source_type, &source.path, "file_safe",
+            conn,
+            &session_id,
+            &source.fingerprint,
+            &source.source_type,
+            &source.path,
+            "file_safe",
         )?;
     }
 
@@ -1161,7 +1184,7 @@ fn index_single_source(
 
 /// Legacy entry point — discovers sources then indexes them (no progress callback).
 #[allow(dead_code)]
-pub fn index_all(conn: &rusqlite::Connection) -> Result<IndexResult, AppError> {
+pub(crate) fn index_all(conn: &rusqlite::Connection) -> Result<IndexResult, AppError> {
     let sources = discover_sources()?;
     index_sources(conn, &sources, |_| {})
 }
@@ -1171,10 +1194,11 @@ fn extract_project_path_from_source(path: &str) -> Option<String> {
     if path.contains("/subagents/") {
         // Subagent: ~/.claude/projects/{project-dir}/{session}/subagents/agent-*.jsonl
         // Navigate up: agent-*.jsonl → subagents/ → {session}/ → {project-dir}
-        let project_dir_name = path_buf.parent()?   // subagents/
-            .parent()?                                // {session}/
-            .parent()?                                // {project-dir}/
-            .file_name()?                             // {project-dir}
+        let project_dir_name = path_buf
+            .parent()? // subagents/
+            .parent()? // {session}/
+            .parent()? // {project-dir}/
+            .file_name()? // {project-dir}
             .to_str()?;
         Some(decode_project_dir(project_dir_name))
     } else {
@@ -1200,11 +1224,7 @@ fn extract_parent_session_id(path: &str) -> Option<String> {
 fn extract_agent_id(path: &str) -> Option<String> {
     let path_buf = PathBuf::from(path);
     let file_name = path_buf.file_stem()?.to_str()?;
-    if file_name.starts_with("agent-") {
-        Some(file_name[6..].to_string())
-    } else {
-        None
-    }
+    file_name.strip_prefix("agent-").map(|stripped| stripped.to_string())
 }
 
 pub struct IndexResult {
@@ -1271,10 +1291,7 @@ mod tests {
     #[test]
     fn extract_from_external_volume() {
         let path = "/Users/hipnusleo/.claude/projects/-Volumes-T9-aria2/session.jsonl";
-        assert_eq!(
-            extract_project_path_from_source(path),
-            Some("/Volumes/T9/aria2".to_string())
-        );
+        assert_eq!(extract_project_path_from_source(path), Some("/Volumes/T9/aria2".to_string()));
     }
 
     #[test]
@@ -1287,10 +1304,7 @@ mod tests {
     #[test]
     fn extract_parent_session_from_subagent() {
         let path = "/Users/hipnusleo/.claude/projects/-Users-hipnusleo-Documents-projects-apps-yeek/abc123/subagents/agent-xyz.jsonl";
-        assert_eq!(
-            extract_parent_session_id(path),
-            Some("abc123".to_string())
-        );
+        assert_eq!(extract_parent_session_id(path), Some("abc123".to_string()));
     }
 
     // --- extract_agent_id tests ---
@@ -1298,10 +1312,7 @@ mod tests {
     #[test]
     fn extract_agent_id_from_path() {
         let path = "/Users/hipnusleo/.claude/projects/-proj/sess/subagents/agent-abc123def.jsonl";
-        assert_eq!(
-            extract_agent_id(path),
-            Some("abc123def".to_string())
-        );
+        assert_eq!(extract_agent_id(path), Some("abc123def".to_string()));
     }
 
     #[test]
@@ -1316,11 +1327,23 @@ mod tests {
     fn decode_real_dir_names() {
         // These are actual directory names from the user's ~/.claude/projects/
         let cases = vec![
-            ("-Users-hipnusleo-Documents-Projects-apps-yeek", "/Users/hipnusleo/Documents/Projects/apps/yeek"),
-            ("-Users-hipnusleo-Documents-projects-apps-efi-cli", "/Users/hipnusleo/Documents/projects/apps/efi/cli"),
-            ("-Users-hipnusleo-Documents-projects-fin-playground", "/Users/hipnusleo/Documents/projects/fin/playground"),
+            (
+                "-Users-hipnusleo-Documents-Projects-apps-yeek",
+                "/Users/hipnusleo/Documents/Projects/apps/yeek",
+            ),
+            (
+                "-Users-hipnusleo-Documents-projects-apps-efi-cli",
+                "/Users/hipnusleo/Documents/projects/apps/efi/cli",
+            ),
+            (
+                "-Users-hipnusleo-Documents-projects-fin-playground",
+                "/Users/hipnusleo/Documents/projects/fin/playground",
+            ),
             ("-Volumes-T9-aria2", "/Volumes/T9/aria2"),
-            ("-Users-hipnusleo-Documents-projects-officework", "/Users/hipnusleo/Documents/projects/officework"),
+            (
+                "-Users-hipnusleo-Documents-projects-officework",
+                "/Users/hipnusleo/Documents/projects/officework",
+            ),
         ];
         for (dir_name, expected) in cases {
             assert_eq!(decode_project_dir(dir_name), expected, "Failed for {}", dir_name);
@@ -1359,20 +1382,22 @@ mod tests {
         ).unwrap();
 
         // Verify project_path is NULL before fix
-        let pp_before: Option<String> = conn.query_row(
-            "SELECT project_path FROM sessions WHERE id = 'session1:abc'",
-            [], |row| row.get(0),
-        ).unwrap();
+        let pp_before: Option<String> = conn
+            .query_row("SELECT project_path FROM sessions WHERE id = 'session1:abc'", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
         assert!(pp_before.is_none(), "Expected NULL project_path before fix");
 
         // Run fix
         fix_project_paths(&conn).unwrap();
 
         // Verify project_path was corrected
-        let pp_after: String = conn.query_row(
-            "SELECT project_path FROM sessions WHERE id = 'session1:abc'",
-            [], |row| row.get(0),
-        ).unwrap();
+        let pp_after: String = conn
+            .query_row("SELECT project_path FROM sessions WHERE id = 'session1:abc'", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
         assert_eq!(pp_after, "/Users/test/myapp", "project_path should be corrected");
     }
 
@@ -1404,10 +1429,11 @@ mod tests {
 
         fix_project_paths(&conn).unwrap();
 
-        let pp: String = conn.query_row(
-            "SELECT project_path FROM sessions WHERE id = 'sess2:xyz'",
-            [], |row| row.get(0),
-        ).unwrap();
+        let pp: String = conn
+            .query_row("SELECT project_path FROM sessions WHERE id = 'sess2:xyz'", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
         assert_eq!(pp, "/Users/test/proj");
     }
 }

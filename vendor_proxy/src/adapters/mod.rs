@@ -1,3 +1,7 @@
+//! Provider format adapters (Chat Completions, Anthropic Messages).
+//! Each adapter transforms a Responses API request into a provider-specific
+//! format and sends it, then converts the response back.
+
 use crate::types::responses::ResponsesResponse;
 use async_trait::async_trait;
 

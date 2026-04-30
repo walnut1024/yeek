@@ -51,10 +51,7 @@ impl AnthropicSseTranslator {
                     tool_calls: None,
                 }));
             }
-            AnthropicSseEvent::ContentBlockStart {
-                index,
-                content_block,
-            } => {
+            AnthropicSseEvent::ContentBlockStart { index, content_block } => {
                 self.current_block_index = index;
                 match content_block.block_type.as_str() {
                     "text" => {
@@ -73,10 +70,12 @@ impl AnthropicSseTranslator {
                 self.current_block_index = index;
                 match delta {
                     crate::types::anthropic::AnthropicSseDelta::TextDelta { text } => {
-                        chunks.push(self.chat_chunk_json(&ChatDelta {
-                            content: Some(text),
-                            tool_calls: None,
-                        }));
+                        chunks.push(
+                            self.chat_chunk_json(&ChatDelta {
+                                content: Some(text),
+                                tool_calls: None,
+                            }),
+                        );
                     }
                     crate::types::anthropic::AnthropicSseDelta::InputJsonDelta { partial_json } => {
                         self.current_tool_input.push_str(&partial_json);
@@ -120,10 +119,8 @@ impl AnthropicSseTranslator {
                 }
             }
             AnthropicSseEvent::MessageStop => {
-                let finish_reason = self
-                    .finish_reason
-                    .clone()
-                    .unwrap_or_else(|| "stop".to_string());
+                let finish_reason =
+                    self.finish_reason.clone().unwrap_or_else(|| "stop".to_string());
                 chunks.extend(self.final_chunk_json(&finish_reason));
             }
             AnthropicSseEvent::Error { error } => {
@@ -138,11 +135,7 @@ impl AnthropicSseTranslator {
     }
 
     fn chat_chunk_json(&self, delta: &ChatDelta) -> String {
-        let choices = vec![ChatStreamChoice {
-            index: 0,
-            delta,
-            finish_reason: None,
-        }];
+        let choices = vec![ChatStreamChoice { index: 0, delta, finish_reason: None }];
         let chunk = ChatCompletionStreamChunk {
             id: self.response_id.clone(),
             object: "chat.completion.chunk".to_string(),
@@ -151,17 +144,15 @@ impl AnthropicSseTranslator {
             choices,
             usage: None,
         };
-        let json = serde_json::to_string(&chunk).unwrap();
+        let json = serde_json::to_string(&chunk)
+            .unwrap_or_else(|_| r#"{"error":"json serialize"}"#.to_string());
         format!("data: {}", json)
     }
 
     fn final_chunk_json(&self, finish_reason: &str) -> Vec<String> {
         let choices = vec![ChatStreamChoice {
             index: 0,
-            delta: &ChatDelta {
-                content: None,
-                tool_calls: None,
-            },
+            delta: &ChatDelta { content: None, tool_calls: None },
             finish_reason: Some(finish_reason.to_string()),
         }];
         let chunk = ChatCompletionStreamChunk {
@@ -176,7 +167,8 @@ impl AnthropicSseTranslator {
                 total_tokens: self.input_tokens + self.output_tokens,
             }),
         };
-        let json = serde_json::to_string(&chunk).unwrap();
+        let json = serde_json::to_string(&chunk)
+            .unwrap_or_else(|_| r#"{"error":"json serialize"}"#.to_string());
         vec![format!("data: {}", json), "data: [DONE]".to_string()]
     }
 }
@@ -193,7 +185,7 @@ fn map_anthropic_stop_to_chat(reason: &str) -> String {
 fn now_unix() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
+        .unwrap_or(std::time::Duration::ZERO) // fallback to zero if system clock is before unix epoch
         .as_secs()
 }
 
@@ -221,10 +213,7 @@ mod tests {
             message: AnthropicMessageStart {
                 id: "msg_1".to_string(),
                 model: "test".to_string(),
-                usage: AnthropicUsage {
-                    input_tokens: 10,
-                    output_tokens: 0,
-                },
+                usage: AnthropicUsage { input_tokens: 10, output_tokens: 0 },
             },
         }));
         all.extend(t.feed(AnthropicSseEvent::ContentBlockStart {
@@ -237,33 +226,20 @@ mod tests {
         }));
         all.extend(t.feed(AnthropicSseEvent::ContentBlockDelta {
             index: 0,
-            delta: AnthropicSseDelta::TextDelta {
-                text: "Hello".to_string(),
-            },
+            delta: AnthropicSseDelta::TextDelta { text: "Hello".to_string() },
         }));
         all.extend(t.feed(AnthropicSseEvent::ContentBlockStop { index: 0 }));
         all.extend(t.feed(AnthropicSseEvent::MessageDelta {
-            delta: AnthropicMessageDelta {
-                stop_reason: Some("end_turn".to_string()),
-            },
+            delta: AnthropicMessageDelta { stop_reason: Some("end_turn".to_string()) },
             usage: None,
         }));
         all.extend(t.feed(AnthropicSseEvent::MessageStop));
 
         let events = parse_events(&all);
         assert_eq!(events.len(), 3); // initial chunk, text delta, final chunk
-        assert_eq!(
-            events[0]["choices"][0]["delta"]["content"].as_str(),
-            Some("")
-        );
-        assert_eq!(
-            events[1]["choices"][0]["delta"]["content"].as_str(),
-            Some("Hello")
-        );
-        assert_eq!(
-            events[2]["choices"][0]["finish_reason"].as_str(),
-            Some("stop")
-        );
+        assert_eq!(events[0]["choices"][0]["delta"]["content"].as_str(), Some(""));
+        assert_eq!(events[1]["choices"][0]["delta"]["content"].as_str(), Some("Hello"));
+        assert_eq!(events[2]["choices"][0]["finish_reason"].as_str(), Some("stop"));
     }
 
     #[test]
@@ -275,10 +251,7 @@ mod tests {
             message: AnthropicMessageStart {
                 id: "msg_1".to_string(),
                 model: "test".to_string(),
-                usage: AnthropicUsage {
-                    input_tokens: 10,
-                    output_tokens: 0,
-                },
+                usage: AnthropicUsage { input_tokens: 10, output_tokens: 0 },
             },
         }));
         all.extend(t.feed(AnthropicSseEvent::ContentBlockStart {
@@ -291,21 +264,15 @@ mod tests {
         }));
         all.extend(t.feed(AnthropicSseEvent::ContentBlockDelta {
             index: 0,
-            delta: AnthropicSseDelta::InputJsonDelta {
-                partial_json: r#"{"city""#.to_string(),
-            },
+            delta: AnthropicSseDelta::InputJsonDelta { partial_json: r#"{"city""#.to_string() },
         }));
         all.extend(t.feed(AnthropicSseEvent::ContentBlockDelta {
             index: 0,
-            delta: AnthropicSseDelta::InputJsonDelta {
-                partial_json: r#":"Paris"}"#.to_string(),
-            },
+            delta: AnthropicSseDelta::InputJsonDelta { partial_json: r#":"Paris"}"#.to_string() },
         }));
         all.extend(t.feed(AnthropicSseEvent::ContentBlockStop { index: 0 }));
         all.extend(t.feed(AnthropicSseEvent::MessageDelta {
-            delta: AnthropicMessageDelta {
-                stop_reason: Some("tool_use".to_string()),
-            },
+            delta: AnthropicMessageDelta { stop_reason: Some("tool_use".to_string()) },
             usage: Some(AnthropicMessageUsage { output_tokens: 20 }),
         }));
         all.extend(t.feed(AnthropicSseEvent::MessageStop));
@@ -322,7 +289,7 @@ mod tests {
                     .is_some()
             })
             .collect();
-        assert!(tool_chunks.len() > 0);
+        assert!(!tool_chunks.is_empty());
 
         // Verify the first tool chunk has correct index
         let first_tc = tool_chunks[0]
@@ -355,9 +322,7 @@ mod tests {
         }));
         all.extend(t.feed(AnthropicSseEvent::ContentBlockDelta {
             index: 1,
-            delta: AnthropicSseDelta::InputJsonDelta {
-                partial_json: "{}".to_string(),
-            },
+            delta: AnthropicSseDelta::InputJsonDelta { partial_json: "{}".to_string() },
         }));
         all.extend(t.feed(AnthropicSseEvent::ContentBlockStop { index: 1 }));
 
@@ -397,10 +362,7 @@ mod tests {
         let events = t.feed(AnthropicSseEvent::MessageStop);
         let parsed = parse_events(&events);
         let final_chunk = parsed.iter().find(|e| {
-            e.get("choices")
-                .and_then(|c| c.get(0))
-                .and_then(|c| c.get("finish_reason"))
-                .is_some()
+            e.get("choices").and_then(|c| c.get(0)).and_then(|c| c.get("finish_reason")).is_some()
         });
         assert!(final_chunk.is_some());
         let usage = final_chunk.unwrap().get("usage").unwrap();

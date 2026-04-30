@@ -55,10 +55,7 @@ pub enum ChatMessage {
         reasoning_content: Option<String>,
     },
     #[serde(rename = "tool")]
-    Tool {
-        content: ChatMessageContent,
-        tool_call_id: String,
-    },
+    Tool { content: ChatMessageContent, tool_call_id: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -76,9 +73,7 @@ pub enum ContentPart {
     #[serde(rename = "image_url")]
     Image { image_url: ImageUrl },
     #[serde(rename = "file")]
-    File {
-        file: serde_json::Value,
-    },
+    File { file: serde_json::Value },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -1,8 +1,8 @@
+use crate::app::errors::AppError;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::Json;
 use serde::Serialize;
-use crate::app::errors::AppError;
 
 #[derive(Serialize)]
 pub struct ErrorResponse {
@@ -27,7 +27,9 @@ impl IntoResponse for AppError {
         let status = match &self {
             AppError::Validation(_) => StatusCode::BAD_REQUEST,
             AppError::NotFound(_) => StatusCode::NOT_FOUND,
-            AppError::Internal(msg) if msg.contains("Scan already in progress") => StatusCode::CONFLICT,
+            AppError::Internal(msg) if msg.contains("Scan already in progress") => {
+                StatusCode::CONFLICT
+            },
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (status, Json(ErrorResponse::from(self))).into_response()

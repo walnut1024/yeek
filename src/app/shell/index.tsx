@@ -16,19 +16,24 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import SessionRow from "@/pages/sessions/session-row";
 import SessionDetailPane from "@/pages/sessions/session-detail-pane";
-import SystemPage from "@/pages/system/system-page";
+import DashboardPage from "@/pages/dashboard/dashboard-page";
+import SettingsPage from "@/pages/system/settings-page";
 import SkillsPage from "@/pages/skills/skills-page";
 import MarketplacePage from "@/pages/marketplace/marketplace-page";
+import ProxyPage from "@/pages/proxy/proxy-page";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { ChatIcon, DashboardIcon, BoltIcon, StoreIcon, SettingsIcon, NetworkIcon } from "@/components/icons";
 import { SESSION_PAGE_SIZE } from "@/lib/constants";
 import { useGroupedSessions } from "./use-grouped-sessions";
 import { useSessionSelection } from "./use-session-selection";
 import { useKeyboardNavigation } from "./use-keyboard-navigation";
 
 export function AppShell() {
-  const [section, setSection] = useState<"sessions" | "skills" | "marketplace" | "system">("sessions");
+  const [section, setSection] = useState<"dashboard" | "sessions" | "skills" | "marketplace" | "settings" | "proxy">("dashboard");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const queryClient = useQueryClient();
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   useZoom();
 
   const { data: status } = useQuery({
@@ -56,56 +61,63 @@ export function AppShell() {
     <div className="app-shell">
       <div className="amber-overlay" />
       <div className="relative z-10 flex h-screen overflow-hidden">
-        {/* Sidebar */}
-        <nav className="flex w-[180px] shrink-0 flex-col border-r border-border bg-card">
-          <div className="px-4 py-3">
-            <span className="font-mono text-[15px] font-bold uppercase tracking-[0.06em] text-foreground">
-              {t("app.title")}
-            </span>
-          </div>
-          <div className="flex-1 space-y-0.5 px-2">
+        {/* Sidebar — icon only */}
+        <TooltipProvider delay={200}>
+        <nav className="flex w-[48px] shrink-0 flex-col items-center border-r border-border bg-card py-3">
+          <div className="flex-1 space-y-1">
             {([
-              { key: "sessions" as const, label: t("nav.sessions"), badge: status ? String(status.total_sessions) : undefined },
-              { key: "skills" as const, label: t("nav.skills") },
-              { key: "marketplace" as const, label: t("nav.marketplace") },
-              { key: "system" as const, label: t("nav.system") },
-            ]).map(({ key, label, badge }) => (
-              <button
-                type="button"
-                key={key}
-                onClick={() => setSection(key)}
-                className={`flex w-full items-center gap-2 rounded-sm px-2.5 py-1.5 text-[12px] font-medium uppercase tracking-[0.1em] transition-colors ${
-                  section === key
-                    ? "bg-secondary text-foreground"
-                    : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
-                }`}
-              >
-                <span className="flex-1 text-left">{label}</span>
-                {badge && (
-                  <span className="font-mono text-[10px] text-muted-foreground">{badge}</span>
-                )}
-              </button>
+              { key: "dashboard" as const, label: t("nav.dashboard"), icon: DashboardIcon },
+              { key: "sessions" as const, label: t("nav.sessions"), icon: ChatIcon, badge: status ? String(status.total_sessions) : undefined },
+              { key: "skills" as const, label: t("nav.skills"), icon: BoltIcon },
+              { key: "marketplace" as const, label: t("nav.marketplace"), icon: StoreIcon },
+              { key: "proxy" as const, label: t("nav.proxy"), icon: NetworkIcon },
+            ]).map(({ key, label, icon: Icon, badge }) => (
+              <Tooltip key={key}>
+                <TooltipTrigger
+                  onClick={() => setSection(key)}
+                  className={`relative flex h-8 w-8 items-center justify-center rounded-md transition-colors ${
+                    section === key
+                      ? "bg-secondary text-foreground"
+                      : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+                  }`}
+                >
+                  <Icon />
+                  {badge && (
+                    <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 font-mono text-[9px] font-medium text-white">
+                      {badge}
+                    </span>
+                  )}
+                </TooltipTrigger>
+                <TooltipContent side="right" className="text-[12px]">{label}</TooltipContent>
+              </Tooltip>
             ))}
           </div>
-          <div className="border-t border-border px-2 py-2">
-            <button
-              type="button"
-              onClick={() => i18n.changeLanguage(i18n.language === "zh-CN" ? "en" : "zh-CN")}
-              className="w-full rounded-sm px-2.5 py-1.5 text-left font-mono text-[12px] font-medium tracking-[0.04em] text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground"
+          <Tooltip>
+            <TooltipTrigger
+              onClick={() => setSection("settings")}
+              className={`relative flex h-8 w-8 items-center justify-center rounded-md transition-colors ${
+                section === "settings"
+                  ? "bg-secondary text-foreground"
+                  : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+              }`}
             >
-              {i18n.language === "zh-CN" ? "EN" : "中文"}
-            </button>
-          </div>
+              <SettingsIcon />
+            </TooltipTrigger>
+            <TooltipContent side="right" className="text-[12px]">{t("nav.settings")}</TooltipContent>
+          </Tooltip>
         </nav>
+        </TooltipProvider>
 
         {/* Main content */}
         <main className="min-h-0 min-w-0 flex-1">
+          {section === "dashboard" && <DashboardPage />}
           {section === "sessions" && (
             <SessionsPage selectedId={selectedId} onSelect={setSelectedId} />
           )}
           {section === "skills" && <SkillsPage />}
           {section === "marketplace" && <MarketplacePage />}
-          {section === "system" && <SystemPage />}
+          {section === "settings" && <SettingsPage />}
+          {section === "proxy" && <ProxyPage />}
         </main>
       </div>
     </div>
@@ -143,6 +155,8 @@ function SessionsPage({
         limit: SESSION_PAGE_SIZE,
       }),
     enabled: !isSearching,
+    refetchInterval: 30_000,
+    staleTime: 10_000,
   });
 
   const searchQuery = useQuery({
@@ -153,6 +167,8 @@ function SessionsPage({
         limit: SESSION_PAGE_SIZE,
       }),
     enabled: isSearching,
+    refetchInterval: 30_000,
+    staleTime: 10_000,
   });
 
   const { data, isLoading, error } = isSearching ? searchQuery : browseQuery;

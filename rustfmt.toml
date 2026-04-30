@@ -1,0 +1,23 @@
+# Rustfmt configuration for yeek workspace
+# Run: cargo fmt --all
+#
+# All options here are stable-channel only.
+# Nightly-only options (imports_granularity, group_imports, etc.)
+# are intentionally omitted for portability.
+
+edition = "2021"
+max_width = 100
+tab_spaces = 4
+hard_tabs = false
+
+# Heuristics
+use_small_heuristics = "Max"
+
+# Expressions
+match_block_trailing_comma = true
+
+# Imports
+reorder_imports = true
+
+# Items
+newline_style = "Unix"

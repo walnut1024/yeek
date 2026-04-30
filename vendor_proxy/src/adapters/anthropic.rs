@@ -35,11 +35,7 @@ impl AnthropicAdapter {
                         content: AnthropicContent::Blocks(blocks),
                     });
                 }
-                ChatMessage::Assistant {
-                    content,
-                    tool_calls,
-                    ..
-                } => {
+                ChatMessage::Assistant { content, tool_calls, .. } => {
                     let mut blocks: Vec<AnthropicContentBlock> = Vec::new();
 
                     if let Some(ref text) = content {
@@ -69,10 +65,7 @@ impl AnthropicAdapter {
                         });
                     }
                 }
-                ChatMessage::Tool {
-                    content,
-                    tool_call_id,
-                } => {
+                ChatMessage::Tool { content, tool_call_id } => {
                     let text = match content {
                         ChatMessageContent::String(s) => s.clone(),
                         ChatMessageContent::Parts(parts) => parts
@@ -169,23 +162,15 @@ impl AnthropicAdapter {
             object: "chat.completion".to_string(),
             created: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_default()
                 .as_secs(),
             model: resp.model.clone(),
             choices: vec![ChatChoice {
                 index: 0,
                 message: ChatResponseMessage {
                     role: "assistant".to_string(),
-                    content: if text_content.is_empty() {
-                        None
-                    } else {
-                        Some(text_content)
-                    },
-                    tool_calls: if tool_calls.is_empty() {
-                        None
-                    } else {
-                        Some(tool_calls)
-                    },
+                    content: if text_content.is_empty() { None } else { Some(text_content) },
+                    tool_calls: if tool_calls.is_empty() { None } else { Some(tool_calls) },
                     reasoning_content: None,
                     annotations: None,
                 },
@@ -207,9 +192,9 @@ impl AnthropicAdapter {
                         AnthropicContentBlock::Text { text: text.clone() }
                     }
                     ContentPart::Image { image_url } => Self::image_to_anthropic(&image_url.url),
-                    ContentPart::File { file } => AnthropicContentBlock::Text {
-                        text: format!("[File: {}]", file),
-                    },
+                    ContentPart::File { file } => {
+                        AnthropicContentBlock::Text { text: format!("[File: {}]", file) }
+                    }
                 })
                 .collect(),
         }
@@ -230,9 +215,7 @@ impl AnthropicAdapter {
                 };
             }
         }
-        AnthropicContentBlock::Text {
-            text: format!("[Image: {}]", url),
-        }
+        AnthropicContentBlock::Text { text: format!("[Image: {}]", url) }
     }
 
     fn merge_user_content(last: &mut AnthropicMessage, new_blocks: Vec<AnthropicContentBlock>) {
@@ -276,10 +259,8 @@ fn chat_to_anthropic_tool_choice(
         Some(serde_json::Value::Object(obj)) => {
             let tc_type = obj.get("type").and_then(|v| v.as_str()).unwrap_or("");
             if tc_type == "function" {
-                if let Some(name) = obj
-                    .get("function")
-                    .and_then(|f| f.get("name"))
-                    .and_then(|v| v.as_str())
+                if let Some(name) =
+                    obj.get("function").and_then(|f| f.get("name")).and_then(|v| v.as_str())
                 {
                     return Some(serde_json::json!({"type": "tool", "name": name}));
                 }
@@ -307,11 +288,7 @@ impl FormatAdapter for AnthropicAdapter {
 
         // Debug: log the Anthropic request (truncated)
         let req_json = serde_json::to_string(&anthropic_req).unwrap_or_default();
-        let preview = if req_json.len() > 2000 {
-            &req_json[..2000]
-        } else {
-            &req_json
-        };
+        let preview = if req_json.len() > 2000 { &req_json[..2000] } else { &req_json };
         tracing::info!("Anthropic request ({} bytes): {}", req_json.len(), preview);
 
         let auth = AuthHeaders::anthropic(api_key);
@@ -319,16 +296,13 @@ impl FormatAdapter for AnthropicAdapter {
         if responses_req.stream {
             // Streaming path
             let url = format!("{}/messages", base_url.trim_end_matches('/'));
-            let rx = client
-                .post_streaming_with_headers(&url, &auth, &anthropic_req)
-                .await?;
+            let rx = client.post_streaming_with_headers(&url, &auth, &anthropic_req).await?;
             Ok(ProviderResponse::Stream(rx))
         } else {
             // Non-streaming path
             let url = format!("{}/messages", base_url.trim_end_matches('/'));
-            let anthropic_resp: AnthropicResponse = client
-                .post_json_with_headers(&url, &auth, &anthropic_req)
-                .await?;
+            let anthropic_resp: AnthropicResponse =
+                client.post_json_with_headers(&url, &auth, &anthropic_req).await?;
 
             // Step 3: Anthropic → Chat
             let chat_resp = Self::anthropic_to_chat(&anthropic_resp);

@@ -34,6 +34,7 @@ pub struct ResumeRequest {
     pub session_id: String,
     pub agent: String,
     pub cwd: Option<String>,
+    pub terminal: Option<String>,
 }
 
 #[derive(Deserialize)]

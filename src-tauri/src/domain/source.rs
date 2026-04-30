@@ -19,7 +19,7 @@ pub enum DeletePolicy {
 
 impl DeletePolicy {
     #[allow(dead_code)]
-    pub fn as_str(&self) -> &str {
+    pub(crate) fn as_str(&self) -> &str {
         match self {
             DeletePolicy::NotAllowed => "not_allowed",
             DeletePolicy::HideOnly => "hide_only",

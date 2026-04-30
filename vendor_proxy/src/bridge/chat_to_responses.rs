@@ -22,10 +22,7 @@ pub fn chat_to_responses(
                     id: Some(format!("rs_{}", &chat.id)),
                     status: Some(choice_status.clone()),
                     role: "assistant".to_string(),
-                    content: vec![OutputContentBlock::OutputText {
-                        text: reasoning.clone(),
-                        annotations: vec![],
-                    }],
+                    summary: vec![ReasoningSummaryBlock::SummaryText { text: reasoning.clone() }],
                 });
             }
         }
@@ -34,21 +31,8 @@ pub fn chat_to_responses(
         if let Some(ref content) = choice.message.content {
             if !content.is_empty() {
                 let annotations = choice.message.annotations.clone().unwrap_or_default();
-                let mut content_blocks = Vec::new();
-
-                // Embed reasoning as reasoning_text block in message content
-                if let Some(ref reasoning) = choice.message.reasoning_content {
-                    if !reasoning.is_empty() {
-                        content_blocks.push(OutputContentBlock::ReasoningText {
-                            text: reasoning.clone(),
-                        });
-                    }
-                }
-
-                content_blocks.push(OutputContentBlock::OutputText {
-                    text: content.clone(),
-                    annotations,
-                });
+                let content_blocks =
+                    vec![OutputContentBlock::OutputText { text: content.clone(), annotations }];
 
                 output.push(ResponsesOutputItem::Message {
                     id: Some(format!("msg_{}", &chat.id)),
@@ -108,9 +92,7 @@ pub fn chat_to_responses(
             req.previous_response_id.clone(),
             req.parallel_tool_calls,
         ),
-        None => (
-            None, None, None, None, None, None, None, None, None, None, None,
-        ),
+        None => (None, None, None, None, None, None, None, None, None, None, None),
     };
 
     ResponsesResponse {
@@ -168,11 +150,7 @@ mod tests {
                 },
                 finish_reason: Some(finish_reason.to_string()),
             }],
-            usage: Some(ChatUsage {
-                prompt_tokens: 10,
-                completion_tokens: 3,
-                total_tokens: 13,
-            }),
+            usage: Some(ChatUsage { prompt_tokens: 10, completion_tokens: 3, total_tokens: 13 }),
         }
     }
 
@@ -183,19 +161,11 @@ mod tests {
         assert_eq!(resp.status, "completed");
         assert_eq!(resp.output.len(), 1);
         match &resp.output[0] {
-            ResponsesOutputItem::Message {
-                id,
-                status,
-                content,
-                ..
-            } => {
+            ResponsesOutputItem::Message { id, status, content, .. } => {
                 assert!(id.as_ref().unwrap().starts_with("msg_"));
                 assert_eq!(status.as_deref(), Some("completed"));
-                match &content[0] {
-                    OutputContentBlock::OutputText { text, .. } => {
-                        assert_eq!(text, "Hello!");
-                    }
-                    _ => {}
+                if let OutputContentBlock::OutputText { text, .. } = &content[0] {
+                    assert_eq!(text, "Hello!");
                 }
             }
             _ => panic!("Expected message output"),
@@ -233,11 +203,7 @@ mod tests {
                 },
                 finish_reason: Some("stop".to_string()),
             }],
-            usage: Some(ChatUsage {
-                prompt_tokens: 10,
-                completion_tokens: 5,
-                total_tokens: 15,
-            }),
+            usage: Some(ChatUsage { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 }),
         };
 
         let resp = chat_to_responses(&chat, None);
@@ -245,19 +211,13 @@ mod tests {
 
         // First output should be reasoning
         match &resp.output[0] {
-            ResponsesOutputItem::Reasoning {
-                id,
-                status,
-                content,
-                ..
-            } => {
+            ResponsesOutputItem::Reasoning { id, status, summary, .. } => {
                 assert!(id.as_ref().unwrap().starts_with("rs_"));
                 assert_eq!(status.as_deref(), Some("completed"));
-                match &content[0] {
-                    OutputContentBlock::OutputText { text, .. } => {
+                match &summary[0] {
+                    ReasoningSummaryBlock::SummaryText { text } => {
                         assert_eq!(text, "Let me think...");
                     }
-                    _ => {}
                 }
             }
             _ => panic!("Expected reasoning output item"),
@@ -295,22 +255,12 @@ mod tests {
                 },
                 finish_reason: Some("tool_calls".to_string()),
             }],
-            usage: Some(ChatUsage {
-                prompt_tokens: 10,
-                completion_tokens: 5,
-                total_tokens: 15,
-            }),
+            usage: Some(ChatUsage { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 }),
         };
 
         let resp = chat_to_responses(&chat, None);
         match &resp.output[0] {
-            ResponsesOutputItem::FunctionCall {
-                id,
-                status,
-                call_id,
-                name,
-                ..
-            } => {
+            ResponsesOutputItem::FunctionCall { id, status, call_id, name, .. } => {
                 assert!(id.as_ref().unwrap().starts_with("fc_"));
                 assert_eq!(status.as_deref(), Some("completed"));
                 assert_eq!(call_id, "call_abc");

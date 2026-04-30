@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Yeek — Hermes Style Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  /* ── Reset ────────────────────────────────────────────── */
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --background: #000000;
+    --panel: #041C1C;
+    --panel-raised: #0a2a2a;
+    --midground: #ffe6cb;
+    --midground-60: rgba(255, 230, 203, 0.6);
+    --midground-40: rgba(255, 230, 203, 0.4);
+    --midground-20: rgba(255, 230, 203, 0.2);
+    --midground-10: rgba(255, 230, 203, 0.1);
+    --midground-05: rgba(255, 230, 203, 0.05);
+    --accent: #ffff89;
+    --amber: rgba(255, 189, 56, 0.35);
+    --green: #a1c181;
+    --green-15: rgba(161, 193, 129, 0.15);
+    --red: #d07277;
+    --red-15: rgba(208, 114, 119, 0.15);
+    --amber-t: #dec184;
+    --amber-t-15: rgba(222, 193, 132, 0.15);
+    --gray: #878a98;
+    --gray-15: rgba(135, 138, 152, 0.15);
+    --blue: #74ade8;
+    --blue-15: rgba(116, 173, 232, 0.15);
+    --border: var(--midground-20);
+    --font-display: 'Space Mono', monospace;
+    --font-sans: 'Inter', -apple-system, sans-serif;
+    --font-mono: 'Courier Prime', 'DM Mono', monospace;
+  }
+
+  html { font-size: 14px; line-height: 1.4; }
+  body {
+    background: var(--background);
+    color: var(--midground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ── Amber gradient overlay ───────────────────────────── */
+  .amber-overlay {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background: radial-gradient(ellipse at 0% 0%, transparent 60%, var(--amber) 100%);
+    mix-blend-mode: lighten;
+    opacity: 0.15;
+  }
+
+  /* ── App shell ────────────────────────────────────────── */
+  .app {
+    position: relative; z-index: 1;
+    display: flex; flex-direction: column;
+    height: 100vh;
+  }
+
+  /* ── Header ───────────────────────────────────────────── */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 44px;
+    border-bottom: 1px solid var(--border);
+  }
+  .header-left { display: flex; align-items: center; gap: 16px; }
+  .header-brand {
+    font-family: var(--font-display);
+    font-size: 16px; font-weight: 700;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    mix-blend-mode: plus-lighter;
+  }
+  .header-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--green);
+  }
+  .nav-pills { display: flex; gap: 2px; }
+  .nav-pill {
+    font-family: var(--font-display);
+    font-size: 12px; font-weight: 400;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    padding: 6px 14px;
+    background: transparent;
+    color: var(--midground-40);
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .nav-pill:hover { color: var(--midground-60); background: var(--midground-05); }
+  .nav-pill.active {
+    color: var(--midground);
+    border-color: var(--midground-20);
+    background: var(--panel);
+  }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .session-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--midground-60);
+    border: 1px solid var(--border);
+    padding: 4px 10px;
+  }
+  .session-chip .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); }
+  .lang-toggle {
+    font-family: var(--font-display); font-size: 13px; font-weight: 500;
+    letter-spacing: 0.05em;
+    padding: 6px 12px;
+    background: transparent; border: none;
+    color: var(--midground-60); cursor: pointer;
+    transition: color 0.15s;
+  }
+  .lang-toggle:hover { color: var(--midground); }
+
+  /* ── Main layout ──────────────────────────────────────── */
+  main {
+    flex: 1; display: grid; min-height: 0;
+    grid-template-columns: 360px minmax(0, 1fr);
+  }
+  .main-full { grid-template-columns: 1fr; }
+
+  /* ── Panels ───────────────────────────────────────────── */
+  .panel {
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    background: var(--background);
+  }
+  .panel:last-child { border-right: none; }
+  .panel-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* ── Search input ─────────────────────────────────────── */
+  .search-input {
+    width: 100%; height: 32px;
+    padding: 0 12px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--midground);
+    font-family: var(--font-sans); font-size: 14px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .search-input::placeholder { color: var(--midground-20); }
+  .search-input:focus { border-color: var(--midground-40); }
+
+  /* ── Section labels (kicker) ──────────────────────────── */
+  .kicker {
+    font-family: var(--font-display);
+    font-size: 12px; font-weight: 400;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--midground-40);
+  }
+  .kicker-label {
+    font-family: var(--font-display);
+    font-size: 12px; font-weight: 400;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--midground-60);
+  }
+
+  /* ── Project group header ─────────────────────────────── */
+  .project-group {
+    margin: 4px 8px;
+    border: 1px solid var(--midground-20);
+    background: var(--midground-05);
+  }
+  .project-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 10px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .project-header:hover { background: var(--midground-10); }
+  .collapse-icon {
+    width: 16px; height: 16px;
+    display: grid; place-items: center;
+    background: var(--panel);
+    font-size: 9px; color: var(--midground-60);
+    flex-shrink: 0;
+  }
+  .project-name {
+    flex: 1; min-width: 0;
+    font-size: 13px; font-weight: 500;
+    color: var(--midground);
+    text-transform: none;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .project-count {
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--midground-60);
+    border: 1px solid var(--midground-20);
+    padding: 2px 8px;
+    flex-shrink: 0;
+  }
+
+  /* ── Session row ──────────────────────────────────────── */
+  .session-row {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 8px 10px;
+    margin: 1px 0;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s;
+    animation: fadeSlideIn 300ms ease-out;
+  }
+  .session-row:hover {
+    border-color: var(--midground-20);
+    background: var(--midground-05);
+  }
+  .session-row.selected {
+    border-color: var(--midground-20);
+    background: var(--midground-10);
+  }
+  .session-agent {
+    font-family: var(--font-display);
+    font-size: 11px; font-weight: 400;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--midground-40);
+  }
+  .session-title {
+    font-size: 14px; font-weight: 500;
+    color: var(--midground);
+    text-transform: none;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    display: block;
+    margin-top: 2px;
+  }
+  .session-meta {
+    display: flex; flex-wrap: wrap; gap: 4px;
+    margin-top: 6px;
+  }
+  .meta-chip {
+    display: inline-flex; align-items: center;
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--midground-60);
+    border: 1px solid var(--midground-20);
+    padding: 2px 8px;
+  }
+  .meta-chip.brand {
+    color: var(--blue);
+    border-color: rgba(116, 173, 232, 0.3);
+    background: var(--blue-15);
+  }
+  .session-time {
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--midground-60);
+    border: 1px solid var(--midground-20);
+    padding: 2px 8px;
+    flex-shrink: 0;
+  }
+
+  /* ── Detail pane ──────────────────────────────────────── */
+  .detail-empty {
+    display: flex; align-items: center; justify-content: center;
+    height: 100%; padding: 24px;
+  }
+  .detail-empty-inner {
+    max-width: 480px;
+    border: 1px solid var(--border);
+    padding: 20px;
+    text-align: center;
+  }
+  .detail-empty-inner .kicker { margin-bottom: 8px; }
+  .detail-empty-inner h3 {
+    font-family: var(--font-sans);
+    font-size: 16px; font-weight: 500;
+    color: var(--midground);
+    text-transform: none;
+    mix-blend-mode: plus-lighter;
+    margin-top: 8px;
+  }
+  .detail-empty-inner p {
+    font-size: 14px; line-height: 1.5;
+    color: var(--midground-60);
+    text-transform: none;
+    margin-top: 8px;
+  }
+
+  /* ── Skills page ──────────────────────────────────────── */
+  .skills-toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .skills-toolbar-left { display: flex; align-items: center; gap: 8px; }
+  .skills-toolbar-right { display: flex; align-items: center; gap: 8px; }
+
+  .health-bar {
+    display: flex; align-items: center; gap: 12px;
+    padding: 6px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    font-size: 12px; color: var(--midground-60);
+  }
+  .health-dot-label {
+    display: flex; align-items: center; gap: 4px;
+    font-family: var(--font-mono); font-size: 11px;
+  }
+  .health-dot { width: 5px; height: 5px; border-radius: 50%; }
+
+  /* ── Plugin card ──────────────────────────────────────── */
+  .plugin-card {
+    margin: 2px 8px;
+    border: 1px solid var(--midground-20);
+    border-left: 3px solid var(--midground-20);
+    background: var(--midground-05);
+    overflow: hidden;
+    transition: all 0.15s;
+  }
+  .plugin-card:hover { background: var(--midground-10); }
+  .plugin-card.health-ok { border-left-color: var(--green); }
+  .plugin-card.health-partial { border-left-color: var(--amber-t); }
+  .plugin-card.health-hook { border-left-color: var(--gray); }
+  .plugin-card.health-broken { border-left-color: var(--red); }
+
+  .plugin-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+  }
+  .plugin-expand {
+    width: 16px; height: 16px;
+    display: grid; place-items: center;
+    background: var(--panel);
+    font-size: 9px; color: var(--midground-60);
+    flex-shrink: 0;
+    transition: transform 0.2s;
+  }
+  .plugin-expand.open { transform: rotate(90deg); }
+  .plugin-name {
+    font-size: 13px; font-weight: 500;
+    color: var(--midground);
+    text-transform: none;
+  }
+  .plugin-meta {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    margin-top: 2px;
+  }
+  .plugin-detail {
+    border-top: 1px solid var(--border);
+    background: var(--panel);
+  }
+  .detail-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 12px;
+    border-bottom: 1px solid var(--midground-10);
+  }
+  .detail-label {
+    width: 48px; flex-shrink: 0;
+    font-family: var(--font-display);
+    font-size: 10px; font-weight: 400;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--midground-40);
+  }
+  .detail-value {
+    flex: 1; min-width: 0;
+    font-size: 11px; color: var(--midground-60);
+    text-transform: none;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .detail-value.mono { font-family: var(--font-mono); }
+
+  .health-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 8px;
+    font-family: var(--font-display);
+    font-size: 10px; font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+  .health-badge.ok { color: var(--green); background: var(--green-15); border: 1px solid rgba(161,193,129,0.3); }
+  .health-badge.partial { color: var(--amber-t); background: var(--amber-t-15); border: 1px solid rgba(222,193,132,0.3); }
+  .health-badge.hook { color: var(--gray); background: var(--gray-15); border: 1px solid rgba(135,138,152,0.3); }
+  .health-badge.broken { color: var(--red); background: var(--red-15); border: 1px solid rgba(208,114,119,0.3); }
+  .health-badge .dot { width: 4px; height: 4px; border-radius: 50%; }
+
+  .toggle-switch {
+    position: relative;
+    width: 32px; height: 18px;
+    border-radius: 9px;
+    border: 1px solid var(--midground-20);
+    background: var(--panel);
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .toggle-switch.on {
+    background: var(--blue);
+    border-color: var(--blue);
+  }
+  .toggle-switch .knob {
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--midground);
+    transition: transform 0.2s;
+  }
+  .toggle-switch.on .knob { transform: translateX(14px); }
+
+  .uninstall-btn {
+    font-family: var(--font-display);
+    font-size: 11px; font-weight: 400;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--midground-60);
+    background: transparent;
+    border: 1px solid var(--midground-20);
+    padding: 3px 10px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.15s;
+  }
+  .uninstall-btn:hover {
+    border-color: var(--red);
+    color: var(--red);
+    background: var(--red-15);
+  }
+
+  .skill-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 12px;
+    border-bottom: 1px solid var(--midground-10);
+    transition: background 0.15s;
+  }
+  .skill-row:hover { background: var(--midground-05); }
+  .skill-type-badge {
+    width: 16px; height: 16px;
+    display: grid; place-items: center;
+    font-family: var(--font-display);
+    font-size: 9px; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .skill-type-badge.skill { color: var(--blue); border: 1px solid rgba(116,173,232,0.3); }
+  .skill-type-badge.agent { color: var(--amber-t); border: 1px solid rgba(222,193,132,0.3); }
+
+  .source-chip {
+    font-size: 11px; color: var(--midground-60);
+    text-transform: none;
+  }
+  .source-chip .market { color: var(--blue); opacity: 0.7; }
+
+  /* ── System page ──────────────────────────────────────── */
+  .system-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) 320px;
+    height: 100%;
+  }
+  .system-main {
+    padding: 16px;
+    overflow: auto;
+    border-right: 1px solid var(--border);
+  }
+  .system-aside {
+    padding: 16px;
+    overflow: auto;
+  }
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    border: 1px solid var(--border);
+    background: var(--border);
+    margin-top: 12px;
+  }
+  .stat-card {
+    padding: 12px;
+    background: var(--background);
+  }
+  .stat-card.brand {
+    background: var(--panel);
+  }
+  .stat-card .kicker-label { color: var(--blue); }
+  .stat-value {
+    font-family: var(--font-mono);
+    font-size: 20px; font-weight: 500;
+    margin-top: 8px;
+  }
+
+  .action-timeline {
+    display: flex;
+    margin-top: 12px;
+  }
+  .timeline-axis {
+    width: 88px;
+    display: flex; flex-direction: column; align-items: center;
+    padding-top: 12px;
+    border-right: 1px solid var(--border);
+    padding-right: 0;
+  }
+  .timeline-date {
+    font-family: var(--font-mono);
+    font-size: 13px; font-weight: 500;
+    color: var(--midground);
+  }
+  .timeline-relative {
+    font-size: 12px;
+    color: var(--midground-60);
+  }
+  .timeline-line { flex: 1; width: 2px; background: var(--border); margin-top: 8px; }
+  .timeline-entries { flex: 1; display: flex; flex-direction: column; }
+  .timeline-entry {
+    display: flex; align-items: flex-start;
+    margin-bottom: 12px;
+  }
+  .timeline-time {
+    width: 88px;
+    display: flex; flex-direction: column; align-items: flex-end;
+    padding-right: 12px;
+  }
+  .timeline-time-main {
+    font-family: var(--font-mono);
+    font-size: 13px; font-weight: 500;
+    color: var(--midground);
+  }
+  .timeline-time-rel {
+    font-size: 12px;
+    color: var(--midground-60);
+  }
+  .timeline-dot {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    display: grid; place-items: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .timeline-dot .inner { width: 5px; height: 5px; border-radius: 50%; background: var(--panel); }
+  .timeline-card {
+    flex: 1;
+    margin-left: 12px;
+    border: 1px solid var(--border);
+    padding: 8px;
+  }
+  .timeline-action {
+    font-family: var(--font-display);
+    font-size: 12px; font-weight: 500;
+    padding: 3px 8px;
+    display: inline-block;
+  }
+  .timeline-action.sync { background: var(--blue); color: var(--background); }
+  .timeline-action.delete { background: var(--red); color: var(--background); }
+  .timeline-detail {
+    font-size: 14px; line-height: 1.5;
+    color: var(--midground-60);
+    text-transform: none;
+    margin-top: 4px;
+  }
+
+  .hint-card {
+    border: 1px solid var(--border);
+    background: var(--panel);
+    padding: 12px;
+    margin-top: 8px;
+  }
+  .hint-card p {
+    font-size: 14px; line-height: 1.5;
+    color: var(--midground-60);
+    text-transform: none;
+  }
+  .hint-card h4 {
+    font-size: 14px; font-weight: 500;
+    color: var(--midground);
+    text-transform: none;
+  }
+
+  /* ── Scroll area ──────────────────────────────────────── */
+  .scroll-area {
+    flex: 1; min-height: 0; overflow-y: auto;
+  }
+  .scroll-area::-webkit-scrollbar { width: 5px; }
+  .scroll-area::-webkit-scrollbar-track { background: transparent; }
+  .scroll-area::-webkit-scrollbar-thumb { background: rgba(255,230,203,0.2); border-radius: 10px; }
+
+  /* ── Buttons ──────────────────────────────────────────── */
+  .btn {
+    font-family: var(--font-display);
+    font-size: 13px; font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 6px 14px;
+    border: 1px solid var(--midground-20);
+    background: transparent;
+    color: var(--midground-60);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn:hover { color: var(--midground); background: var(--midground-05); }
+  .btn.primary { background: var(--midground); color: var(--background); border-color: var(--midground); }
+  .btn.primary:hover { opacity: 0.9; }
+  .btn.danger { color: var(--red); border-color: rgba(208,114,119,0.3); }
+  .btn.danger:hover { background: var(--red-15); border-color: var(--red); }
+
+  /* ── Animations ───────────────────────────────────────── */
+  @keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Section toggle (for demo) ────────────────────────── */
+  .view-tabs { display: flex; gap: 4px; }
+  .view-tab {
+    font-family: var(--font-display);
+    font-size: 11px; font-weight: 400;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--midground-40);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .view-tab:hover { color: var(--midground-60); }
+  .view-tab.active {
+    border-color: var(--midground-20);
+    background: var(--panel);
+    color: var(--midground);
+  }
+
+  /* ── Page visibility ──────────────────────────────────── */
+  .page { display: none; height: 100%; }
+  .page.active { display: flex; flex-direction: column; }
+  .page-grid.active { display: grid; }
+
+  /* ── Flat skill row ───────────────────────────────────── */
+  .flat-skill-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 12px;
+    border: 1px solid transparent;
+    margin: 1px 8px;
+    transition: all 0.15s;
+    animation: fadeSlideIn 300ms ease-out;
+  }
+  .flat-skill-row:hover {
+    border-color: var(--midground-20);
+    background: var(--midground-05);
+  }
+
+  /* ── Marketplace source line ──────────────────────────── */
+  .market-source {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--midground-40);
+    border: 1px solid var(--midground-10);
+    padding: 2px 8px;
+    flex-shrink: 0;
+  }
+  .market-source .accent { color: var(--blue); opacity: 0.7; }
+
+  /* ── Install path code block ──────────────────────────── */
+  .path-block {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--midground-60);
+    background: var(--panel);
+    border: 1px solid var(--midground-20);
+    padding: 8px 12px;
+    word-break: break-all;
+    text-transform: none;
+  }
+</style>
+</head>
+<body>
+
+<div class="amber-overlay"></div>
+
+<div class="app">
+  <!-- ── Header ──────────────────────────────────────── -->
+  <header>
+    <div class="header-left">
+      <div class="header-dot"></div>
+      <span class="header-brand">Yeek</span>
+      <div class="nav-pills">
+        <button class="nav-pill active" onclick="showPage('sessions')">Sessions</button>
+        <button class="nav-pill" onclick="showPage('skills')">Skills</button>
+        <button class="nav-pill" onclick="showPage('system')">System</button>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="session-chip">
+        <span class="dot"></span>
+        <span>42 sessions</span>
+      </div>
+      <button class="lang-toggle">中</button>
+    </div>
+  </header>
+
+  <!-- ── Sessions Page ───────────────────────────────── -->
+  <main id="page-sessions" class="page-grid active">
+    <section class="panel">
+      <div class="panel-header">
+        <input class="search-input" type="text" placeholder="Search sessions..." />
+      </div>
+      <div class="scroll-area">
+        <!-- Project: yeek -->
+        <div class="project-group">
+          <div class="project-header">
+            <span class="collapse-icon">▼</span>
+            <span class="project-name">yeek (/Users/hipnusleo/Documents/projects/apps/yeek)</span>
+            <span class="project-count">3</span>
+          </div>
+          <div class="session-row">
+            <div style="flex:1;min-width:0">
+              <div class="session-agent">Claude Code</div>
+              <span class="session-title">Fix scroll area overflow in session detail pane</span>
+              <div class="session-meta">
+                <span class="meta-chip brand">glm-5.1</span>
+                <span class="meta-chip">12 msgs</span>
+                <span class="meta-chip">yeek</span>
+              </div>
+            </div>
+            <span class="session-time">2m ago</span>
+          </div>
+          <div class="session-row selected">
+            <div style="flex:1;min-width:0">
+              <div class="session-agent">Claude Code</div>
+              <span class="session-title">Add Skills management tab with plugin health checks</span>
+              <div class="session-meta">
+                <span class="meta-chip brand">glm-5-turbo</span>
+                <span class="meta-chip">48 msgs</span>
+                <span class="meta-chip">yeek</span>
+              </div>
+            </div>
+            <span class="session-time">15m ago</span>
+          </div>
+          <div class="session-row">
+            <div style="flex:1;min-width:0">
+              <div class="session-agent">Claude Code</div>
+              <span class="session-title">Implement right-click context menu for session deletion</span>
+              <div class="session-meta">
+                <span class="meta-chip brand">glm-5.1</span>
+                <span class="meta-chip">8 msgs</span>
+                <span class="meta-chip">yeek</span>
+              </div>
+            </div>
+            <span class="session-time">1h ago</span>
+          </div>
+        </div>
+
+        <!-- Project: my-app -->
+        <div class="project-group">
+          <div class="project-header">
+            <span class="collapse-icon">▶</span>
+            <span class="project-name">my-app (/Users/hipnusleo/Documents/projects/my-app)</span>
+            <span class="project-count">2</span>
+          </div>
+        </div>
+
+        <!-- Project: api-server -->
+        <div class="project-group">
+          <div class="project-header">
+            <span class="collapse-icon">▶</span>
+            <span class="project-name">api-server (/Users/hipnusleo/Documents/projects/api-server)</span>
+            <span class="project-count">5</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="detail-empty">
+        <div class="detail-empty-inner">
+          <span class="kicker">SESSION SELECTED</span>
+          <h3 style="mix-blend-mode: plus-lighter">Add Skills management tab with plugin health checks</h3>
+          <p>48 messages · glm-5-turbo · yeek</p>
+          <div style="margin-top:16px; text-align:left;">
+            <div style="border-bottom: 1px solid var(--border); padding: 8px 0; display:flex; gap:8px; align-items:flex-start;">
+              <span style="font-family:var(--font-display);font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:var(--blue);width:48px;flex-shrink:0">USER</span>
+              <span style="font-size:14px;line-height:1.5;color:var(--midground-60);text-transform:none">I want to add a Skills management feature to Yeek that shows all installed Claude Code plugins/skills on my computer, including global and project level.</span>
+            </div>
+            <div style="border-bottom: 1px solid var(--border); padding: 8px 0; display:flex; gap:8px; align-items:flex-start;">
+              <span style="font-family:var(--font-display);font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:var(--green);width:48px;flex-shrink:0">AI</span>
+              <span style="font-size:14px;line-height:1.5;color:var(--midground-60);text-transform:none">I'll help you design a Skills management feature. Let me start by exploring the current project structure and understanding the plugin system...</span>
+            </div>
+            <div style="padding: 8px 0; display:flex; gap:8px; align-items:flex-start;">
+              <span style="font-family:var(--font-display);font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:var(--blue);width:48px;flex-shrink:0">USER</span>
+              <span style="font-size:14px;line-height:1.5;color:var(--midground-60);text-transform:none">Also add health validation — I've had plugins that showed up in /plugins but didn't actually work because the files were broken.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ── Skills Page ─────────────────────────────────── -->
+  <div id="page-skills" class="page">
+    <div class="skills-toolbar">
+      <div class="skills-toolbar-left">
+        <div class="view-tabs">
+          <button class="view-tab active">Global <span style="font-size:10px;opacity:0.6">14</span></button>
+          <button class="view-tab">Project <span style="font-size:10px;opacity:0.6">0</span></button>
+        </div>
+      </div>
+      <div class="skills-toolbar-right">
+        <span class="meta-chip">16 skills · 8 agents</span>
+        <div class="view-tabs">
+          <button class="view-tab active">Plugins</button>
+          <button class="view-tab">All Skills</button>
+        </div>
+        <button class="btn">Refresh</button>
+      </div>
+    </div>
+
+    <div class="health-bar">
+      <span class="kicker-label">Health</span>
+      <span class="health-dot-label"><span class="health-dot" style="background:var(--green)"></span> 7</span>
+      <span class="health-dot-label"><span class="health-dot" style="background:var(--amber-t)"></span> 3</span>
+      <span class="health-dot-label"><span class="health-dot" style="background:var(--gray)"></span> 2</span>
+      <span class="health-dot-label"><span class="health-dot" style="background:var(--red)"></span> 2</span>
+    </div>
+
+    <div class="scroll-area">
+      <!-- Plugin: superpowers (OK) -->
+      <div class="plugin-card health-ok">
+        <div class="plugin-header">
+          <span class="plugin-expand open">▶</span>
+          <div style="flex:1;min-width:0">
+            <div class="plugin-name">superpowers</div>
+            <div class="plugin-meta">
+              <span class="meta-chip" style="font-family:var(--font-mono)">v5.0.7</span>
+              <span class="meta-chip">5 skills · 5 agents</span>
+              <span class="source-chip"><span class="market">← claude-plugins-official</span> anthropics/claude-plugins-official</span>
+            </div>
+          </div>
+          <span class="health-badge ok"><span class="dot" style="background:var(--green)"></span> OK</span>
+          <div class="toggle-switch on"><div class="knob"></div></div>
+          <button class="uninstall-btn">Uninstall</button>
+        </div>
+        <div class="plugin-detail">
+          <div class="detail-row">
+            <span class="detail-label">Path</span>
+            <span class="detail-value mono">~/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.7/</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Source</span>
+            <span class="detail-value">claude-plugins-official · anthropics/claude-plugins-official · 2025-04-15</span>
+          </div>
+          <div class="skill-row">
+            <span class="skill-type-badge skill">S</span>
+            <span style="font-size:13px;color:var(--midground);width:160px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">brainstorming</span>
+            <span style="flex:1;min-width:0;font-size:12px;color:var(--midground-60);text-transform:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Help turn ideas into fully formed designs through collaborative dialogue</span>
+            <span class="meta-chip" style="font-family:var(--font-mono);font-size:10px">Read, Glob, Grep</span>
+            <span style="width:5px;height:5px;border-radius:50%;background:var(--green);flex-shrink:0"></span>
+          </div>
+          <div class="skill-row">
+            <span class="skill-type-badge skill">S</span>
+            <span style="font-size:13px;color:var(--midground);width:160px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">writing-plans</span>
+            <span style="flex:1;min-width:0;font-size:12px;color:var(--midground-60);text-transform:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Write comprehensive implementation plans for agentic workers</span>
+            <span class="meta-chip" style="font-family:var(--font-mono);font-size:10px">Read, Glob, Grep, Bash</span>
+            <span style="width:5px;height:5px;border-radius:50%;background:var(--green);flex-shrink:0"></span>
+          </div>
+          <div class="skill-row">
+            <span class="skill-type-badge agent">A</span>
+            <span style="font-size:13px;color:var(--midground);width:160px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">code-reviewer</span>
+            <span style="flex:1;min-width:0;font-size:12px;color:var(--midground-60);text-transform:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Review code for quality, correctness, and spec compliance</span>
+            <span class="meta-chip" style="font-family:var(--font-mono);font-size:10px">Read, Glob, Grep, Bash</span>
+            <span style="width:5px;height:5px;border-radius:50%;background:var(--green);flex-shrink:0"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Plugin: document-skills (PARTIAL) -->
+      <div class="plugin-card health-partial">
+        <div class="plugin-header">
+          <span class="plugin-expand">▶</span>
+          <div style="flex:1;min-width:0">
+            <div class="plugin-name">document-skills</div>
+            <div class="plugin-meta">
+              <span class="meta-chip" style="font-family:var(--font-mono)">v1.2.0</span>
+              <span class="meta-chip">16 skills</span>
+              <span class="source-chip"><span class="market">← claude-plugins-official</span></span>
+            </div>
+          </div>
+          <span class="health-badge partial"><span class="dot" style="background:var(--amber-t)"></span> PARTIAL</span>
+          <div class="toggle-switch on"><div class="knob"></div></div>
+          <button class="uninstall-btn">Uninstall</button>
+        </div>
+      </div>
+
+      <!-- Plugin: claude-hud (HOOK) -->
+      <div class="plugin-card health-hook">
+        <div class="plugin-header">
+          <span class="plugin-expand">▶</span>
+          <div style="flex:1;min-width:0">
+            <div class="plugin-name">claude-hud</div>
+            <div class="plugin-meta">
+              <span class="meta-chip" style="font-family:var(--font-mono)">v1.3.0</span>
+              <span class="meta-chip">hook-only</span>
+              <span class="source-chip"><span class="market">← claude-hud</span> jarrodwatts/claude-hud</span>
+            </div>
+          </div>
+          <span class="health-badge hook"><span class="dot" style="background:var(--gray)"></span> HOOK</span>
+          <div class="toggle-switch on"><div class="knob"></div></div>
+          <button class="uninstall-btn">Uninstall</button>
+        </div>
+      </div>
+
+      <!-- Plugin: obsidian-visual-skills (BROKEN) -->
+      <div class="plugin-card health-broken">
+        <div class="plugin-header">
+          <span class="plugin-expand">▶</span>
+          <div style="flex:1;min-width:0">
+            <div class="plugin-name">obsidian-visual-skills</div>
+            <div class="plugin-meta">
+              <span class="meta-chip" style="font-family:var(--font-mono)">v0.1.0</span>
+              <span class="source-chip"><span class="market">← axton-obsidian-visual-skills</span></span>
+            </div>
+          </div>
+          <span class="health-badge broken"><span class="dot" style="background:var(--red)"></span> BROKEN</span>
+          <div class="toggle-switch"><div class="knob"></div></div>
+          <button class="uninstall-btn">Uninstall</button>
+        </div>
+      </div>
+
+      <!-- Plugin: skill-creator (OK) -->
+      <div class="plugin-card health-ok">
+        <div class="plugin-header">
+          <span class="plugin-expand">▶</span>
+          <div style="flex:1;min-width:0">
+            <div class="plugin-name">skill-creator</div>
+            <div class="plugin-meta">
+              <span class="meta-chip" style="font-family:var(--font-mono)">v2.0.3</span>
+              <span class="meta-chip">1 skill</span>
+              <span class="source-chip"><span class="market">← claude-plugins-official</span></span>
+            </div>
+          </div>
+          <span class="health-badge ok"><span class="dot" style="background:var(--green)"></span> OK</span>
+          <div class="toggle-switch on"><div class="knob"></div></div>
+          <button class="uninstall-btn">Uninstall</button>
+        </div>
+      </div>
+
+      <!-- Plugin: openai-codex (OK) -->
+      <div class="plugin-card health-ok">
+        <div class="plugin-header">
+          <span class="plugin-expand">▶</span>
+          <div style="flex:1;min-width:0">
+            <div class="plugin-name">openai-codex</div>
+            <div class="plugin-meta">
+              <span class="meta-chip" style="font-family:var(--font-mono)">v0.3.1</span>
+              <span class="meta-chip">2 agents</span>
+              <span class="source-chip"><span class="market">← openai-codex</span> openai/codex-plugin-cc</span>
+            </div>
+          </div>
+          <span class="health-badge ok"><span class="dot" style="background:var(--green)"></span> OK</span>
+          <div class="toggle-switch on"><div class="knob"></div></div>
+          <button class="uninstall-btn">Uninstall</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── System Page ─────────────────────────────────── -->
+  <div id="page-system" class="page">
+    <div class="system-grid">
+      <section class="system-main">
+        <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:1px solid var(--border);padding-bottom:12px">
+          <div>
+            <span class="kicker">Operations</span>
+            <h2 style="font-size:14px;font-weight:500;color:var(--midground);text-transform:none;margin-top:4px">System Status</h2>
+            <p style="font-size:14px;line-height:1.5;color:var(--midground-60);text-transform:none;margin-top:8px;max-width:600px">Manage database, trigger rescans, and monitor sync activity.</p>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn danger">Release & Resync</button>
+            <button class="btn primary">Rescan</button>
+          </div>
+        </div>
+
+        <div class="stat-grid">
+          <div class="stat-card">
+            <span class="kicker-label">Total Sessions</span>
+            <div class="stat-value">42</div>
+          </div>
+          <div class="stat-card">
+            <span class="kicker-label">Total Sources</span>
+            <div class="stat-value">127</div>
+          </div>
+          <div class="stat-card brand">
+            <span class="kicker-label">Last Sync</span>
+            <div class="stat-value">10:18 AM</div>
+          </div>
+        </div>
+
+        <div style="margin-top:20px">
+          <span class="kicker">Activity</span>
+          <h3 style="font-size:14px;font-weight:500;color:var(--midground);text-transform:none;margin-top:4px">Recent Actions</h3>
+
+          <div class="action-timeline">
+            <div class="timeline-axis">
+              <div class="timeline-date" style="font-size:13px;font-weight:500;color:var(--midground)">Today</div>
+              <div class="timeline-relative" style="font-size:12px;color:var(--midground-60)">Apr 21, 2026</div>
+              <div class="timeline-line"></div>
+            </div>
+            <div class="timeline-entries">
+              <div class="timeline-entry">
+                <div class="timeline-time">
+                  <span class="timeline-time-main">10:18</span>
+                  <span class="timeline-time-rel">just now</span>
+                </div>
+                <div class="timeline-dot" style="background:var(--blue)"><div class="inner"></div></div>
+                <div class="timeline-card" style="border-color:rgba(116,173,232,0.3);background:rgba(116,173,232,0.05)">
+                  <span class="timeline-action sync">sync_completed</span>
+                  <div class="timeline-detail">3 sessions, 15 messages indexed</div>
+                </div>
+              </div>
+              <div class="timeline-entry">
+                <div class="timeline-time">
+                  <span class="timeline-time-main">10:15</span>
+                  <span class="timeline-time-rel">3m ago</span>
+                </div>
+                <div class="timeline-dot" style="background:var(--red)"><div class="inner"></div></div>
+                <div class="timeline-card" style="border-color:rgba(208,114,119,0.3);background:rgba(208,114,119,0.05)">
+                  <span class="timeline-action delete">soft_delete</span>
+                  <div class="timeline-detail" style="color:rgba(208,114,119,0.8)">3 sessions in /Users/hipnusleo/Documents/projects/apps/yeek</div>
+                </div>
+              </div>
+              <div class="timeline-entry">
+                <div class="timeline-time">
+                  <span class="timeline-time-main">09:42</span>
+                  <span class="timeline-time-rel">36m ago</span>
+                </div>
+                <div class="timeline-dot" style="background:var(--blue)"><div class="inner"></div></div>
+                <div class="timeline-card" style="border-color:rgba(116,173,232,0.3);background:rgba(116,173,232,0.05)">
+                  <span class="timeline-action sync">sync_completed</span>
+                  <div class="timeline-detail">5 sessions, 28 messages indexed</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="system-aside">
+        <span class="kicker">Operations Notes</span>
+        <h3 style="font-size:16px;font-weight:500;color:var(--midground);text-transform:none;margin-top:8px;mix-blend-mode:plus-lighter">Working with Yeek</h3>
+        <p style="font-size:14px;line-height:1.5;color:var(--midground-60);text-transform:none;margin-top:8px">Yeek watches your Claude Code sessions directory for changes and indexes them automatically.</p>
+
+        <div class="hint-card">
+          <h4 style="margin-bottom:6px">Rescan Sources</h4>
+          <p>If sessions are missing, trigger a full rescan. This re-reads all source files and rebuilds the index.</p>
+        </div>
+        <div class="hint-card">
+          <h4 style="margin-bottom:6px">Delete Safety</h4>
+          <p>Yeek uses soft-delete by default. Sessions are hidden, not removed. Use destructive delete to permanently remove data.</p>
+        </div>
+        <div class="hint-card">
+          <h4 style="margin-bottom:6px">Action Audit Log</h4>
+          <p>Every sync, delete, and rescan operation is logged with timestamps for full auditability.</p>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<script>
+function showPage(name) {
+  // Update nav pills
+  document.querySelectorAll('.nav-pill').forEach(p => p.classList.remove('active'));
+  event.target.classList.add('active');
+
+  // Hide all pages
+  document.querySelectorAll('.page, main').forEach(p => {
+    p.classList.remove('active');
+    p.style.display = 'none';
+  });
+
+  // Show target
+  const target = document.getElementById('page-' + name);
+  if (name === 'sessions') {
+    target.style.display = 'grid';
+  } else {
+    target.style.display = 'flex';
+  }
+  target.classList.add('active');
+}
+</script>
+
+</body>
+</html>

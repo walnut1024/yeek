@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          components: rustfmt, clippy
+      - name: Format check
+        run: cargo xtask fmt
+      - name: Clippy (deny warnings)
+        run: cargo xtask lint
+      - name: Tests
+        run: cargo xtask test
+      - name: Security audit
+        run: cargo audit

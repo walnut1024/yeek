@@ -1,6 +1,7 @@
 use std::sync::Arc;
+use yeek_lib::app::proxy::ProxyManager;
 use yeek_lib::app::state::AppState;
-use yeek_lib::http::{HttpRuntimeState, SseEventEmitter, build_router};
+use yeek_lib::http::{build_router, HttpRuntimeState, SseEventEmitter};
 use yeek_lib::store::schema;
 use yeek_lib::sync::background::ScanGuard;
 
@@ -15,13 +16,16 @@ async fn main() {
     }
 
     // Normal server mode
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
-    log::info!("yeek-server starting...");
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
+        )
+        .init();
+    tracing::info!("yeek-server starting...");
 
     // DB init
-    let db_dir = dirs::data_local_dir()
-        .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("yeek");
+    let db_dir =
+        dirs::data_local_dir().unwrap_or_else(|| std::path::PathBuf::from(".")).join("yeek");
     std::fs::create_dir_all(&db_dir).ok();
     let db_path = db_dir.join("yeek.db");
     let conn = rusqlite::Connection::open(&db_path).expect("failed to open database");
@@ -32,27 +36,37 @@ async fn main() {
     let scan_guard = Arc::new(ScanGuard::new());
 
     // File watcher
-    let claude_projects_dir = dirs::home_dir()
-        .expect("Cannot find home directory")
-        .join(".claude")
-        .join("projects");
+    let claude_projects_dir =
+        dirs::home_dir().expect("Cannot find home directory").join(".claude").join("projects");
     let watcher = yeek_lib::sync::watcher::FileWatcher::start(
-        claude_projects_dir, db_path.clone(), emitter.clone(), scan_guard.clone(),
-    ).expect("Failed to start file watcher");
-
-    let config_watcher = yeek_lib::sync::watcher::FileWatcher::start_plugin_config_watcher(
+        claude_projects_dir,
+        db_path.clone(),
         emitter.clone(),
-    ).expect("Failed to start plugin config watcher");
+        scan_guard.clone(),
+    )
+    .expect("Failed to start file watcher");
+
+    let config_watcher =
+        yeek_lib::sync::watcher::FileWatcher::start_plugin_config_watcher(emitter.clone())
+            .expect("Failed to start plugin config watcher");
+
+    // Open a second connection for proxy config (DB-backed mode)
+    let proxy_db = std::sync::Arc::new(std::sync::Mutex::new(
+        rusqlite::Connection::open(&db_path).expect("failed to open proxy db"),
+    ));
+    let proxy_manager = ProxyManager::with_db(proxy_db);
 
     let app_state = Arc::new(
-        AppState::new(conn, db_path.clone(), emitter)
+        AppState::new(conn, db_path.clone(), emitter, proxy_manager)
             .with_watcher(watcher)
             .with_config_watcher(config_watcher),
     );
 
     // Startup sync
     yeek_lib::sync::background::spawn_background_scan(
-        db_path, app_state.event_emitter.clone(), scan_guard,
+        db_path,
+        app_state.event_emitter.clone(),
+        scan_guard,
     );
 
     // Router
@@ -60,17 +74,21 @@ async fn main() {
     let app = build_router(runtime_state);
 
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 17321));
-    log::info!("yeek-server listening on http://{}", addr);
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    tracing::info!("yeek-server listening on http://{}", addr);
+    let listener =
+        tokio::net::TcpListener::bind(addr).await.expect("failed to bind diagnostic server");
+    axum::serve(listener, app).await.expect("diagnostic server crashed");
 }
 
 fn run_diagnostics(args: &[String]) {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "warn".into()),
+        )
+        .init();
 
-    let db_dir = dirs::data_local_dir()
-        .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("yeek");
+    let db_dir =
+        dirs::data_local_dir().unwrap_or_else(|| std::path::PathBuf::from(".")).join("yeek");
     let db_path = db_dir.join("yeek.db");
 
     if !db_path.exists() {
@@ -85,7 +103,11 @@ fn run_diagnostics(args: &[String]) {
     match yeek_lib::adapter::claudecode::diagnostic::run_diagnostic_scan(&db_path) {
         Ok(result) => {
             if use_json {
-                println!("{}", serde_json::to_string_pretty(&result).unwrap());
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&result)
+                        .unwrap_or_else(|e| format!("JSON error: {}", e))
+                );
             } else {
                 println!("=== Scan Diagnostic Report ===");
                 println!("Total discovered: {}", result.total_discovered);
@@ -107,10 +129,10 @@ fn run_diagnostics(args: &[String]) {
                     }
                 }
             }
-        }
+        },
         Err(e) => {
             eprintln!("Diagnostic scan failed: {}", e);
             std::process::exit(1);
-        }
+        },
     }
 }

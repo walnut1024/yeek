@@ -11,8 +11,16 @@ dist
 dist-ssr
 *.local
 
-# Tauri build
+# Release artifacts
+release/
+
+# Rust build
 src-tauri/target
+vendor_proxy/target
+target/
+
+# Runtime data
+src-tauri/yeek.db
 
 # Editor directories and files
 .vscode/*
@@ -25,14 +33,13 @@ src-tauri/target
 *.sln
 *.sw?
 
-docs/
-
-# claudecode related
+# Claude Code / agent config
 .claude/
 .agents/
 .superpowers/
 
+# Reference & prototypes
 reference/
 demo/
 ui_design/
-.superpowers/
+vendor/

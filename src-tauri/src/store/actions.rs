@@ -13,7 +13,10 @@ pub struct ActionLogEntry {
     pub created_at: String,
 }
 
-pub fn record_action(
+/// Record a user action in the audit log.
+///
+/// Actions track system operations like sync, delete, install for debugging and audit.
+pub(crate) fn record_action(
     conn: &rusqlite::Connection,
     session_id: Option<&str>,
     action: &str,
@@ -27,7 +30,10 @@ pub fn record_action(
     Ok(())
 }
 
-pub fn get_recent_actions(
+/// Retrieve the most recent audit log entries.
+///
+/// Returns up to `limit` recent actions, ordered by timestamp descending.
+pub(crate) fn get_recent_actions(
     conn: &rusqlite::Connection,
     limit: i64,
 ) -> Result<Vec<ActionLogEntry>, AppError> {

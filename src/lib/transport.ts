@@ -43,6 +43,15 @@ const ROUTES: Record<string, RouteMapping> = {
   remove_marketplace:          { method: "DELETE", path: "/api/marketplaces/{name}" },
   list_marketplace_plugins:    { method: "GET",  path: "/api/marketplaces/{marketplaceName}/plugins" },
   install_marketplace_plugin:  { method: "POST", path: "/api/marketplaces/install-plugin" },
+  // Proxy
+  get_proxy_status:    { method: "GET",  path: "/api/proxy/status" },
+  start_proxy:         { method: "POST", path: "/api/proxy/start" },
+  stop_proxy:          { method: "POST", path: "/api/proxy/stop" },
+  restart_proxy:       { method: "POST", path: "/api/proxy/restart" },
+  get_proxy_config:    { method: "GET",  path: "/api/proxy/config" },
+  update_proxy_config: { method: "PUT",  path: "/api/proxy/config" },
+  get_proxy_metrics:   { method: "GET",  path: "/api/proxy/metrics" },
+  get_proxy_logs:      { method: "GET",  path: "/api/proxy/logs" },
 };
 
 function commandToRoute(

@@ -49,7 +49,7 @@ pub struct ScanDiagnosticResult {
 ///
 /// Classification is best-effort: it inspects the error message text
 /// to determine which pipeline stage produced the failure.
-pub fn classify_error(e: &AppError) -> (ScanStage, String) {
+pub(crate) fn classify_error(e: &AppError) -> (ScanStage, String) {
     let msg = e.to_string();
     let msg_lower = msg.to_lowercase();
 
@@ -63,7 +63,7 @@ pub fn classify_error(e: &AppError) -> (ScanStage, String) {
             } else {
                 (ScanStage::Unknown, "internal".into())
             }
-        }
+        },
 
         AppError::DbError(_) => {
             if msg_lower.contains("fts5") || msg_lower.contains("messages_fts") {
@@ -83,7 +83,7 @@ pub fn classify_error(e: &AppError) -> (ScanStage, String) {
             } else {
                 (ScanStage::Unknown, "db_error".into())
             }
-        }
+        },
 
         _ => (ScanStage::Unknown, "unknown".into()),
     }
@@ -109,9 +109,8 @@ pub fn run_diagnostic_scan(db_path: &Path) -> Result<ScanDiagnosticResult, AppEr
     let existing_fingerprints: HashMap<String, String> = {
         let mut stmt =
             conn.prepare("SELECT path, fingerprint FROM sources WHERE status = 'active'")?;
-        let rows = stmt.query_map([], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-        })?;
+        let rows =
+            stmt.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?;
         rows.filter_map(|r| r.ok()).collect()
     };
 
@@ -142,7 +141,7 @@ pub fn run_diagnostic_scan(db_path: &Path) -> Result<ScanDiagnosticResult, AppEr
             Ok(_) => {
                 conn.execute_batch(&format!("RELEASE {}", sp_name))?;
                 total_succeeded += 1;
-            }
+            },
             Err(e) => {
                 let _ = conn.execute_batch(&format!("ROLLBACK TO {}", sp_name));
                 let _ = conn.execute_batch(&format!("RELEASE {}", sp_name));
@@ -155,7 +154,7 @@ pub fn run_diagnostic_scan(db_path: &Path) -> Result<ScanDiagnosticResult, AppEr
                     message: e.to_string(),
                 });
                 total_failed += 1;
-            }
+            },
         }
     }
 

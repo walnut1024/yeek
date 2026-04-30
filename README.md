@@ -4,11 +4,11 @@
 
 **Your Claude Code sessions, organized and inspectable**
 
-A local-first Electron + Rust desktop app for browsing, searching, and managing
+A local-first Tauri v2 + Rust desktop app for browsing, searching, and managing
 Claude Code agent sessions — with a built-in plugin marketplace.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Electron](https://img.shields.io/badge/Electron-35-47848F?logo=electron)](https://electronjs.org)
+[![Tauri](https://img.shields.io/badge/Tauri-v2-FFC131?logo=tauri)](https://v2.tauri.app)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev)
 
 [Download for macOS](https://github.com/walnut1024/yeek/releases/latest) · [English](#features) · [中文](#features)
@@ -19,11 +19,12 @@ Claude Code agent sessions — with a built-in plugin marketplace.
 
 ## Features
 
+- **Dashboard** — Home screen with at-a-glance overview: session counts, sync health, proxy metrics, and a timestamped action audit log.
 - **Session Browser** — Browse conversations grouped by project. Full transcript with branch navigation, message graph, source file references, and subagent inspection.
+- **Settings** — Configure default terminal for session resume, switch language, and trigger index rebuilds.
 - **Full-text Search** — FTS5-powered search across titles, messages, and model names. Results highlighted in real-time.
 - **Skills & Plugins** — View installed plugins, health status, toggle enable/disable, clean orphaned entries, or reinstall broken ones.
 - **Marketplace** — Manage plugin marketplaces (add, update, remove). Expand any marketplace to browse and install plugins with one click.
-- **System Pulse** — Health checks, sync status, activity audit log, and index maintenance.
 - **Real-time Sync** — OS-native file watcher detects new/changed session files instantly. Plugin config watcher picks up installs/uninstalls from external tools.
 - **Bilingual UI** — Full English and Chinese localization.
 
@@ -34,7 +35,8 @@ Claude Code agent sessions — with a built-in plugin marketplace.
 | Layer | Technology |
 |-------|-----------|
 | Backend | Rust, Axum, rusqlite (SQLite + FTS5) |
-| Shell | Electron 35 |
+| Proxy | vendor_proxy — Responses API → multi-provider LLM proxy |
+| Shell | Tauri v2 |
 | Frontend | React 19, TypeScript, Vite, Tailwind CSS v4, shadcn/ui |
 | State | TanStack Query, localStorage |
 | i18n | react-i18next (English + 中文) |
@@ -60,10 +62,11 @@ cd yeek
 npm install
 
 # Dev mode
-npm run electron:dev
+cargo tauri dev
 
 # Production build
-npm run electron:build
+npm run build
+cargo build --release
 ```
 
 ---
@@ -71,10 +74,6 @@ npm run electron:build
 ## Architecture
 
 ```
-electron-app/src/
-  main.ts             — Electron main process (server lifecycle, window)
-  preload.ts          — Context bridge
-
 src-tauri/src/
   adapter/claudecode/ — JSONL parser + source discovery
   app/commands.rs     — Business logic (shared by HTTP routes)
@@ -83,9 +82,16 @@ src-tauri/src/
   store/              — SQLite store (sessions, messages, sources, actions)
   sync/               — Startup sync, background scanner, file watchers
 
+vendor_proxy/src/
+  adapters/           — Provider format adapters (Anthropic, Chat Completions)
+  bridge/             — Responses API ↔ Chat Completions conversion
+  stream/             — SSE streaming translation
+  types/              — API type definitions
+
 src/
   app/shell/          — Main layout with sidebar navigation
-  pages/              — Sessions, Skills, Marketplace, System
+  pages/              — Sessions, Dashboard, Skills, Marketplace, Proxy, Settings
+  lib/api.ts          — Typed Tauri command wrappers
   lib/transport.ts    — HTTP API client
   lib/events.ts       — SSE event stream
   components/ui/      — shadcn/ui components
@@ -95,7 +101,7 @@ src/
 ### Data Flow
 
 ```
-~/.claude/projects/ ──file watcher──▶ SQLite ──HTTP API──▶ Electron ──▶ React (TanStack Query)
+~/.claude/projects/ ──file watcher──▶ SQLite ──HTTP API──▶ Tauri ──▶ React (TanStack Query)
 ~/.claude/plugins/  ──config watcher──▶ SSE events ──▶ auto-invalidate
 ```
 
@@ -120,7 +126,7 @@ See [DESIGN.md](DESIGN.md) for the full specification.
 git clone https://github.com/walnut1024/yeek.git
 cd yeek
 npm install
-npm run electron:dev
+cargo tauri dev
 ```
 
 PRs welcome. Keep changes surgical — see [CLAUDE.md](CLAUDE.md) for the coding guidelines used in this project.

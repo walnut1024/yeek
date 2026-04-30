@@ -33,6 +33,7 @@ export default function SessionDetailPane({
     "graph-view",
     "feed",
   );
+  const [defaultTerminal] = useLocalStorage<string>("default-terminal", "");
 
   const { data: preview, isLoading: previewLoading } = useQuery({
     queryKey: ["session-preview", sessionId],
@@ -104,7 +105,7 @@ export default function SessionDetailPane({
                 className="h-7 rounded-md px-2.5 text-[13px]"
                 onClick={async () => {
                   try {
-                    await resumeSession(record.id, record.agent, record.project_path);
+                    await resumeSession(record.id, record.agent, record.project_path, defaultTerminal || null);
                   } catch (e) {
                     console.error("Failed to resume session:", e);
                   }

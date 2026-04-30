@@ -1,3 +1,5 @@
+//! Axum HTTP server: /health, /v1/models, /v1/responses proxy endpoint.
+
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
@@ -5,8 +7,12 @@ use axum::{
         sse::{Event, Sse},
         IntoResponse, Response,
     },
+    Json,
 };
-use std::sync::Arc;
+use std::collections::VecDeque;
+use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use crate::adapters::anthropic::AnthropicAdapter;
 use crate::adapters::chat_completions::ChatCompletionsAdapter;
@@ -21,6 +27,33 @@ use crate::types::responses::ResponsesRequest;
 pub struct AppState {
     pub config: ProxyConfig,
     pub client: HttpClient,
+    pub started_at: Instant,
+    pub request_count: AtomicU64,
+    pub error_count: AtomicU64,
+    pub active_connections: AtomicI64,
+    pub latency_total_ns: AtomicU64,
+    pub request_times: Mutex<VecDeque<Instant>>,
+    pub provider_stats: Arc<std::sync::RwLock<std::collections::HashMap<String, ProviderStats>>>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ProviderStats {
+    pub requests: u64,
+    pub errors: u64,
+    pub last_error: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct AdminStatus {
+    pub version: String,
+    pub uptime_secs: u64,
+    pub listen_addr: String,
+    pub request_count: u64,
+    pub error_count: u64,
+    pub active_connections: i64,
+    pub rps: f64,
+    pub avg_latency_ms: f64,
+    pub providers: std::collections::HashMap<String, ProviderStats>,
 }
 
 /// Determine which adapter to use based on (in order):
@@ -35,22 +68,26 @@ fn select_adapter<'a>(
     Arc<dyn FormatAdapter>,
     &'a crate::config::ProviderConfig,
     Option<String>,
+    String,
 ) {
     // 1. Explicit provider header
-    let provider_name = headers
-        .get("x-codex-provider")
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string());
+    let header_provider =
+        headers.get("x-codex-provider").and_then(|v| v.to_str().ok()).map(|s| s.to_string());
 
-    let provider = provider_name
+    let provider = header_provider
         .as_deref()
         .and_then(|name| state.config.provider_by_name(name))
-        .or_else(|| {
-            state.config.providers.values().find(|p| {
-                p.models.iter().any(|m| m == model)
-            })
-        })
+        .or_else(|| state.config.providers.values().find(|p| p.models.iter().any(|m| m == model)))
         .unwrap_or_else(|| state.config.default_provider());
+
+    // Resolve provider name for metrics
+    let provider_name = state
+        .config
+        .providers
+        .iter()
+        .find(|(_, v)| std::ptr::eq(*v, provider))
+        .map(|(k, _)| k.clone())
+        .unwrap_or_else(|| "unknown".to_string());
 
     // Prefer API key from incoming Authorization: Bearer header, fall back to env var
     let api_key = headers
@@ -58,19 +95,55 @@ fn select_adapter<'a>(
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.strip_prefix("Bearer "))
         .map(|s| s.to_string())
-        .or_else(|| {
-            provider
-                .api_key_env
-                .as_ref()
-                .and_then(|env_key| std::env::var(env_key).ok())
-        });
+        .or_else(|| provider.api_key_env.as_ref().and_then(|env_key| std::env::var(env_key).ok()));
 
     let adapter: Arc<dyn FormatAdapter> = match provider.format {
         ProviderFormat::ChatCompletions => Arc::new(ChatCompletionsAdapter),
         ProviderFormat::AnthropicMessages => Arc::new(AnthropicAdapter),
     };
 
-    (adapter, provider, api_key)
+    (adapter, provider, api_key, provider_name)
+}
+
+/// GET /admin/status — runtime metrics for monitoring.
+pub async fn admin_status(State(state): State<Arc<AppState>>) -> Json<AdminStatus> {
+    let providers = state
+        .provider_stats
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+
+    // RPS: count requests in the last second
+    let now = Instant::now();
+    let rps = {
+        let mut times = state.request_times.lock().unwrap_or_else(|e| e.into_inner());
+        // Prune old entries (> 1s)
+        while times.front().map_or(false, |t| now.duration_since(*t).as_millis() > 1000) {
+            times.pop_front();
+        }
+        times.len() as f64
+    };
+
+    // Avg latency
+    let total_ns = state.latency_total_ns.load(Ordering::Relaxed);
+    let total_reqs = state.request_count.load(Ordering::Relaxed);
+    let avg_latency_ms = if total_reqs > 0 {
+        (total_ns as f64) / (total_reqs as f64) / 1_000_000.0
+    } else {
+        0.0
+    };
+
+    Json(AdminStatus {
+        version: env!("CARGO_PKG_VERSION").into(),
+        uptime_secs: state.started_at.elapsed().as_secs(),
+        listen_addr: state.config.server.listen_addr.clone(),
+        request_count: total_reqs,
+        error_count: state.error_count.load(Ordering::Relaxed),
+        active_connections: state.active_connections.load(Ordering::Relaxed),
+        rps,
+        avg_latency_ms,
+        providers,
+    })
 }
 
 pub async fn health() -> impl IntoResponse {
@@ -82,7 +155,7 @@ pub async fn health() -> impl IntoResponse {
 pub async fn models_handler(State(state): State<Arc<AppState>>) -> Response {
     tracing::info!("GET /v1/models — returning model list");
     let mut models = Vec::new();
-    for (_name, p) in &state.config.providers {
+    for p in state.config.providers.values() {
         let model_names: Vec<&str> = if p.models.is_empty() {
             vec![]
         } else {
@@ -108,7 +181,12 @@ pub async fn models_handler(State(state): State<Arc<AppState>>) -> Response {
     }
 
     let body = serde_json::json!({ "models": models });
-    (StatusCode::OK, serde_json::to_string(&body).unwrap()).into_response()
+    (
+        StatusCode::OK,
+        serde_json::to_string(&body)
+            .unwrap_or_else(|_| r#"{"error":"json serialize"}"#.to_string()),
+    )
+        .into_response()
 }
 
 pub async fn proxy_handler(
@@ -133,7 +211,8 @@ pub async fn proxy_handler(
     tracing::info!("Request: stream={}, model={}", responses_req.stream, responses_req.model);
     // Dump input items to diagnose reasoning_content issue
     if let serde_json::Value::Array(ref items) = responses_req.input {
-        let types: Vec<String> = items.iter()
+        let types: Vec<String> = items
+            .iter()
             .filter_map(|it| {
                 let t = it.get("type").and_then(|v| v.as_str())?;
                 if t == "message" {
@@ -148,41 +227,73 @@ pub async fn proxy_handler(
 
         // Sniff reasoning content in message items with role "assistant"
         for it in items {
-            if it.get("type").and_then(|v| v.as_str()) == Some("message") {
-                if it.get("role").and_then(|v| v.as_str()) == Some("assistant") {
-                    if let Some(content) = it.get("content").and_then(|v| v.as_array()) {
-                        let content_types: Vec<&str> = content.iter()
-                            .filter_map(|b| b.get("type").and_then(|v| v.as_str()))
-                            .collect();
-                        if !content_types.is_empty() {
-                            tracing::info!("  assistant content types: {:?}", content_types);
-                        }
+            if it.get("type").and_then(|v| v.as_str()) == Some("message")
+                && it.get("role").and_then(|v| v.as_str()) == Some("assistant")
+            {
+                if let Some(content) = it.get("content").and_then(|v| v.as_array()) {
+                    let content_types: Vec<&str> = content
+                        .iter()
+                        .filter_map(|b| b.get("type").and_then(|v| v.as_str()))
+                        .collect();
+                    if !content_types.is_empty() {
+                        tracing::info!("  assistant content types: {:?}", content_types);
                     }
                 }
             }
         }
     }
 
-    let (adapter, provider, api_key) = select_adapter(&state, &headers, &responses_req.model);
+    let (adapter, provider, api_key, provider_name) =
+        select_adapter(&state, &headers, &responses_req.model);
     tracing::info!(
-        "Routed to provider: base_url={}, format={:?}, has_api_key={}",
+        "Routed to provider: name={}, base_url={}, format={:?}, has_api_key={}",
+        provider_name,
         provider.base_url,
         provider.format,
         api_key.is_some()
     );
 
-    match adapter
-        .send(
-            &state.client,
-            &provider.base_url,
-            api_key.as_deref(),
-            &responses_req,
-        )
-        .await
+    state.request_count.fetch_add(1, Ordering::Relaxed);
+    state.active_connections.fetch_add(1, Ordering::Relaxed);
+    let request_start = Instant::now();
+
+    // Record request timestamp for RPS calculation
+    {
+        let mut times = state.request_times.lock().unwrap_or_else(|e| e.into_inner());
+        times.push_back(request_start);
+        // Keep max 200 entries to bound memory
+        while times.len() > 200 {
+            times.pop_front();
+        }
+    }
+
+    // Track per-provider stats
+    {
+        let mut stats = state
+            .provider_stats
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
+        let entry = stats.entry(provider_name.clone()).or_insert(ProviderStats {
+            requests: 0,
+            errors: 0,
+            last_error: None,
+        });
+        entry.requests += 1;
+    }
+
+    let result = adapter
+        .send(&state.client, &provider.base_url, api_key.as_deref(), &responses_req)
+        .await;
+
+    let elapsed_ns = request_start.elapsed().as_nanos() as u64;
+    state.latency_total_ns.fetch_add(elapsed_ns, Ordering::Relaxed);
+    state.active_connections.fetch_sub(1, Ordering::Relaxed);
+
+    match result
     {
         Ok(ProviderResponse::Complete(resp)) => {
-            let json = serde_json::to_string(&*resp).unwrap();
-            tracing::info!("Response (complete): {} bytes", json.len());
+            let json = serde_json::to_string(&*resp).expect("json serialize");
+            tracing::info!("Response (complete): {} bytes, {}ms", json.len(), elapsed_ns / 1_000_000);
             (StatusCode::OK, json).into_response()
         }
         Ok(ProviderResponse::Stream(rx)) => {
@@ -249,6 +360,14 @@ pub async fn proxy_handler(
             Sse::new(stream).into_response()
         }
         Err(e) => {
+            state.error_count.fetch_add(1, Ordering::Relaxed);
+            // Track per-provider error
+            if let Ok(mut stats) = state.provider_stats.write() {
+                if let Some(entry) = stats.get_mut(&provider_name) {
+                    entry.errors += 1;
+                    entry.last_error = Some(e.to_string());
+                }
+            }
             tracing::error!("Provider error: {}", e);
             let status = match &e {
                 crate::client::ProxyError::ProviderError { status, .. } => {
@@ -262,7 +381,12 @@ pub async fn proxy_handler(
                     "type": "proxy_error"
                 }
             });
-            (status, serde_json::to_string(&body).unwrap()).into_response()
+            (
+                status,
+                serde_json::to_string(&body)
+                    .unwrap_or_else(|_| r#"{"error":"json serialize"}"#.to_string()),
+            )
+                .into_response()
         }
     }
 }

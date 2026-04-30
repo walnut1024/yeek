@@ -30,7 +30,7 @@ pub enum SessionStatus {
 }
 
 impl SessionStatus {
-    pub fn as_str(&self) -> &str {
+    pub(crate) fn as_str(&self) -> &str {
         match self {
             SessionStatus::Active => "active",
             SessionStatus::Complete => "complete",
@@ -48,7 +48,7 @@ pub enum VisibilityStatus {
 }
 
 impl VisibilityStatus {
-    pub fn as_str(&self) -> &str {
+    pub(crate) fn as_str(&self) -> &str {
         match self {
             VisibilityStatus::Visible => "visible",
             VisibilityStatus::Hidden => "hidden",
@@ -66,7 +66,7 @@ pub enum DeleteMode {
 }
 
 impl DeleteMode {
-    pub fn as_str(&self) -> &str {
+    pub(crate) fn as_str(&self) -> &str {
         match self {
             DeleteMode::None => "none",
             DeleteMode::SoftDeleted => "soft_deleted",
