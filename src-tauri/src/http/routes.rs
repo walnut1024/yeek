@@ -34,6 +34,7 @@ pub fn build_router(state: HttpRuntimeState) -> Router {
         .route("/sessions/{id}/transcript", get(session_transcript))
         .route("/sessions/{id}/delete-plan", get(delete_plan))
         .route("/sessions/{id}/destructive-delete", post(destructive_delete))
+        .route("/sessions/destructive-delete-batch", post(destructive_delete_batch))
         .route("/sessions/soft-delete", post(soft_delete))
         .route("/sessions/soft-delete-project", post(soft_delete_project))
         .route("/sessions/{session_id}/subagents/{subagent_id}", get(subagent_messages))
@@ -198,6 +199,16 @@ async fn destructive_delete(
     Path(id): Path<String>,
 ) -> Result<Json<crate::service::delete_planner::DestructiveDeleteResult>, AppError> {
     let result = tokio::task::spawn_blocking(move || do_destructive_delete(&state.app_state, id))
+        .await
+        .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
+    Ok(Json(result))
+}
+
+async fn destructive_delete_batch(
+    State(state): State<HttpRuntimeState>,
+    Json(body): Json<DestructiveDeleteBatchRequest>,
+) -> Result<Json<DeleteJobPayload>, AppError> {
+    let result = tokio::task::spawn_blocking(move || do_destructive_delete_batch(&state.app_state, body.ids))
         .await
         .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
     Ok(Json(result))

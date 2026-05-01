@@ -81,13 +81,15 @@ export default function MarketplacePage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
+      {/* Header */}
+      <div className="flex flex-col gap-2 border-b border-border px-3 pb-3">
+        <h2 className="text-[14px] font-medium leading-none text-foreground">{t("marketplace.title")}</h2>
+        <p className="mt-2 max-w-2xl text-[14px] leading-[1.5] text-muted-foreground">{t("marketplace.description")}</p>
+      </div>
       {/* Toolbar */}
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
-        <span className="text-[13px] font-medium text-foreground">
-          {t("marketplace.title")}
-          <span className="ml-2 text-[11px] text-muted-foreground">
-            {marketplaces.length}
-          </span>
+        <span className="text-[11px] text-muted-foreground">
+          {marketplaces.length}
         </span>
         <div className="flex items-center gap-1.5">
           {marketplaces.length > 0 && (

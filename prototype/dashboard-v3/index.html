@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard v3 — Yeek</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0a0a; --card: #141415; --border: #252528;
+    --muted: #6e6e73; --fg: #f5f5f7;
+    --primary: #3b82f6; --destructive: #ef4444; --success: #22c55e; --warning: #eab308;
+    --gap: 12px;
+  }
+  body {
+    background: var(--bg); color: var(--fg);
+    font: 14px/1.5 "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1024px; margin: 0 auto; padding: 28px 20px; }
+
+  /* Header */
+  .header { margin-bottom: 24px; }
+  .kicker { font: 500 10px/1 "Inter", sans-serif; text-transform: uppercase; letter-spacing: 0.14em; color: var(--muted); }
+  .header h1 { font: 600 16px/1 "Inter", sans-serif; letter-spacing: -0.02em; margin-top: 6px; }
+  .header p  { font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+  /* Rows */
+  .row { display: grid; gap: var(--gap); margin-bottom: var(--gap); }
+  .r4 { grid-template-columns: repeat(4, 1fr); }
+  .r6 { grid-template-columns: repeat(6, 1fr); }
+  .r3 { grid-template-columns: repeat(3, 1fr); }
+  .r1 { grid-template-columns: 1fr; }
+  .sec-gap { margin-top: 16px; }
+
+  /* Hero card */
+  .hero {
+    background: var(--card); border: 1px solid var(--border); padding: 18px 20px 16px;
+    display: flex; flex-direction: column;
+  }
+  .hero .hl { font: 500 12px/1 "Inter", sans-serif; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  .hero .hv { font: 500 28px/1 "JetBrains Mono", "SF Mono", monospace; letter-spacing: -0.03em; margin-top: 10px; }
+  .hero .hs { font-size: 12px; color: var(--muted); margin-top: auto; padding-top: 8px; }
+  .hero.accent { background: linear-gradient(135deg, #0f1729, #14171f); border-color: rgba(59,130,246,0.18); }
+  .hero.accent .hl, .hero.accent .hv { color: var(--primary); }
+
+  /* Metric card */
+  .metric {
+    background: var(--card); border: 1px solid var(--border); padding: 14px 12px; text-align: center;
+  }
+  .metric .mv { font: 500 18px/1 "JetBrains Mono", "SF Mono", monospace; letter-spacing: -0.02em; }
+  .metric .ml { font: 500 11px/1 "Inter", sans-serif; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-top: 5px; }
+  .metric .ms { font: 11px/1 "JetBrains Mono", "SF Mono", monospace; color: rgba(110,110,115,0.5); margin-top: 3px; }
+
+  /* Health card */
+  .health {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--card); border: 1px solid var(--border); padding: 14px 16px;
+  }
+  .health .hi {
+    width: 34px; height: 34px; border-radius: 8px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .health .hv { font: 500 14px/1.1 "JetBrains Mono", "SF Mono", monospace; }
+  .health .hl { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .health .hs { font: 11px/1 "JetBrains Mono", "SF Mono", monospace; color: rgba(110,110,115,0.55); margin-top: 1px; }
+  .hi-sync { background: rgba(59,130,246,0.1); color: var(--primary); }
+  .hi-live { background: rgba(34,197,94,0.1); color: var(--success); }
+  .hi-plug { background: rgba(245,245,247,0.05); color: var(--fg); }
+
+  /* Timeline */
+  .t-row { display: flex; gap: 12px; }
+  .t-axis { display: flex; flex-direction: column; align-items: center; width: 12px; flex-shrink: 0; }
+  .t-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+  .t-dot.s { background: var(--primary); }
+  .t-dot.d { background: var(--destructive); }
+  .t-dot.o { background: var(--muted); }
+  .t-line { width: 1px; flex: 1; background: var(--border); }
+  .t-body { flex: 1; min-width: 0; padding-bottom: 12px; }
+  .t-head { display: flex; align-items: center; gap: 8px; }
+  .t-tag { font: 500 11px/1 "JetBrains Mono", "SF Mono", monospace; color: rgba(245,245,247,0.5); }
+  .t-time { margin-left: auto; font: 11px/1 "JetBrains Mono", "SF Mono", monospace; color: var(--muted); }
+  .t-detail { font-size: 12px; color: rgba(245,245,247,0.6); line-height: 1.4; margin-top: 2px; }
+  .t-more { font-size: 12px; color: var(--muted); cursor: pointer; padding: 4px 0 4px 24px; }
+  .t-more:hover { color: var(--fg); }
+
+  @media (max-width: 800px) {
+    .r4, .r6 { grid-template-columns: repeat(2, 1fr); }
+    .r3 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <div class="header">
+    <div class="kicker">Dashboard</div>
+    <h1>Overview</h1>
+    <p>Session index, proxy health, and recent activity at a glance.</p>
+  </div>
+
+  <!-- Row 1: 4 hero cards -->
+  <div class="row r4">
+    <div class="hero"><div class="hl">Sessions</div><div class="hv">1,284</div><div class="hs">+32 this week</div></div>
+    <div class="hero"><div class="hl">Sources</div><div class="hv">4,921</div><div class="hs">Indexed files</div></div>
+    <div class="hero"><div class="hl">Projects</div><div class="hv">47</div><div class="hs">Active workspaces</div></div>
+    <div class="hero accent"><div class="hl">Messages</div><div class="hv">186K</div><div class="hs">Across all sessions</div></div>
+  </div>
+
+  <!-- Row 2: 6 proxy cards -->
+  <div class="kicker sec-gap">Proxy Runtime</div>
+  <div class="row r6" style="margin-top:8px">
+    <div class="metric"><div class="mv">142m</div><div class="ml">Uptime</div><div class="ms">8,520s</div></div>
+    <div class="metric"><div class="mv">3.2</div><div class="ml">RPS</div><div class="ms">req/s</div></div>
+    <div class="metric"><div class="mv">87ms</div><div class="ml">Latency</div><div class="ms">avg</div></div>
+    <div class="metric"><div class="mv">4</div><div class="ml">Active Conn</div><div class="ms">connections</div></div>
+    <div class="metric"><div class="mv">27,451</div><div class="ml">Requests</div><div class="ms">total</div></div>
+    <div class="metric"><div class="mv" style="color:var(--warning)">3</div><div class="ml">Errors</div><div class="ms">0.01%</div></div>
+  </div>
+
+  <!-- Row 3: 3 health cards -->
+  <div class="kicker sec-gap">System Health</div>
+  <div class="row r3" style="margin-top:8px">
+    <div class="health">
+      <div class="hi hi-sync">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+      </div>
+      <div><div class="hv">2m ago</div><div class="hl">Last Sync</div><div class="hs">2026-04-30 14:28 UTC</div></div>
+    </div>
+    <div class="health">
+      <div class="hi hi-live">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+      </div>
+      <div><div class="hv">12 active</div><div class="hl">Active Sessions</div><div class="hs">1,268 complete · 4 partial</div></div>
+    </div>
+    <div class="health">
+      <div class="hi hi-plug">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/><line x1="12" y1="22" x2="12" y2="15.5"/><polyline points="22 8.5 12 15.5 2 8.5"/></svg>
+      </div>
+      <div><div class="hv">8 plugins</div><div class="hl">Plugin Health</div><div class="hs">6 OK · 1 partial · 1 broken</div></div>
+    </div>
+  </div>
+
+  <!-- Activity + Alerts merged -->
+  <div class="kicker sec-gap">Activity</div>
+  <div style="margin-top:8px">
+    <div class="t-row">
+      <div class="t-axis"><span class="t-dot d"></span><div class="t-line"></div></div>
+      <div class="t-body">
+        <div class="t-head"><span class="t-tag" style="color:var(--destructive)">sync_completed</span><span class="t-time">14:28</span></div>
+        <div class="t-detail" style="color:rgba(239,68,68,0.7)">errors=2 — permission denied: ~/private.key, ~/secrets.yml</div>
+      </div>
+    </div>
+    <div class="t-row">
+      <div class="t-axis"><span class="t-dot d"></span><div class="t-line"></div></div>
+      <div class="t-body">
+        <div class="t-head"><span class="t-tag" style="color:var(--destructive)">sync_completed</span><span class="t-time">11:15</span></div>
+        <div class="t-detail" style="color:rgba(239,68,68,0.7)">errors=1 — broken symlink: ~/old-project</div>
+      </div>
+    </div>
+    <div class="t-row">
+      <div class="t-axis"><span class="t-dot d"></span><div class="t-line"></div></div>
+      <div class="t-body"><div class="t-head"><span class="t-tag">soft_delete</span><span class="t-time">13:55</span></div><div class="t-detail">2 sessions in ~/projects/api-server</div></div>
+    </div>
+    <div class="t-row">
+      <div class="t-axis"><span class="t-dot o"></span><div class="t-line"></div></div>
+      <div class="t-body"><div class="t-head"><span class="t-tag">release</span><span class="t-time">12:40</span></div><div class="t-detail">Cleared all indexed data — rebuild triggered</div></div>
+    </div>
+    <div class="t-row">
+      <div class="t-axis"><span class="t-dot s"></span><div class="t-line"></div></div>
+      <div class="t-body"><div class="t-head"><span class="t-tag">sync_started</span><span class="t-time">12:39</span></div><div class="t-detail">Scanning 4,921 source files in 47 projects</div></div>
+    </div>
+    <div class="t-row">
+      <div class="t-axis"><span class="t-dot o"></span></div>
+      <div class="t-body"><div class="t-head"><span class="t-tag">archive</span><span class="t-time">09:12</span></div><div class="t-detail">Archived 15 sessions older than 30 days</div></div>
+    </div>
+    <div class="t-more">+ 45 more actions</div>
+  </div>
+
+</div>
+
+</body>
+</html>

@@ -22,4 +22,8 @@ impl EventEmitter for TauriEventEmitter {
     fn emit_plugin_config_changed(&self) {
         let _ = self.handle.emit("plugin-config-changed", ());
     }
+
+    fn emit_delete_progress(&self, payload: DeleteProgressPayload) {
+        let _ = self.handle.emit("delete-progress", payload);
+    }
 }

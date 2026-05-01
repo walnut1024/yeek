@@ -30,6 +30,7 @@ const ROUTES: Record<string, RouteMapping> = {
   get_action_log:              { method: "GET",  path: "/api/system/action-log" },
   get_delete_plan:             { method: "GET",  path: "/api/sessions/{sessionId}/delete-plan" },
   destructive_delete_session:  { method: "POST", path: "/api/sessions/{sessionId}/destructive-delete" },
+  destructive_delete_sessions: { method: "POST", path: "/api/sessions/destructive-delete-batch" },
   get_subagent_messages:       { method: "GET",  path: "/api/sessions/{sessionId}/subagents/{subagentId}" },
   resume_session:              { method: "POST", path: "/api/sessions/resume" },
   list_plugins:                { method: "GET",  path: "/api/plugins" },

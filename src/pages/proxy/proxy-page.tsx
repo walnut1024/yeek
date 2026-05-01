@@ -32,7 +32,7 @@ const FILTERS = ["All", "DeepSeek", "OpenAI", "Anthropic", "Zhipu", "Ollama", "C
 
 export default function ProxyPage() {
   const queryClient = useQueryClient();
-  useTranslation();
+  const { t } = useTranslation();
   const [launchAtStartup, setLaunchAtStartup] = useLocalStorage("yeek:proxy-launch-at-startup", false);
   const [editingProvider, setEditingProvider] = useState<string | null>(null);
   const [pendingRestart, setPendingRestart] = useState(false);
@@ -166,9 +166,13 @@ export default function ProxyPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
+      {/* Header */}
+      <div className="flex flex-col gap-2 border-b border-border px-3 pb-3">
+        <h2 className="text-[14px] font-medium leading-none text-foreground">{t("proxy.title")}</h2>
+        <p className="mt-2 max-w-2xl text-[14px] leading-[1.5] text-muted-foreground">{t("proxy.description")}</p>
+      </div>
       {/* Toolbar */}
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
-        <span className="text-[13px] font-medium text-foreground">Proxy</span>
         <div className="flex items-center gap-2">
           <Badge
             variant={isRunning ? "default" : "secondary"}

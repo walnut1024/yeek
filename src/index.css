@@ -175,7 +175,7 @@
   }
 
   .zed-chip {
-    @apply inline-flex items-center gap-1 rounded-sm border border-border bg-secondary px-1.5 py-0.5 font-mono text-[12px] text-muted-foreground;
+    @apply inline-flex items-center gap-1 rounded-sm border border-border bg-secondary px-1.5 py-0.5 font-mono text-[12px] font-medium text-muted-foreground;
   }
 
   .zed-input {

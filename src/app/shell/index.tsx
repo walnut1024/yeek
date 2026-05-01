@@ -8,6 +8,7 @@ import {
   getSystemStatus,
   softDeleteSessions,
   softDeleteProject,
+  destructiveDeleteSessions,
 } from "@/lib/api";
 import { useDebouncedValue, useLocalStorage } from "@/lib/hooks";
 import { useZoom } from "./use-zoom";
@@ -142,6 +143,9 @@ function SessionsPage({
     { x: number; y: number; sessionId: string; projectPath?: string } | null
   >(null);
   const ctxRef = useRef<HTMLDivElement>(null);
+  const [deleteMode, setDeleteMode] = useState<"soft" | "destructive">("soft");
+  const [deleteProgress, setDeleteProgress] = useState<{ processed: number; total: number } | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const { t } = useTranslation();
 
   const isSearching = search.trim().length > 0;
@@ -176,7 +180,7 @@ function SessionsPage({
 
   const grouped = useGroupedSessions(sessions, isSearching);
   const {
-    manageMode, selectedIds, confirmDelete, setConfirmDelete,
+    manageMode, setManageMode, selectedIds, confirmDelete, setConfirmDelete,
     toggleSession, toggleProject, exitManageMode, allSelected, someSelected,
     toggleAll, flatSessionIds,
   } = useSessionSelection(sessions, grouped, collapsedProjects, selectedId, onSelect);
@@ -187,6 +191,23 @@ function SessionsPage({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sessions"] });
       exitManageMode();
+    },
+    onError: (err) => {
+      console.error("Soft delete failed:", err);
+      setDeleteError(err instanceof Error ? err.message : String(err));
+      setConfirmDelete(false);
+    },
+  });
+
+  const destructiveBatch = useMutation({
+    mutationFn: (ids: string[]) => destructiveDeleteSessions(ids),
+    onSuccess: () => {
+      setDeleteProgress({ processed: 0, total: selectedIds.size });
+    },
+    onError: (err) => {
+      console.error("Destructive delete failed:", err);
+      setDeleteError(err instanceof Error ? err.message : String(err));
+      setConfirmDelete(false);
     },
   });
 
@@ -214,26 +235,59 @@ function SessionsPage({
     return () => window.removeEventListener("mousedown", handler);
   }, [ctxMenu]);
 
+  // Listen for delete progress events
+  useEffect(() => {
+    const transport = getEventTransport();
+    const unlisten = transport.on<{ processed: number; total: number; status: string }>("delete-progress", (payload) => {
+      if (payload.status === "completed" || payload.status === "failed") {
+        setDeleteProgress(null);
+        queryClient.invalidateQueries({ queryKey: ["sessions"] });
+        queryClient.invalidateQueries({ queryKey: ["system-status"] });
+        if (payload.status === "completed") exitManageMode();
+      } else {
+        setDeleteProgress({ processed: payload.processed, total: payload.total });
+      }
+    });
+    return () => { unlisten.then((f) => f()); };
+  }, [queryClient]);
+
   const toggleCollapse = (key: string) => {
     setCollapsedProjects((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   return (
-    <div className="grid h-full min-h-0 xl:grid-cols-[360px_minmax(0,1fr)]">
-      <section className="surface-panel flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="border-b border-border px-3 py-2">
-          <label className="block">
-            <span className="sr-only">{t("sessions.searchSrLabel")}</span>
-            <input
-              ref={searchRef}
-              value={searchRaw}
-              onChange={(e) => setSearchRaw(e.target.value)}
-              placeholder={t("sessions.searchPlaceholder")}
-              className="zed-input"
-            />
-          </label>
+    <div className="flex h-full flex-col overflow-hidden">
+      {/* Header — full width */}
+      <div className="flex flex-col gap-2 border-b border-border px-3 pb-3">
+        <h2 className="text-[14px] font-medium leading-none text-foreground">{t("sessions.title")}</h2>
+        <p className="mt-2 text-[14px] leading-[1.5] text-muted-foreground">{t("sessions.description")}</p>
+      </div>
+      {/* Search + Manage — full width */}
+      <div className="border-b border-border px-3 py-2">
+        <div className="flex items-center gap-2">
+            <label className="block flex-1">
+              <span className="sr-only">{t("sessions.searchSrLabel")}</span>
+              <input
+                ref={searchRef}
+                value={searchRaw}
+                onChange={(e) => setSearchRaw(e.target.value)}
+                placeholder={t("sessions.searchPlaceholder")}
+                className="zed-input"
+              />
+            </label>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 shrink-0 rounded-md px-2.5 text-[12px]"
+              onClick={() => setManageMode(!manageMode)}
+            >
+              {manageMode ? t("sessions.done") : t("sessions.manage")}
+            </Button>
+          </div>
         </div>
 
+      <div className="grid min-h-0 flex-1 xl:grid-cols-[360px_minmax(0,1fr)]">
+      <section className="flex min-h-0 flex-1 flex-col overflow-hidden border-r border-border">
         <ScrollArea className="min-h-0 flex-1">
           {error ? (
             <div className="flex h-72 items-center justify-center px-6">
@@ -382,34 +436,69 @@ function SessionsPage({
 
         {manageMode && (
           <div className="border-t border-border bg-card px-3 py-2">
+            {deleteError && (
+              <div className="mb-2 flex items-center justify-between rounded-md border border-destructive/30 bg-destructive/10 px-2.5 py-1.5">
+                <span className="text-[12px] text-destructive">{deleteError}</span>
+                <Button variant="ghost" size="sm" className="h-5 px-1 text-[11px] text-destructive" onClick={() => setDeleteError(null)}>Dismiss</Button>
+              </div>
+            )}
             {confirmDelete ? (
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <span className="flex size-8 shrink-0 items-center justify-center rounded-sm bg-destructive/10">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-destructive" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-                      <line x1="12" y1="9" x2="12" y2="13" />
-                      <line x1="12" y1="17" x2="12.01" y2="17" />
-                    </svg>
-                  </span>
-                  <div>
-                    <p className="text-[13px] font-medium text-foreground">
-                      {t("manage.deleteConfirm", { count: selectedIds.size })}
-                    </p>
-                    <p className="text-[12px] text-muted-foreground">
-                      {t("manage.deleteHint")}
-                    </p>
+              deleteProgress ? (
+                <div className="space-y-2">
+                  <p className="text-[13px] font-medium text-foreground">
+                    {t("manage.deleting")} {deleteProgress.processed}/{deleteProgress.total}
+                  </p>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
+                    <div
+                      className="h-full rounded-full bg-primary transition-all duration-300 ease-out"
+                      style={{ width: `${Math.round((deleteProgress.processed / deleteProgress.total) * 100)}%` }}
+                    />
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <Button variant="outline" size="sm" className="h-8 rounded-md px-3 text-[13px]" onClick={() => setConfirmDelete(false)}>
+              ) : (
+              <div className="space-y-2">
+                {/* Delete type selection */}
+                <div className="flex items-center justify-between gap-4">
+                  <p className="text-[13px] font-medium text-foreground">
+                    {t("manage.deleteConfirm", { count: selectedIds.size })}
+                  </p>
+                  <Button variant="outline" size="sm" className="h-7 rounded-md px-2.5 text-[13px]" onClick={() => { setConfirmDelete(false); setDeleteMode("soft"); }}>
                     {t("manage.back")}
                   </Button>
-                  <Button variant="destructive" size="sm" className="h-8 rounded-md px-3 text-[13px]" onClick={() => deleteBatch.mutate(Array.from(selectedIds))} disabled={deleteBatch.isPending}>
-                    {deleteBatch.isPending ? t("manage.deleting") : t("manage.confirm")}
+                </div>
+                <div className="space-y-1.5">
+                  <label className={`flex cursor-pointer items-start gap-2.5 rounded-md border p-2.5 transition-colors ${deleteMode === "soft" ? "border-primary/30 bg-primary/5" : "border-border hover:border-muted-foreground/30"}`}>
+                    <input type="radio" name="deleteMode" className="mt-0.5 accent-primary" checked={deleteMode === "soft"} onChange={() => setDeleteMode("soft")} />
+                    <div>
+                      <p className="text-[13px] font-medium text-foreground">{t("manage.softDelete")}</p>
+                      <p className="text-[12px] text-muted-foreground">{t("manage.softDeleteDesc")}</p>
+                    </div>
+                  </label>
+                  <label className={`flex cursor-pointer items-start gap-2.5 rounded-md border p-2.5 transition-colors ${deleteMode === "destructive" ? "border-destructive/30 bg-destructive/5" : "border-border hover:border-muted-foreground/30"}`}>
+                    <input type="radio" name="deleteMode" className="mt-0.5 accent-destructive" checked={deleteMode === "destructive"} onChange={() => setDeleteMode("destructive")} />
+                    <div>
+                      <p className="text-[13px] font-medium text-foreground">{t("manage.destructiveDelete")}</p>
+                      <p className="text-[12px] text-muted-foreground">{t("manage.destructiveDeleteDesc")}</p>
+                    </div>
+                  </label>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button
+                    variant="destructive" size="sm" className="h-8 rounded-md px-3 text-[13px]"
+                    onClick={() => {
+                      if (deleteMode === "destructive") {
+                        destructiveBatch.mutate(Array.from(selectedIds));
+                      } else {
+                        deleteBatch.mutate(Array.from(selectedIds));
+                      }
+                    }}
+                    disabled={deleteBatch.isPending || destructiveBatch.isPending}
+                  >
+                    {deleteBatch.isPending || destructiveBatch.isPending ? t("manage.deleting") : t("manage.confirm")}
                   </Button>
                 </div>
               </div>
+              )
             ) : (
               <div className="flex items-center justify-between gap-4">
                 <span className="text-[13px] text-muted-foreground">
@@ -429,14 +518,14 @@ function SessionsPage({
         )}
       </section>
 
-      <section className="surface-panel min-h-0 flex-1 overflow-hidden">
+      <section className="min-h-0 flex-1 overflow-hidden">
         {selectedId ? (
           <SessionDetailPane sessionId={selectedId} />
         ) : (
           <div className="flex h-full items-center justify-center p-6">
             <div className="max-w-xl border border-border bg-card p-5">
               <p className="zed-kicker">{t("sessions.selectPrompt")}</p>
-              <h3 className="mt-2 max-w-md text-[16px] font-medium leading-[1.2] text-foreground">
+              <h3 className="mt-2 max-w-md text-[14px] font-semibold leading-none text-foreground">
                 {t("sessions.selectHeading")}
               </h3>
               <p className="mt-2 max-w-lg text-[14px] leading-[1.5] text-muted-foreground">
@@ -446,6 +535,7 @@ function SessionsPage({
           </div>
         )}
       </section>
+      </div>
 
       {ctxMenu && (
         <div

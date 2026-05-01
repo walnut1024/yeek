@@ -40,6 +40,10 @@ impl EventEmitter for SseEventEmitter {
         });
         let _ = self.tx.send(json.to_string());
     }
+
+    fn emit_delete_progress(&self, payload: DeleteProgressPayload) {
+        self.broadcast("delete-progress", &payload);
+    }
 }
 
 impl SseEventEmitter {

@@ -12,6 +12,7 @@ pub trait EventEmitter: Send + Sync {
     fn emit_sync_progress(&self, payload: SyncProgressPayload);
     fn emit_sync_completed(&self, payload: SyncCompletedPayload);
     fn emit_plugin_config_changed(&self);
+    fn emit_delete_progress(&self, payload: DeleteProgressPayload);
 }
 
 // ---------------------------------------------------------------------------
@@ -57,4 +58,14 @@ pub struct SystemErrorPayload {
     pub kind: String,
     pub message: String,
     pub source: Option<String>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct DeleteProgressPayload {
+    pub processed: i64,
+    pub total: i64,
+    pub current_session_id: String,
+    pub status: String, // "running" | "completed" | "failed"
+    pub deleted_files: i64,
+    pub failed_files: i64,
 }

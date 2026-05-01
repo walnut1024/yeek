@@ -231,7 +231,7 @@ export default function SettingsPage() {
 
       <aside className="surface-panel overflow-hidden border-l border-border p-3">
         <p className="zed-kicker">{t("settings.opsNotes")}</p>
-        <h3 className="mt-2 text-[16px] font-medium leading-[1.2] text-foreground">
+        <h3 className="mt-2 text-[14px] font-semibold leading-none text-foreground">
           {t("settings.opsHeading")}
         </h3>
         <p className="mt-2 text-[14px] leading-[1.5] text-muted-foreground">

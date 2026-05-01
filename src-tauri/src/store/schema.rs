@@ -79,6 +79,17 @@ CREATE TABLE IF NOT EXISTS proxy_config (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     config_json TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS delete_queue (
+    id TEXT PRIMARY KEY,
+    session_ids TEXT NOT NULL,
+    current_index INTEGER NOT NULL DEFAULT 0,
+    total_count INTEGER NOT NULL,
+    delete_mode TEXT NOT NULL DEFAULT 'destructive',
+    status TEXT NOT NULL DEFAULT 'running',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 "#;
 
 /// Add a column to a table, ignoring "duplicate column" errors (column already exists).

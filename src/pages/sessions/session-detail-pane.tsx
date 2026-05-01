@@ -1,34 +1,21 @@
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { getSessionPreview, softDeleteSessions, resumeSession } from "@/lib/api";
+import { getSessionPreview, resumeSession } from "@/lib/api";
+import { useLocalStorage } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { formatTime, formatRelativeTime } from "@/lib/formatters";
 import TranscriptView from "./transcript-view";
 import SourcesTab from "./sources-tab";
 import SessionGraph from "./session-graph";
-import { useLocalStorage } from "@/lib/hooks";
 
 export default function SessionDetailPane({
   sessionId,
 }: {
   sessionId: string;
 }) {
-  const queryClient = useQueryClient();
   const { t } = useTranslation();
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [viewMode, setViewMode] = useLocalStorage<"feed" | "graph">(
     "graph-view",
     "feed",
@@ -38,14 +25,6 @@ export default function SessionDetailPane({
   const { data: preview, isLoading: previewLoading } = useQuery({
     queryKey: ["session-preview", sessionId],
     queryFn: () => getSessionPreview(sessionId),
-  });
-
-  const softDel = useMutation({
-    mutationFn: () => softDeleteSessions([sessionId]),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sessions"] });
-      setShowDeleteConfirm(false);
-    },
   });
 
   if (previewLoading || !preview) {
@@ -94,7 +73,7 @@ export default function SessionDetailPane({
                   value={formatRelativeTime(record.updated_at)}
                 />
               </div>
-              <div className="mt-2 flex items-center gap-3 text-[12px] font-medium tracking-[0.14em] text-muted-foreground">
+              <div className="mt-2 flex items-center gap-3 text-[12px] font-medium tracking-[0.1em] text-muted-foreground">
                 <span>{t("detail.sourceLabel", { path: record.id })}</span>
                 <span>{t("detail.sourcePath", { path: record.project_path })}</span>
               </div>
@@ -113,43 +92,11 @@ export default function SessionDetailPane({
               >
                 {t("detail.resume")}
               </Button>
-              <Button
-                size="sm"
-                variant="destructive"
-                className="h-7 rounded-md px-2.5 text-[13px]"
-                onClick={() => setShowDeleteConfirm(true)}
-              >
-                {t("detail.delete")}
-              </Button>
             </div>
           </div>
 
           <SourcesTab sessionId={sessionId} />
         </section>
-
-        <AlertDialog
-          open={showDeleteConfirm}
-          onOpenChange={setShowDeleteConfirm}
-        >
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>{t("detail.deleteTitle")}</AlertDialogTitle>
-              <AlertDialogDescription>
-                {t("detail.deleteDescription")}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>{t("detail.deleteCancel")}</AlertDialogCancel>
-              <AlertDialogAction
-                disabled={softDel.isPending}
-                onClick={() => softDel.mutate()}
-                className="border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20"
-              >
-                {softDel.isPending ? t("detail.deleting") : t("detail.delete")}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
 
         <section className="surface-card overflow-hidden p-1">
           {/* Graph/Feed toggle */}

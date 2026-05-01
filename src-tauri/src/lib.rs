@@ -115,6 +115,9 @@ pub fn run() {
                     .expect("Failed to spawn migration thread");
             }
 
+            // Resume any incomplete delete jobs from previous session
+            app::commands::resume_pending_delete_jobs(&app.state::<AppState>());
+
             // Startup sync: background thread — window appears immediately
             sync::background::spawn_background_scan(db_path, emitter, scan_guard);
 
@@ -172,6 +175,7 @@ pub fn run() {
             tauri_bridge::commands::resume_session,
             tauri_bridge::commands::get_delete_plan,
             tauri_bridge::commands::destructive_delete_session,
+            tauri_bridge::commands::destructive_delete_sessions,
             tauri_bridge::commands::list_plugins,
             tauri_bridge::commands::toggle_plugin,
             tauri_bridge::commands::uninstall_plugin,

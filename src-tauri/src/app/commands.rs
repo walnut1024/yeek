@@ -31,32 +31,59 @@ pub(crate) fn do_system_status(state: &AppState) -> Result<SystemStatusPayload, 
     let db = state.db()?;
 
     let total_sessions: i64 = db
-        .query_row("SELECT COUNT(*) FROM sessions WHERE parent_session_id IS NULL", [], |row| {
-            row.get(0)
-        })
+        .query_row(
+            "SELECT COUNT(*) FROM sessions WHERE parent_session_id IS NULL AND visibility = 'visible' AND delete_mode = 'none'",
+            [],
+            |row| row.get(0),
+        )
         .unwrap_or(0);
 
-    let total_sources: i64 =
-        db.query_row("SELECT COUNT(*) FROM sources", [], |row| row.get(0)).unwrap_or(0);
+    let total_sources: i64 = db
+        .query_row(
+            "SELECT COUNT(DISTINCT ss.source_id) FROM session_sources ss JOIN sessions s ON ss.session_id = s.id WHERE s.visibility = 'visible' AND s.delete_mode = 'none'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
 
     let total_projects: i64 = db
-        .query_row("SELECT COUNT(DISTINCT project_path) FROM sessions WHERE project_path IS NOT NULL", [], |row| row.get(0))
+        .query_row(
+            "SELECT COUNT(DISTINCT project_path) FROM sessions WHERE project_path IS NOT NULL AND visibility = 'visible' AND delete_mode = 'none'",
+            [],
+            |row| row.get(0),
+        )
         .unwrap_or(0);
 
     let total_messages: i64 = db
-        .query_row("SELECT COALESCE(SUM(message_count), 0) FROM sessions WHERE parent_session_id IS NULL", [], |row| row.get(0))
+        .query_row(
+            "SELECT COALESCE(SUM(message_count), 0) FROM sessions WHERE parent_session_id IS NULL AND visibility = 'visible' AND delete_mode = 'none'",
+            [],
+            |row| row.get(0),
+        )
         .unwrap_or(0);
 
     let active_sessions: i64 = db
-        .query_row("SELECT COUNT(*) FROM sessions WHERE parent_session_id IS NULL AND status = 'active'", [], |row| row.get(0))
+        .query_row(
+            "SELECT COUNT(*) FROM sessions WHERE parent_session_id IS NULL AND status = 'active' AND visibility = 'visible' AND delete_mode = 'none'",
+            [],
+            |row| row.get(0),
+        )
         .unwrap_or(0);
 
     let complete_sessions: i64 = db
-        .query_row("SELECT COUNT(*) FROM sessions WHERE parent_session_id IS NULL AND status = 'complete'", [], |row| row.get(0))
+        .query_row(
+            "SELECT COUNT(*) FROM sessions WHERE parent_session_id IS NULL AND status = 'complete' AND visibility = 'visible' AND delete_mode = 'none'",
+            [],
+            |row| row.get(0),
+        )
         .unwrap_or(0);
 
     let partial_sessions: i64 = db
-        .query_row("SELECT COUNT(*) FROM sessions WHERE parent_session_id IS NULL AND status = 'partial'", [], |row| row.get(0))
+        .query_row(
+            "SELECT COUNT(*) FROM sessions WHERE parent_session_id IS NULL AND status = 'partial' AND visibility = 'visible' AND delete_mode = 'none'",
+            [],
+            |row| row.get(0),
+        )
         .unwrap_or(0);
 
     let last_sync_at: Option<String> = db
@@ -659,6 +686,218 @@ pub(crate) fn do_destructive_delete(
     let db = state.db()?;
     let result = crate::service::delete_planner::execute_destructive_delete(&db, &session_id)?;
     Ok(result)
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DeleteJobPayload {
+    pub job_id: String,
+}
+
+pub(crate) fn do_destructive_delete_batch(
+    state: &AppState,
+    ids: Vec<String>,
+) -> Result<DeleteJobPayload, AppError> {
+    let job_id = uuid::Uuid::new_v4().to_string();
+    let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    let ids_json = serde_json::to_string(&ids)
+        .map_err(|e| AppError::Internal(format!("json: {}", e)))?;
+    let total = ids.len() as i64;
+
+    // Insert checkpoint record
+    {
+        let db = state.db()?;
+        db.execute(
+            "INSERT INTO delete_queue (id, session_ids, current_index, total_count, status, created_at, updated_at)
+             VALUES (?1, ?2, 0, ?3, 'running', ?4, ?4)",
+            rusqlite::params![job_id, ids_json, total, now],
+        )?;
+        action_store::record_action(
+            &db, None, "destructive_delete_batch",
+            Some(&format!("job {}: {} sessions queued", job_id, ids.len())),
+        )?;
+    }
+
+    // Spawn background worker
+    let emitter = state.event_emitter.clone();
+    let db_path = state.db_path.clone();
+    let jid = job_id.clone();
+
+    std::thread::spawn(move || {
+        let conn = match rusqlite::Connection::open(&db_path) {
+            Ok(c) => c,
+            Err(e) => {
+                emitter.emit_delete_progress(crate::app::events::DeleteProgressPayload {
+                    processed: 0, total,
+                    current_session_id: String::new(),
+                    status: "failed".into(),
+                    deleted_files: 0, failed_files: 0,
+                });
+                tracing::error!("Delete job {}: failed to open DB: {}", jid, e);
+                return;
+            },
+        };
+        let _ = crate::store::schema::configure_connection(&conn);
+
+        let mut total_deleted = 0i64;
+        let mut total_failed = 0i64;
+
+        for (i, sid) in ids.iter().enumerate() {
+            let processed = (i + 1) as i64;
+            match crate::service::delete_planner::execute_destructive_delete(&conn, sid) {
+                Ok(r) => {
+                    total_deleted += r.deleted_files;
+                    total_failed += r.failed_files;
+                },
+                Err(e) => {
+                    total_failed += 1;
+                    tracing::error!("Delete job {}: session {} failed: {}", jid, sid, e);
+                },
+            }
+
+            // Update checkpoint
+            let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+            let _ = conn.execute(
+                "UPDATE delete_queue SET current_index = ?1, updated_at = ?2 WHERE id = ?3",
+                rusqlite::params![processed, now, jid],
+            );
+
+            // Emit progress
+            emitter.emit_delete_progress(crate::app::events::DeleteProgressPayload {
+                processed,
+                total,
+                current_session_id: sid.clone(),
+                status: "running".into(),
+                deleted_files: total_deleted,
+                failed_files: total_failed,
+            });
+        }
+
+        // Mark completed
+        let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+        let _ = conn.execute(
+            "UPDATE delete_queue SET status = 'completed', updated_at = ?1 WHERE id = ?2",
+            rusqlite::params![now, jid],
+        );
+
+        let _ = crate::store::actions::record_action(
+            &conn, None, "destructive_delete_batch_completed",
+            Some(&format!("job {}: {} sessions, deleted={}, failed={}", jid, ids.len(), total_deleted, total_failed)),
+        );
+
+        emitter.emit_delete_progress(crate::app::events::DeleteProgressPayload {
+            processed: total,
+            total,
+            current_session_id: String::new(),
+            status: "completed".into(),
+            deleted_files: total_deleted,
+            failed_files: total_failed,
+        });
+    });
+
+    Ok(DeleteJobPayload { job_id })
+}
+
+/// Resume any incomplete delete jobs from a previous session.
+pub(crate) fn resume_pending_delete_jobs(state: &AppState) {
+    let emitter = state.event_emitter.clone();
+    let db_path = state.db_path.clone();
+
+    // Check for pending jobs
+    let jobs: Vec<(String, String, i64, i64)> = {
+        let db = match state.db() { Ok(d) => d, Err(_) => return };
+        let mut stmt = match db.prepare(
+            "SELECT id, session_ids, current_index, total_count FROM delete_queue WHERE status = 'running'"
+        ) { Ok(s) => s, Err(_) => return };
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i64>(2)?,
+                row.get::<_, i64>(3)?,
+            ))
+        });
+        match rows {
+            Ok(r) => r.filter_map(|r| r.ok()).collect(),
+            Err(_) => return,
+        }
+    };
+
+    for (job_id, ids_json, current_index, total_count) in jobs {
+        let ids: Vec<String> = match serde_json::from_str(&ids_json) {
+            Ok(ids) => ids,
+            Err(_) => continue,
+        };
+        let remaining: Vec<String> = ids.into_iter().skip(current_index as usize).collect();
+        if remaining.is_empty() {
+            let _ = state.db().and_then(|db| {
+                db.execute(
+                    "UPDATE delete_queue SET status = 'completed', updated_at = ?1 WHERE id = ?2",
+                    rusqlite::params![chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true), job_id],
+                ).map_err(|e| AppError::DbError(e.to_string()))
+            });
+            continue;
+        }
+
+        let emitter = emitter.clone();
+        let db_path = db_path.clone();
+        let total = total_count;
+        let start_index = current_index;
+
+        tracing::info!("Resuming delete job {}: {} remaining", job_id, remaining.len());
+
+        std::thread::spawn(move || {
+            let conn = match rusqlite::Connection::open(&db_path) {
+                Ok(c) => c,
+                Err(_) => return,
+            };
+            let _ = crate::store::schema::configure_connection(&conn);
+
+            let mut total_deleted = 0i64;
+            let mut total_failed = 0i64;
+
+            for (i, sid) in remaining.iter().enumerate() {
+                let processed = start_index + (i + 1) as i64;
+                match crate::service::delete_planner::execute_destructive_delete(&conn, sid) {
+                    Ok(r) => {
+                        total_deleted += r.deleted_files;
+                        total_failed += r.failed_files;
+                    },
+                    Err(e) => {
+                        total_failed += 1;
+                        tracing::error!("Delete job {}: session {} failed: {}", job_id, sid, e);
+                    },
+                }
+
+                let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+                let _ = conn.execute(
+                    "UPDATE delete_queue SET current_index = ?1, updated_at = ?2 WHERE id = ?3",
+                    rusqlite::params![processed, now, job_id],
+                );
+
+                emitter.emit_delete_progress(crate::app::events::DeleteProgressPayload {
+                    processed, total,
+                    current_session_id: sid.clone(),
+                    status: "running".into(),
+                    deleted_files: total_deleted,
+                    failed_files: total_failed,
+                });
+            }
+
+            let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+            let _ = conn.execute(
+                "UPDATE delete_queue SET status = 'completed', updated_at = ?1 WHERE id = ?2",
+                rusqlite::params![now, job_id],
+            );
+
+            emitter.emit_delete_progress(crate::app::events::DeleteProgressPayload {
+                processed: total, total,
+                current_session_id: String::new(),
+                status: "completed".into(),
+                deleted_files: total_deleted,
+                failed_files: total_failed,
+            });
+        });
+    }
 }
 
 // --- Rescan ---

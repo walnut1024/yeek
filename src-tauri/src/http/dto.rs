@@ -63,3 +63,8 @@ pub struct InstallMarketplacePluginRequest {
     pub marketplace_name: String,
     pub plugin_name: String,
 }
+
+#[derive(Deserialize)]
+pub struct DestructiveDeleteBatchRequest {
+    pub ids: Vec<String>,
+}

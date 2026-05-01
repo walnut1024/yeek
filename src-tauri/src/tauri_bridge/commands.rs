@@ -120,6 +120,14 @@ pub fn destructive_delete_session(
 }
 
 #[tauri::command]
+pub fn destructive_delete_sessions(
+    state: State<'_, AppState>,
+    ids: Vec<String>,
+) -> Result<DeleteJobPayload, AppError> {
+    do_destructive_delete_batch(&state, ids)
+}
+
+#[tauri::command]
 pub fn list_plugins(
     state: State<'_, AppState>,
     scope: String,

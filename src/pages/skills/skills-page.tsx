@@ -103,7 +103,12 @@ export default function SkillsPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Toolbar — matches sessions page toolbar style */}
+      {/* Header */}
+      <div className="flex flex-col gap-2 border-b border-border px-3 pb-3">
+        <h2 className="text-[14px] font-medium leading-none text-foreground">{t("skills.title")}</h2>
+        <p className="mt-2 max-w-2xl text-[14px] leading-[1.5] text-muted-foreground">{t("skills.description")}</p>
+      </div>
+      {/* Toolbar */}
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <div className="flex items-center gap-2">
           {(["global", "project"] as const).map((s) => (
@@ -140,7 +145,7 @@ export default function SkillsPage() {
       {/* Health bar */}
       {hs && (
         <div className="flex items-center gap-3 border-b border-border bg-secondary px-3 py-1.5 text-[12px] text-muted-foreground">
-          <span className="text-[10px] uppercase tracking-[0.08em]">{t("skills.health")}</span>
+          <span className="text-[10px] uppercase tracking-[0.06em]">{t("skills.health")}</span>
           <HealthDot dot="bg-chart-2" count={hs.ok} />
           <HealthDot dot="bg-chart-3" count={hs.partial} />
           <HealthDot dot="bg-chart-5" count={hs.hook} />
@@ -440,7 +445,7 @@ function PluginCard({
 function DetailRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="flex items-center gap-2 border-b border-border px-3 py-1">
-      <span className="w-12 shrink-0 text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+      <span className="w-12 shrink-0 text-[10px] uppercase tracking-[0.06em] text-muted-foreground">
         {label}
       </span>
       <span
@@ -485,7 +490,7 @@ function HealthBadge({ health }: { health: string }) {
   const hc = HEALTH_COLORS[health] ?? HEALTH_COLORS.hook;
   return (
     <span
-      className={`flex shrink-0 items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.04em] ${hc.text} ${hc.bg} ${hc.border}`}
+      className={`flex shrink-0 items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.06em] ${hc.text} ${hc.bg} ${hc.border}`}
     >
       <span className={`size-1 rounded-full ${hc.dot}`} />
       {HEALTH_LABELS[health] ?? health.toUpperCase()}

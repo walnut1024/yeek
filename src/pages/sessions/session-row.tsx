@@ -69,7 +69,7 @@ const SessionRow = React.memo(function SessionRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+            <p className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
               {session.agent === "claude_code" ? "Claude Code" : session.agent}
             </p>
             <span className="mt-0.5 block truncate text-[14px] leading-[1.3] text-foreground">
