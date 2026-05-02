@@ -17,6 +17,10 @@ pub fn responses_to_chat(req: &ResponsesRequest) -> ChatCompletionRequest {
     let input_messages = transform_input(&req.input);
     messages.extend(input_messages);
 
+    // Fix: assistant messages with tool_calls must be followed by tool messages
+    // for every tool_call_id. Insert dummy tool results for any missing ones.
+    repair_orphaned_tool_calls(&mut messages);
+
     // Debug: log reasoning_content status on assistant messages
     for (i, msg) in messages.iter().enumerate() {
         if let ChatMessage::Assistant { reasoning_content, .. } = msg {
@@ -391,6 +395,69 @@ fn transform_input(input: &serde_json::Value) -> Vec<ChatMessage> {
     }
 
     messages
+}
+
+/// Ensure every assistant message with tool_calls has corresponding Tool messages.
+/// For any tool_call_id without a following Tool message, insert a dummy placeholder.
+/// Mirrors LiteLLM's `sanitize_messages_for_tool_calling` / `_add_missing_tool_results`.
+fn repair_orphaned_tool_calls(messages: &mut Vec<ChatMessage>) {
+    let mut insertions: Vec<(usize, ChatMessage)> = Vec::new();
+
+    let mut i = 0;
+    while i < messages.len() {
+        let tool_call_ids: Vec<String> = match &messages[i] {
+            ChatMessage::Assistant { tool_calls: Some(tcs), .. } => {
+                tcs.iter().map(|tc| tc.id.clone()).filter(|id| !id.is_empty()).collect()
+            }
+            _ => {
+                i += 1;
+                continue;
+            }
+        };
+
+        if tool_call_ids.is_empty() {
+            i += 1;
+            continue;
+        }
+
+        // Collect tool_call_ids that have corresponding Tool messages following this assistant
+        let mut found_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut j = i + 1;
+        while j < messages.len() {
+            match &messages[j] {
+                ChatMessage::Tool { tool_call_id, .. } => {
+                    found_ids.insert(tool_call_id.clone());
+                }
+                ChatMessage::Assistant { .. } => break,
+                _ => {}
+            }
+            j += 1;
+        }
+
+        let missing: Vec<&String> = tool_call_ids.iter().filter(|id| !found_ids.contains(*id)).collect();
+
+        if !missing.is_empty() {
+            // Insert dummy tool results right after the last tool message (or after the assistant)
+            let insert_pos = j;
+            for (offset, missing_id) in missing.iter().enumerate() {
+                let dummy = ChatMessage::Tool {
+                    tool_call_id: (*missing_id).clone(),
+                    content: ChatMessageContent::String(
+                        "[System: Tool execution skipped/interrupted. No result provided.]".to_string(),
+                    ),
+                };
+                insertions.push((insert_pos + offset, dummy));
+            }
+            i = j;
+        } else {
+            i += 1;
+        }
+    }
+
+    // Insert in reverse order to preserve positions
+    for (pos, msg) in insertions.into_iter().rev() {
+        messages.insert(pos, msg);
+    }
 }
 
 /// Flush pending tool calls into a single assistant message.
@@ -933,5 +1000,82 @@ mod tests {
         let chat = responses_to_chat(&req);
         assert_eq!(chat.messages.len(), 1);
         assert!(matches!(chat.messages[0], ChatMessage::User { .. }));
+    }
+
+    #[test]
+    fn test_orphaned_tool_calls_get_dummy_results() {
+        // function_call without function_call_output → should get a dummy tool message
+        let req = ResponsesRequest {
+            input: serde_json::json!([
+                {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "Hi"}]},
+                {"type": "function_call", "call_id": "call_1", "name": "get_weather", "arguments": "{}"},
+            ]),
+            ..make_req()
+        };
+
+        let chat = responses_to_chat(&req);
+        // System not present, so: [User, Assistant{tool_calls}, Tool{dummy}]
+        assert_eq!(chat.messages.len(), 3);
+        match &chat.messages[2] {
+            ChatMessage::Tool { tool_call_id, content } => {
+                assert_eq!(tool_call_id, "call_1");
+                match content {
+                    ChatMessageContent::String(s) => assert!(s.contains("skipped")),
+                    _ => panic!("Expected string content"),
+                }
+            }
+            _ => panic!("Expected dummy tool message"),
+        }
+    }
+
+    #[test]
+    fn test_partial_orphaned_tool_calls() {
+        // Two tool_calls, only one has output
+        let req = ResponsesRequest {
+            input: serde_json::json!([
+                {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "Hi"}]},
+                {"type": "function_call", "call_id": "call_1", "name": "tool_a", "arguments": "{}"},
+                {"type": "function_call", "call_id": "call_2", "name": "tool_b", "arguments": "{}"},
+                {"type": "function_call_output", "call_id": "call_1", "output": "result_a"},
+            ]),
+            ..make_req()
+        };
+
+        let chat = responses_to_chat(&req);
+        // [User, Assistant{2 tool_calls}, Tool{call_1}, Tool{dummy for call_2}]
+        assert_eq!(chat.messages.len(), 4);
+        // call_1 result
+        match &chat.messages[2] {
+            ChatMessage::Tool { tool_call_id, .. } => {
+                assert_eq!(tool_call_id, "call_1");
+            }
+            _ => panic!("Expected tool message for call_1"),
+        }
+        // call_2 dummy
+        match &chat.messages[3] {
+            ChatMessage::Tool { tool_call_id, content } => {
+                assert_eq!(tool_call_id, "call_2");
+                match content {
+                    ChatMessageContent::String(s) => assert!(s.contains("skipped")),
+                    _ => panic!("Expected string content"),
+                }
+            }
+            _ => panic!("Expected dummy tool message for call_2"),
+        }
+    }
+
+    #[test]
+    fn test_no_dummy_when_all_tool_results_present() {
+        let req = ResponsesRequest {
+            input: serde_json::json!([
+                {"type": "function_call", "call_id": "call_1", "name": "tool_a", "arguments": "{}"},
+                {"type": "function_call_output", "call_id": "call_1", "output": "ok"},
+            ]),
+            ..make_req()
+        };
+
+        let chat = responses_to_chat(&req);
+        // No dummy inserted — just [Assistant{tool_calls}, Tool{call_1}]
+        assert_eq!(chat.messages.len(), 2);
     }
 }
