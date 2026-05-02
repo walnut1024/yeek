@@ -435,6 +435,18 @@ export async function getProxyMetrics(): Promise<ProxyMetrics> {
   return getTransport().command<ProxyMetrics>("get_proxy_metrics");
 }
 
+export interface ProxyErrorEvent {
+  timestamp: number;
+  provider: string;
+  model: string;
+  status: number;
+  message: string;
+}
+
+export async function getProxyErrorEvents(): Promise<ProxyErrorEvent[]> {
+  return getTransport().command<ProxyErrorEvent[]>("get_proxy_error_events");
+}
+
 export async function getProxyLogs(lines: number): Promise<string> {
   return getTransport().command<string>("get_proxy_logs", { lines });
 }
