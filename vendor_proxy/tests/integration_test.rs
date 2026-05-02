@@ -247,6 +247,7 @@ async fn test_models_endpoint() {
         latency_total_ns: std::sync::atomic::AtomicU64::new(0),
         request_times: std::sync::Mutex::new(std::collections::VecDeque::new()),
         provider_stats: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
+        error_events: std::sync::Mutex::new(std::collections::VecDeque::new()),
     });
     let proxy_app = Router::new()
         .route("/v1/models", axum::routing::get(vendor_proxy::server::models_handler))
@@ -289,6 +290,7 @@ async fn start_proxy(upstream_addr: &str, port: u16) -> std::net::SocketAddr {
         latency_total_ns: std::sync::atomic::AtomicU64::new(0),
         request_times: std::sync::Mutex::new(std::collections::VecDeque::new()),
         provider_stats: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
+        error_events: std::sync::Mutex::new(std::collections::VecDeque::new()),
     });
     let proxy_app = Router::new()
         .route("/v1/{*path}", axum::routing::any(vendor_proxy::server::proxy_handler))

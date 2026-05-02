@@ -17,21 +17,9 @@ pub fn responses_to_chat(req: &ResponsesRequest) -> ChatCompletionRequest {
     let input_messages = transform_input(&req.input);
     messages.extend(input_messages);
 
-    // Fix: assistant messages with tool_calls must be followed by tool messages
-    // for every tool_call_id. Insert dummy tool results for any missing ones.
     repair_orphaned_tool_calls(&mut messages);
-
-    // Debug: log reasoning_content status on assistant messages
-    for (i, msg) in messages.iter().enumerate() {
-        if let ChatMessage::Assistant { reasoning_content, .. } = msg {
-            let has_rc = reasoning_content.is_some();
-            tracing::info!(
-                "Chat msg[{}] assistant reasoning_content: {}",
-                i,
-                if has_rc { "SOME" } else { "NONE" }
-            );
-        }
-    }
+    reorder_tool_messages(&mut messages);
+    sanitize_empty_content(&mut messages);
 
     // tools: filter web_search, convert to chat format
     let chat_tools: Vec<ChatTool> = req
@@ -457,6 +445,75 @@ fn repair_orphaned_tool_calls(messages: &mut Vec<ChatMessage>) {
     // Insert in reverse order to preserve positions
     for (pos, msg) in insertions.into_iter().rev() {
         messages.insert(pos, msg);
+    }
+}
+
+/// Ensure Tool messages immediately follow their preceding Assistant message.
+/// Some providers (DeepSeek) reject [Assistant(tool_calls), User, Tool] —
+/// the Tool must come right after the Assistant with no intervening messages.
+fn reorder_tool_messages(messages: &mut Vec<ChatMessage>) {
+    let mut i = 0;
+    while i < messages.len() {
+        // Find an Assistant with tool_calls
+        let has_tool_calls = match &messages[i] {
+            ChatMessage::Assistant { tool_calls: Some(tcs), .. } => !tcs.is_empty(),
+            _ => false,
+        };
+        if !has_tool_calls { i += 1; continue; }
+
+        // Collect all Tool messages and non-tool messages between this Assistant and the next
+        let mut tools: Vec<ChatMessage> = Vec::new();
+        let mut others: Vec<ChatMessage> = Vec::new();
+        let mut j = i + 1;
+        let mut needs_reorder = false;
+
+        while j < messages.len() {
+            match &messages[j] {
+                ChatMessage::Tool { .. } => {
+                    if !others.is_empty() { needs_reorder = true; }
+                    tools.push(messages[j].clone());
+                }
+                ChatMessage::Assistant { .. } => break,
+                _ => { others.push(messages[j].clone()); }
+            }
+            j += 1;
+        }
+
+        if needs_reorder {
+            // Replace messages[i+1..j] with: tools first, then others
+            let range_len = j - (i + 1);
+            for _ in 0..range_len { messages.remove(i + 1); }
+            let mut insert_pos = i + 1;
+            for msg in tools.into_iter().chain(others.into_iter()) {
+                messages.insert(insert_pos, msg);
+                insert_pos += 1;
+            }
+        }
+
+        i += 1;
+    }
+}
+
+/// Replace empty content strings with a single space.
+/// Anthropic and some providers reject `content: ""`.
+/// Mirrors LiteLLM's `_sanitize_empty_text_content`.
+fn sanitize_empty_content(messages: &mut Vec<ChatMessage>) {
+    for msg in messages.iter_mut() {
+        match msg {
+            ChatMessage::User { content } => {
+                if let ChatMessageContent::String(s) = content {
+                    if s.is_empty() { *s = " ".to_string(); }
+                }
+            }
+            ChatMessage::Assistant { content, tool_calls: None, .. } => {
+                match content {
+                    None => *content = Some(" ".to_string()),
+                    Some(s) if s.is_empty() => *content = Some(" ".to_string()),
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
     }
 }
 
@@ -1077,5 +1134,55 @@ mod tests {
         let chat = responses_to_chat(&req);
         // No dummy inserted — just [Assistant{tool_calls}, Tool{call_1}]
         assert_eq!(chat.messages.len(), 2);
+    }
+
+    #[test]
+    fn test_empty_content_sanitized_to_space() {
+        let req = ResponsesRequest {
+            input: serde_json::json!([
+                {"type": "message", "role": "user", "content": [{"type": "input_text", "text": ""}]},
+                {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": ""}]},
+            ]),
+            ..make_req()
+        };
+
+        let chat = responses_to_chat(&req);
+        // User empty content -> " "
+        match &chat.messages[0] {
+            ChatMessage::User { content } => match content {
+                ChatMessageContent::String(s) => assert_eq!(s, " "),
+                _ => panic!("Expected string content"),
+            },
+            _ => panic!("Expected user message"),
+        }
+        // Assistant empty content (no tool_calls) -> " "
+        match &chat.messages[1] {
+            ChatMessage::Assistant { content, tool_calls, .. } => {
+                assert!(tool_calls.is_none());
+                assert_eq!(content.as_deref(), Some(" "));
+            }
+            _ => panic!("Expected assistant message"),
+        }
+    }
+
+    #[test]
+    fn test_empty_content_with_tool_calls_preserved() {
+        // Assistant with tool_calls and empty content should NOT be replaced
+        let req = ResponsesRequest {
+            input: serde_json::json!([
+                {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "Hi"}]},
+                {"type": "function_call", "call_id": "call_1", "name": "tool_a", "arguments": "{}"},
+            ]),
+            ..make_req()
+        };
+
+        let chat = responses_to_chat(&req);
+        match &chat.messages[1] {
+            ChatMessage::Assistant { content, tool_calls, .. } => {
+                assert!(tool_calls.is_some());
+                assert!(content.is_none()); // tool_calls assistant keeps empty content
+            }
+            _ => panic!("Expected assistant with tool_calls"),
+        }
     }
 }
