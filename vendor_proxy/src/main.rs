@@ -1,9 +1,42 @@
 use std::collections::{HashMap, VecDeque};
+use std::os::unix::io::AsRawFd;
 use std::sync::{atomic::AtomicI64, Arc, Mutex};
 use std::time::Instant;
 use vendor_proxy::client;
 use vendor_proxy::config;
 use vendor_proxy::server;
+
+const PID_FILE: &str = "proxy.pid";
+
+fn acquire_pid_lock() -> std::fs::File {
+    let dir = std::env::temp_dir().join("yeek");
+    std::fs::create_dir_all(&dir).expect("create pid dir");
+    let path = dir.join(PID_FILE);
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .truncate(false)
+        .open(&path)
+        .unwrap_or_else(|e| panic!("open pid file {}: {}", path.display(), e));
+    let fd = file.as_raw_fd();
+    let result = unsafe { libc::flock(fd, libc::LOCK_EX | libc::LOCK_NB) };
+    if result != 0 {
+        let existing_pid = std::fs::read_to_string(&path).unwrap_or_default();
+        panic!(
+            "Another proxy instance is running (pid: {}) — lock {}: {}",
+            existing_pid.trim(),
+            path.display(),
+            std::io::Error::last_os_error()
+        );
+    }
+    file.set_len(0).ok();
+    use std::io::{Seek, SeekFrom, Write};
+    file.seek(SeekFrom::Start(0)).ok();
+    write!(file, "{}", std::process::id()).ok();
+    tracing::info!("Acquired PID lock: {} (pid {})", path.display(), std::process::id());
+    file
+}
 
 #[tokio::main]
 async fn main() {
@@ -13,6 +46,8 @@ async fn main() {
                 .unwrap_or_else(|_| "info".into()),
         )
         .init();
+
+    let _pid_lock = acquire_pid_lock();
 
     let config_path = std::env::args()
         .nth(1)
