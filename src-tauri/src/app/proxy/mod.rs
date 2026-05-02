@@ -79,6 +79,15 @@ pub struct ProxyMetrics {
     pub avg_latency_ms: f64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProxyErrorEvent {
+    pub timestamp: u64,
+    pub provider: String,
+    pub model: String,
+    pub status: u16,
+    pub message: String,
+}
+
 pub struct ProxyManager {
     config_source: ConfigSource,
     db: Option<Arc<Mutex<Connection>>>,
@@ -239,6 +248,17 @@ impl ProxyManager {
             rps: resp["rps"].as_f64().unwrap_or(0.0),
             avg_latency_ms: resp["avg_latency_ms"].as_f64().unwrap_or(0.0),
         })
+    }
+
+    pub fn get_error_events(&self) -> Result<Vec<ProxyErrorEvent>, AppError> {
+        let config = self.read_config()?;
+        let url = format!("http://{}/admin/errors", config.server.listen_addr);
+        let body = ureq::get(&url).call()
+            .map_err(|e| AppError::Internal(format!("error events: {}", e)))?
+            .into_body().read_to_string()
+            .map_err(|e| AppError::Internal(format!("error events read: {}", e)))?;
+        serde_json::from_str(&body)
+            .map_err(|e| AppError::ParseError(format!("error events json: {}", e)))
     }
 
     pub fn read_config(&self) -> Result<ProxyConfig, AppError> {

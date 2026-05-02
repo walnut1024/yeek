@@ -59,6 +59,7 @@ pub fn build_router(state: HttpRuntimeState) -> Router {
         .route("/proxy/config", get(proxy_get_config).put(proxy_update_config))
         .route("/proxy/metrics", get(proxy_metrics))
         .route("/proxy/logs", get(proxy_logs))
+        .route("/proxy/errors", get(proxy_error_events))
         // SSE
         .route("/events", get(sse_handler))
         .with_state(state);
@@ -440,6 +441,14 @@ async fn proxy_logs(
 ) -> Result<String, AppError> {
     let lines: usize = params.get("lines").and_then(|v| v.parse().ok()).unwrap_or(50);
     tokio::task::spawn_blocking(move || do_get_proxy_logs(&state.app_state, lines))
+        .await
+        .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))
+}
+
+async fn proxy_error_events(
+    State(state): State<HttpRuntimeState>,
+) -> Result<Json<Vec<crate::app::proxy::ProxyErrorEvent>>, AppError> {
+    tokio::task::spawn_blocking(move || do_get_proxy_error_events(&state.app_state).map(Json))
         .await
         .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))
 }

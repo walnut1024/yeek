@@ -53,6 +53,7 @@ const ROUTES: Record<string, RouteMapping> = {
   update_proxy_config: { method: "PUT",  path: "/api/proxy/config" },
   get_proxy_metrics:   { method: "GET",  path: "/api/proxy/metrics" },
   get_proxy_logs:      { method: "GET",  path: "/api/proxy/logs" },
+  get_proxy_error_events: { method: "GET", path: "/api/proxy/errors" },
 };
 
 function commandToRoute(
