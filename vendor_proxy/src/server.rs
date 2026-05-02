@@ -34,6 +34,7 @@ pub struct AppState {
     pub latency_total_ns: AtomicU64,
     pub request_times: Mutex<VecDeque<Instant>>,
     pub provider_stats: Arc<std::sync::RwLock<std::collections::HashMap<String, ProviderStats>>>,
+    pub error_events: Mutex<VecDeque<ErrorEvent>>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -41,6 +42,15 @@ pub struct ProviderStats {
     pub requests: u64,
     pub errors: u64,
     pub last_error: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ErrorEvent {
+    pub timestamp: u64,
+    pub provider: String,
+    pub model: String,
+    pub status: u16,
+    pub message: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -144,6 +154,11 @@ pub async fn admin_status(State(state): State<Arc<AppState>>) -> Json<AdminStatu
         avg_latency_ms,
         providers,
     })
+}
+
+pub async fn admin_errors(State(state): State<Arc<AppState>>) -> Json<Vec<ErrorEvent>> {
+    let events = state.error_events.lock().unwrap_or_else(|e| e.into_inner());
+    Json(events.clone().into_iter().collect())
 }
 
 pub async fn health() -> impl IntoResponse {
@@ -361,6 +376,25 @@ pub async fn proxy_handler(
         }
         Err(e) => {
             state.error_count.fetch_add(1, Ordering::Relaxed);
+            {
+                let mut events = state.error_events.lock().unwrap_or_else(|e| e.into_inner());
+                events.push_front(ErrorEvent {
+                    timestamp: std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_millis() as u64,
+                    provider: provider_name.clone(),
+                    model: responses_req.model.clone(),
+                    status: match &e {
+                        crate::client::ProxyError::ProviderError { status, .. } => *status,
+                        _ => 500,
+                    },
+                    message: e.to_string(),
+                });
+                while events.len() > 100 {
+                    events.pop_back();
+                }
+            }
             // Track per-provider error
             if let Ok(mut stats) = state.provider_stats.write() {
                 if let Some(entry) = stats.get_mut(&provider_name) {

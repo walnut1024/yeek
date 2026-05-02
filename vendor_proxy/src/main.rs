@@ -34,11 +34,13 @@ async fn main() {
         latency_total_ns: std::sync::atomic::AtomicU64::new(0),
         request_times: Mutex::new(VecDeque::new()),
         provider_stats: Arc::new(std::sync::RwLock::new(HashMap::new())),
+        error_events: Mutex::new(VecDeque::new()),
     });
 
     let app = axum::Router::new()
         .route("/health", axum::routing::any(server::health))
         .route("/admin/status", axum::routing::get(server::admin_status))
+        .route("/admin/errors", axum::routing::get(server::admin_errors))
         .route("/v1/models", axum::routing::get(server::models_handler))
         .route("/v1/{*path}", axum::routing::any(server::proxy_handler))
         .with_state(state);
