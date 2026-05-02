@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { getSystemStatus, getActionLog, getProxyMetrics, listPlugins } from "@/lib/api";
+import { getSystemStatus, getActionLog, getProxyMetrics, listPlugins, getProxyErrorEvents, type ProxyErrorEvent } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { formatTime, formatRelativeTime, getCurrentLocale } from "@/lib/formatters";
 
 const VISIBLE_ACTIONS = 5;
@@ -16,6 +17,7 @@ function formatCount(n: number): string {
 export default function DashboardPage() {
   const { t } = useTranslation();
   const [showAllActions, setShowAllActions] = useState(false);
+  const [showErrorSheet, setShowErrorSheet] = useState(false);
 
   const { data: status } = useQuery({
     queryKey: ["system-status"],
@@ -37,6 +39,13 @@ export default function DashboardPage() {
     queryKey: ["plugins", "global"],
     queryFn: () => listPlugins("global"),
     staleTime: 60_000,
+  });
+
+  const { data: errorEvents } = useQuery({
+    queryKey: ["proxy-error-events"],
+    queryFn: getProxyErrorEvents,
+    enabled: showErrorSheet,
+    refetchInterval: showErrorSheet ? 5000 : false,
   });
 
   const allActions = actionLog?.actions ?? [];
@@ -73,7 +82,7 @@ export default function DashboardPage() {
               <MetricCard label={t("dashboard.metricLatency")} value={`${metrics.avg_latency_ms.toFixed(0)}ms`} sub="avg" />
               <MetricCard label={t("dashboard.metricActive")} value={String(metrics.active_connections)} sub="connections" />
               <MetricCard label={t("dashboard.metricRequests")} value={String(metrics.request_count)} sub="total" />
-              <MetricCard label={t("dashboard.metricErrors")} value={String(metrics.error_count)} sub={`${((metrics.error_count / Math.max(metrics.request_count, 1)) * 100).toFixed(2)}%`} danger={metrics.error_count > 0} />
+              <MetricCard label={t("dashboard.metricErrors")} value={String(metrics.error_count)} sub={`${((metrics.error_count / Math.max(metrics.request_count, 1)) * 100).toFixed(2)}%`} danger={metrics.error_count > 0} onClick={() => setShowErrorSheet(true)} />
             </div>
           </>
         )}
@@ -152,6 +161,8 @@ export default function DashboardPage() {
         )}
 
       </div>
+
+      <ErrorSheet open={showErrorSheet} onOpenChange={setShowErrorSheet} events={errorEvents} />
     </div>
   );
 }
@@ -168,9 +179,12 @@ function StatCard({ label, value, sub, accent }: { label: string; value: string;
   );
 }
 
-function MetricCard({ label, value, sub, danger }: { label: string; value: string; sub: string; danger?: boolean }) {
+function MetricCard({ label, value, sub, danger, onClick }: { label: string; value: string; sub: string; danger?: boolean; onClick?: () => void }) {
   return (
-    <div className="border border-border bg-card px-3 py-3.5 text-center">
+    <div
+      className={`border border-border bg-card px-3 py-3.5 text-center ${onClick ? "cursor-pointer hover:bg-card/80 transition-colors" : ""}`}
+      onClick={onClick}
+    >
       <p className={`font-mono text-[18px] font-medium leading-none tracking-[-0.02em] ${danger ? "text-amber-400" : "text-foreground"}`}>{value}</p>
       <p className="mt-1.5 text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">{label}</p>
       <p className="mt-1 font-mono text-[11px] text-muted-foreground/50">{sub}</p>
@@ -218,5 +232,42 @@ function HealthCard({ icon, value, label, sub, health }: {
         )}
       </div>
     </div>
+  );
+}
+
+function ErrorSheet({ open, onOpenChange, events }: { open: boolean; onOpenChange: (v: boolean) => void; events?: ProxyErrorEvent[] }) {
+  const { t } = useTranslation();
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="w-[420px] sm:max-w-[420px] flex flex-col">
+        <SheetHeader>
+          <SheetTitle className="text-[14px] font-medium">Proxy Errors</SheetTitle>
+          <SheetDescription className="text-[12px] text-muted-foreground">
+            Retains last 100 errors, cleared on proxy restart
+          </SheetDescription>
+        </SheetHeader>
+        <div className="flex-1 overflow-auto px-1 pt-2">
+          {!events || events.length === 0 ? (
+            <p className="py-8 text-center text-[13px] text-muted-foreground">{t("dashboard.noActions")}</p>
+          ) : (
+            events.map((e, i) => (
+              <div key={i} className="border-b border-border py-2.5">
+                <div className="flex items-center gap-2">
+                  <span className={`font-mono text-[11px] font-medium px-1.5 py-0.5 rounded ${e.status >= 500 ? "bg-destructive/10 text-destructive" : "bg-amber-400/10 text-amber-500"}`}>
+                    {e.status}
+                  </span>
+                  <span className="font-mono text-[11px] text-foreground/60">{e.provider}</span>
+                  <span className="font-mono text-[11px] text-muted-foreground truncate">{e.model}</span>
+                  <span className="ml-auto shrink-0 font-mono text-[11px] text-muted-foreground">
+                    {new Date(e.timestamp).toLocaleTimeString(getCurrentLocale(), { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}
+                  </span>
+                </div>
+                <p className="mt-1 text-[12px] text-foreground/60 leading-[1.4] break-all">{e.message}</p>
+              </div>
+            ))
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
