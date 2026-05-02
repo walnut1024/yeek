@@ -448,7 +448,7 @@ async fn proxy_logs(
 async fn proxy_error_events(
     State(state): State<HttpRuntimeState>,
 ) -> Result<Json<Vec<crate::app::proxy::ProxyErrorEvent>>, AppError> {
-    tokio::task::spawn_blocking(move || do_get_proxy_error_events(&state.app_state).map(Json))
+    tokio::task::spawn_blocking(move || state.app_state.proxy_manager.get_error_events().map(Json))
         .await
         .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))
 }
