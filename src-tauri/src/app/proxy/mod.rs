@@ -143,6 +143,29 @@ impl ProxyManager {
         }
         self.ensure_config_exists()?;
         let config = self.read_config()?;
+
+        // Detect stale proxy: if listen_addr responds to health check, adopt it
+        if self.probe_health(Some(&config.server.listen_addr)) {
+            tracing::info!("Adopting existing proxy instance at {}", config.server.listen_addr);
+            let pid = self.read_pid_file();
+            *self.pid.lock().unwrap_or_else(|e| e.into_inner()) = pid;
+            self.unexpected_exit.store(false, Ordering::Relaxed);
+            self.running.store(true, Ordering::Relaxed);
+            if let Some(id) = pid {
+                self.spawn_watchdog_for_adopted(id);
+            }
+            return Ok(());
+        }
+
+        // Port occupied but unhealthy → kill stale process
+        if let Some(stale_pid) = self.read_pid_file() {
+            tracing::warn!("Killing stale proxy process (pid {})", stale_pid);
+            let _ = std::process::Command::new("kill")
+                .arg(stale_pid.to_string())
+                .output();
+            std::thread::sleep(Duration::from_millis(300));
+        }
+
         let temp_toml = self.write_temp_config(&config)?;
         self.unexpected_exit.store(false, Ordering::Relaxed);
 
@@ -327,6 +350,47 @@ impl ProxyManager {
         };
         std::net::TcpStream::connect_timeout(&sock, Duration::from_millis(500))
             .map(|_| true).unwrap_or(false)
+    }
+
+    fn pid_file_path() -> PathBuf {
+        std::env::temp_dir().join("yeek").join("proxy.pid")
+    }
+
+    fn read_pid_file(&self) -> Option<u32> {
+        std::fs::read_to_string(Self::pid_file_path())
+            .ok()
+            .and_then(|s| s.trim().parse().ok())
+    }
+
+    fn spawn_watchdog_for_adopted(&self, pid: u32) {
+        let running_flag = Arc::clone(&self.running);
+        let unexpected = Arc::clone(&self.unexpected_exit);
+        let stop_req = Arc::clone(&self.stop_requested);
+        std::thread::Builder::new()
+            .name("yeek-proxy-watchdog".into())
+            .spawn(move || {
+                // Poll for adopted process exit
+                loop {
+                    std::thread::sleep(Duration::from_secs(2));
+                    if !running_flag.load(Ordering::Relaxed) {
+                        return;
+                    }
+                    // Check if process still exists
+                    let alive = std::process::Command::new("kill")
+                        .args(["-0", &pid.to_string()])
+                        .output()
+                        .map(|o| o.status.success())
+                        .unwrap_or(false);
+                    if !alive {
+                        running_flag.store(false, Ordering::Relaxed);
+                        if !stop_req.load(Ordering::Relaxed) {
+                            unexpected.store(true, Ordering::Relaxed);
+                            tracing::warn!("adopted proxy (pid {}) exited unexpectedly", pid);
+                        }
+                        return;
+                    }
+                }
+            }).ok();
     }
 
     fn find_binary(&self) -> Result<PathBuf, AppError> {
