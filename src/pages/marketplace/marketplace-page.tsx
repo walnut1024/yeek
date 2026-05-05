@@ -627,8 +627,6 @@ function MarketplaceRow({
           ) : sorted.length > 0 ? sorted.map(({ mp, info }) => {
             if (info) {
               // Installed plugin — full management UI
-              const isEnabled = info.enabled;
-              const isBroken = info.health === "broken";
               return (
                 <InstalledPluginRow
                   key={mp.name}
