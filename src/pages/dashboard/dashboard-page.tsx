@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { getSystemStatus, getActionLog, getProxyMetrics, listPlugins, getProxyErrorEvents, type ProxyErrorEvent } from "@/lib/api";
+import { getSystemStatus, getActionLog, getProxyMetrics, listPlugins, getProxyErrorEvents } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { UpdateBanner } from "@/components/update-banner";
 import { formatTime, formatRelativeTime, getCurrentLocale } from "@/lib/formatters";
