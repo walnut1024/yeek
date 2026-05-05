@@ -19,19 +19,18 @@ import SessionRow from "@/pages/sessions/session-row";
 import SessionDetailPane from "@/pages/sessions/session-detail-pane";
 import DashboardPage from "@/pages/dashboard/dashboard-page";
 import SettingsPage from "@/pages/system/settings-page";
-import SkillsPage from "@/pages/skills/skills-page";
 import MarketplacePage from "@/pages/marketplace/marketplace-page";
 import ProxyPage from "@/pages/proxy/proxy-page";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { ChatIcon, DashboardIcon, BoltIcon, StoreIcon, SettingsIcon, NetworkIcon } from "@/components/icons";
+import { ChatIcon, DashboardIcon, StoreIcon, SettingsIcon, NetworkIcon } from "@/components/icons";
 import { SESSION_PAGE_SIZE } from "@/lib/constants";
 import { useGroupedSessions } from "./use-grouped-sessions";
 import { useSessionSelection } from "./use-session-selection";
 import { useKeyboardNavigation } from "./use-keyboard-navigation";
 
 export function AppShell() {
-  const [section, setSection] = useState<"dashboard" | "sessions" | "skills" | "marketplace" | "settings" | "proxy">("dashboard");
+  const [section, setSection] = useState<"dashboard" | "sessions" | "marketplace" | "settings" | "proxy">("dashboard");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const { t } = useTranslation();
@@ -69,7 +68,6 @@ export function AppShell() {
             {([
               { key: "dashboard" as const, label: t("nav.dashboard"), icon: DashboardIcon },
               { key: "sessions" as const, label: t("nav.sessions"), icon: ChatIcon, badge: status ? String(status.total_sessions) : undefined },
-              { key: "skills" as const, label: t("nav.skills"), icon: BoltIcon },
               { key: "marketplace" as const, label: t("nav.marketplace"), icon: StoreIcon },
               { key: "proxy" as const, label: t("nav.proxy"), icon: NetworkIcon },
             ]).map(({ key, label, icon: Icon, badge }) => (
@@ -115,7 +113,6 @@ export function AppShell() {
           {section === "sessions" && (
             <SessionsPage selectedId={selectedId} onSelect={setSelectedId} />
           )}
-          {section === "skills" && <SkillsPage />}
           {section === "marketplace" && <MarketplacePage />}
           {section === "settings" && <SettingsPage />}
           {section === "proxy" && <ProxyPage />}

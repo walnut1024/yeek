@@ -52,6 +52,8 @@ ureq = "3"
 # Tauri shell (optional)
 tauri = { version = "2.10.0", features = ["tray-icon"], optional = true }
 tauri-plugin-log = { version = "2", optional = true }
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 
 # HTTP server (optional)
 axum = { workspace = true, optional = true }

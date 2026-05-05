@@ -389,6 +389,7 @@ export interface ProxyProviderConfig {
   api_key_env?: string | null;
   models: string[];
   enabled?: boolean;
+  company?: string | null;
 }
 
 export interface ProxyConfig {

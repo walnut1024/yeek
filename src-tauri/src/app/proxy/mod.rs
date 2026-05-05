@@ -44,18 +44,72 @@ pub struct ProviderConfig {
     pub models: Vec<String>,
     #[serde(default = "default_enabled")]
     pub enabled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub company: Option<String>,
 }
 fn default_enabled() -> bool { true }
 
 impl Default for ProxyConfig {
     fn default() -> Self {
         let mut p = std::collections::HashMap::new();
-        p.insert("DeepSeek".into(), ProviderConfig { kind: Some("builtin".into()), format: Some("chat_completions".into()), base_url: "https://api.deepseek.com".into(), api_key_env: Some("DEEPSEEK_API_KEY".into()), models: vec!["deepseek-v4-pro".into(), "deepseek-v4-flash".into()], enabled: true });
-        p.insert("OpenAI Official".into(), ProviderConfig { kind: Some("builtin".into()), format: Some("chat_completions".into()), base_url: "https://api.openai.com/v1".into(), api_key_env: Some("OPENAI_API_KEY".into()), models: vec!["gpt-4o".into(), "gpt-4o-mini".into()], enabled: false });
-        p.insert("Anthropic Official".into(), ProviderConfig { kind: Some("builtin".into()), format: Some("anthropic_messages".into()), base_url: "https://api.anthropic.com/v1".into(), api_key_env: Some("ANTHROPIC_API_KEY".into()), models: vec!["claude-sonnet-4-6".into(), "claude-opus-4-7".into()], enabled: false });
-        p.insert("Zhipu GLM".into(), ProviderConfig { kind: Some("builtin".into()), format: Some("anthropic_messages".into()), base_url: "https://open.bigmodel.cn/api/anthropic/v1".into(), api_key_env: Some("ZHIPU_API_KEY".into()), models: vec!["glm-5.1".into()], enabled: false });
-        p.insert("Ollama".into(), ProviderConfig { kind: Some("builtin".into()), format: Some("chat_completions".into()), base_url: "http://localhost:11434/v1".into(), api_key_env: None, models: vec![], enabled: false });
-        Self { server: ServerConfig { listen_addr: "127.0.0.1:8787".into() }, default_provider: "DeepSeek".into(), providers: p }
+        // DeepSeek
+        p.insert("DeepSeek".into(), ProviderConfig {
+            kind: Some("builtin".into()), format: Some("chat_completions".into()),
+            base_url: "https://api.deepseek.com".into(),
+            api_key_env: Some("DEEPSEEK_API_KEY".into()),
+            models: vec!["deepseek-v4-flash".into(), "deepseek-v4-pro".into()],
+            enabled: true, company: Some("DeepSeek".into()),
+        });
+        p.insert("DeepSeek Anthropic".into(), ProviderConfig {
+            kind: Some("builtin".into()), format: Some("anthropic_messages".into()),
+            base_url: "https://api.deepseek.com/anthropic".into(),
+            api_key_env: Some("DEEPSEEK_API_KEY".into()),
+            models: vec!["deepseek-v4-flash".into(), "deepseek-v4-pro".into()],
+            enabled: false, company: Some("DeepSeek".into()),
+        });
+        // Zhipu
+        p.insert("Zhipu Coding".into(), ProviderConfig {
+            kind: Some("builtin".into()), format: Some("chat_completions".into()),
+            base_url: "https://open.bigmodel.cn/api/coding/paas/v4".into(),
+            api_key_env: Some("ZHIPU_API_KEY".into()),
+            models: vec!["glm-5.1".into()],
+            enabled: false, company: Some("Zhipu".into()),
+        });
+        p.insert("Zhipu General".into(), ProviderConfig {
+            kind: Some("builtin".into()), format: Some("chat_completions".into()),
+            base_url: "https://open.bigmodel.cn/api/paas/v4".into(),
+            api_key_env: Some("ZHIPU_API_KEY".into()),
+            models: vec!["glm-5.1".into()],
+            enabled: false, company: Some("Zhipu".into()),
+        });
+        p.insert("Zhipu Anthropic".into(), ProviderConfig {
+            kind: Some("builtin".into()), format: Some("anthropic_messages".into()),
+            base_url: "https://open.bigmodel.cn/api/anthropic".into(),
+            api_key_env: Some("ZHIPU_API_KEY".into()),
+            models: vec!["glm-5.1".into()],
+            enabled: false, company: Some("Zhipu".into()),
+        });
+        // OpenAI
+        p.insert("OpenAI".into(), ProviderConfig {
+            kind: Some("builtin".into()), format: Some("chat_completions".into()),
+            base_url: "https://api.openai.com/v1".into(),
+            api_key_env: Some("OPENAI_API_KEY".into()),
+            models: vec!["gpt-4o".into(), "gpt-4o-mini".into()],
+            enabled: false, company: Some("OpenAI".into()),
+        });
+        // Anthropic
+        p.insert("Anthropic".into(), ProviderConfig {
+            kind: Some("builtin".into()), format: Some("anthropic_messages".into()),
+            base_url: "https://api.anthropic.com/v1".into(),
+            api_key_env: Some("ANTHROPIC_API_KEY".into()),
+            models: vec!["claude-sonnet-4-6".into(), "claude-opus-4-7".into()],
+            enabled: false, company: Some("Anthropic".into()),
+        });
+        Self {
+            server: ServerConfig { listen_addr: "127.0.0.1:8787".into() },
+            default_provider: "DeepSeek".into(),
+            providers: p,
+        }
     }
 }
 

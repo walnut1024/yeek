@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { getSystemStatus, getActionLog, getProxyMetrics, listPlugins, getProxyErrorEvents, type ProxyErrorEvent } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { UpdateBanner } from "@/components/update-banner";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { formatTime, formatRelativeTime, getCurrentLocale } from "@/lib/formatters";
 
@@ -62,6 +63,9 @@ export default function DashboardPage() {
           <h2 className="text-[14px] font-medium leading-none text-foreground">{t("dashboard.title")}</h2>
           <p className="mt-2 max-w-2xl text-[14px] leading-[1.5] text-muted-foreground">{t("dashboard.description")}</p>
         </div>
+
+        {/* Update notification banner */}
+        <UpdateBanner />
 
         <div className="min-h-0 flex-1 overflow-auto p-3">
         {/* Row 1: Hero Stats */}

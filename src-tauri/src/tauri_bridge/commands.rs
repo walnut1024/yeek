@@ -236,3 +236,10 @@ pub fn get_proxy_metrics(
 ) -> Result<ProxyMetrics, AppError> {
     do_get_proxy_metrics(&state)
 }
+
+#[tauri::command]
+pub fn get_proxy_error_events(
+    state: State<'_, AppState>,
+) -> Result<Vec<crate::app::proxy::ProxyErrorEvent>, AppError> {
+    crate::app::commands::do_get_proxy_error_events(&state)
+}

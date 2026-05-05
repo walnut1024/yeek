@@ -18,6 +18,8 @@ pub fn responses_to_chat(req: &ResponsesRequest) -> ChatCompletionRequest {
     messages.extend(input_messages);
 
     repair_orphaned_tool_calls(&mut messages);
+    remove_orphaned_tool_results(&mut messages);
+    dedup_tool_results(&mut messages);
     reorder_tool_messages(&mut messages);
     sanitize_empty_content(&mut messages);
 
@@ -445,6 +447,63 @@ fn repair_orphaned_tool_calls(messages: &mut Vec<ChatMessage>) {
     // Insert in reverse order to preserve positions
     for (pos, msg) in insertions.into_iter().rev() {
         messages.insert(pos, msg);
+    }
+}
+
+/// Remove Tool messages whose tool_call_id has no matching tool_call in any
+/// preceding assistant message. Anthropic rejects orphaned tool_results.
+/// Mirrors LiteLLM's `_is_orphaned_tool_result` (factory.py).
+fn remove_orphaned_tool_results(messages: &mut Vec<ChatMessage>) {
+    // Build set of all tool_call_ids across all assistant messages
+    let mut all_tool_call_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for msg in messages.iter() {
+        if let ChatMessage::Assistant { tool_calls: Some(tcs), .. } = msg {
+            for tc in tcs {
+                if !tc.id.is_empty() {
+                    all_tool_call_ids.insert(tc.id.clone());
+                }
+            }
+        }
+    }
+
+    messages.retain(|msg| match msg {
+        ChatMessage::Tool { tool_call_id, .. } => all_tool_call_ids.contains(tool_call_id),
+        _ => true,
+    });
+}
+
+/// Deduplicate Tool messages: within each contiguous block after an assistant
+/// message, keep only the last occurrence per tool_call_id.
+/// Anthropic rejects "each tool_use must have a single result".
+/// Mirrors LiteLLM's Case D in `sanitize_messages_for_tool_calling`.
+fn dedup_tool_results(messages: &mut Vec<ChatMessage>) {
+    let mut remove_indices: std::collections::HashSet<usize> = std::collections::HashSet::new();
+    // Track tool_call_id -> first-seen index, reset at each assistant boundary
+    let mut seen_in_block: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+
+    for (idx, msg) in messages.iter().enumerate() {
+        match msg {
+            ChatMessage::Tool { tool_call_id, .. } if !tool_call_id.is_empty() => {
+                if let Some(&prev_idx) = seen_in_block.get(tool_call_id) {
+                    // Mark the earlier occurrence for removal (keep latest)
+                    remove_indices.insert(prev_idx);
+                }
+                seen_in_block.insert(tool_call_id.clone(), idx);
+            }
+            ChatMessage::Assistant { .. } | ChatMessage::System { .. } => {
+                seen_in_block.clear();
+            }
+            _ => {}
+        }
+    }
+
+    if !remove_indices.is_empty() {
+        let mut i = 0;
+        messages.retain(|_| {
+            let keep = !remove_indices.contains(&i);
+            i += 1;
+            keep
+        });
     }
 }
 
@@ -1183,6 +1242,88 @@ mod tests {
                 assert!(content.is_none()); // tool_calls assistant keeps empty content
             }
             _ => panic!("Expected assistant with tool_calls"),
+        }
+    }
+
+    #[test]
+    fn test_orphaned_tool_result_removed() {
+        // Tool message with call_id that has no matching assistant tool_call → removed
+        let req = ResponsesRequest {
+            input: serde_json::json!([
+                {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "Hi"}]},
+                {"type": "function_call_output", "call_id": "ghost_call", "output": "orphan"},
+                {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "Done"}]},
+            ]),
+            ..make_req()
+        };
+
+        let chat = responses_to_chat(&req);
+        // orphaned tool result removed: [User, Assistant("Done")]
+        assert_eq!(chat.messages.len(), 2);
+        match &chat.messages[0] {
+            ChatMessage::User { .. } => {}
+            _ => panic!("Expected user message"),
+        }
+        match &chat.messages[1] {
+            ChatMessage::Assistant { content, tool_calls, .. } => {
+                assert!(tool_calls.is_none());
+                assert_eq!(content.as_deref(), Some("Done"));
+            }
+            _ => panic!("Expected assistant message"),
+        }
+    }
+
+    #[test]
+    fn test_duplicate_tool_results_deduped() {
+        // Two tool results for same call_id → keep only the last
+        let req = ResponsesRequest {
+            input: serde_json::json!([
+                {"type": "function_call", "call_id": "call_1", "name": "tool_a", "arguments": "{}"},
+                {"type": "function_call_output", "call_id": "call_1", "output": "first"},
+                {"type": "function_call_output", "call_id": "call_1", "output": "second"},
+            ]),
+            ..make_req()
+        };
+
+        let chat = responses_to_chat(&req);
+        // [Assistant{tool_calls}, Tool{call_1="second"}] — first deduplicated
+        assert_eq!(chat.messages.len(), 2);
+        match &chat.messages[1] {
+            ChatMessage::Tool { tool_call_id, content } => {
+                assert_eq!(tool_call_id, "call_1");
+                match content {
+                    ChatMessageContent::String(s) => assert_eq!(s, "second"),
+                    _ => panic!("Expected string content"),
+                }
+            }
+            _ => panic!("Expected tool message"),
+        }
+    }
+
+    #[test]
+    fn test_tool_result_kept_when_matching_tool_call_exists() {
+        // Tool result with valid matching tool_call → kept
+        let req = ResponsesRequest {
+            input: serde_json::json!([
+                {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "Hi"}]},
+                {"type": "function_call", "call_id": "call_1", "name": "tool_a", "arguments": "{}"},
+                {"type": "function_call_output", "call_id": "call_1", "output": "ok"},
+            ]),
+            ..make_req()
+        };
+
+        let chat = responses_to_chat(&req);
+        // [User, Assistant{tool_calls}, Tool{call_1}]
+        assert_eq!(chat.messages.len(), 3);
+        match &chat.messages[2] {
+            ChatMessage::Tool { tool_call_id, content } => {
+                assert_eq!(tool_call_id, "call_1");
+                match content {
+                    ChatMessageContent::String(s) => assert_eq!(s, "ok"),
+                    _ => panic!("Expected string content"),
+                }
+            }
+            _ => panic!("Expected tool message"),
         }
     }
 }

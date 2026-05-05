@@ -1977,3 +1977,9 @@ pub(crate) fn do_get_proxy_metrics(
 ) -> Result<crate::app::proxy::ProxyMetrics, AppError> {
     state.proxy_manager.get_metrics()
 }
+
+pub(crate) fn do_get_proxy_error_events(
+    state: &AppState,
+) -> Result<Vec<crate::app::proxy::ProxyErrorEvent>, AppError> {
+    state.proxy_manager.get_error_events()
+}

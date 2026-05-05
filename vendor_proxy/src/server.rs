@@ -148,7 +148,7 @@ pub async fn admin_status(State(state): State<Arc<AppState>>) -> Json<AdminStatu
         uptime_secs: state.started_at.elapsed().as_secs(),
         listen_addr: state.config.server.listen_addr.clone(),
         request_count: total_reqs,
-        error_count: state.error_count.load(Ordering::Relaxed),
+        error_count: state.error_events.lock().unwrap_or_else(|e| e.into_inner()).len() as u64,
         active_connections: state.active_connections.load(Ordering::Relaxed),
         rps,
         avg_latency_ms,

@@ -48,6 +48,13 @@ pub fn run() {
                 )?;
             }
 
+            // Updater plugin — automatic in-app updates from GitHub Releases
+            app.handle().plugin(
+                tauri_plugin_updater::Builder::new().build(),
+            )?;
+            // Process plugin — relaunch after update install
+            app.handle().plugin(tauri_plugin_process::init())?;
+
             // Create event emitter
             let emitter: Arc<dyn app::events::EventEmitter> =
                 Arc::new(TauriEventEmitter { handle: app.handle().clone() });
@@ -195,6 +202,7 @@ pub fn run() {
             tauri_bridge::commands::update_proxy_config,
             tauri_bridge::commands::get_proxy_logs,
             tauri_bridge::commands::get_proxy_metrics,
+            tauri_bridge::commands::get_proxy_error_events,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

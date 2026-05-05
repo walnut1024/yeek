@@ -2,31 +2,180 @@
 
 # Yeek
 
-**Your Claude Code sessions, organized and inspectable**
+**Browse, search, and manage your Claude Code agent sessions — with a built-in multi-provider LLM proxy and plugin marketplace.**
 
-A local-first Tauri v2 + Rust desktop app for browsing, searching, and managing
-Claude Code agent sessions — with a built-in plugin marketplace.
+A local-first desktop app. Rust backend + Tauri v2 + React 19.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Tauri](https://img.shields.io/badge/Tauri-v2-FFC131?logo=tauri)](https://v2.tauri.app)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev)
 
-[Download for macOS](https://github.com/walnut1024/yeek/releases/latest) · [English](#features) · [中文](#features)
+[Download for macOS](https://github.com/walnut1024/yeek/releases/latest)
 
 </div>
 
 ---
 
-## Features
+## What is Yeek?
 
-- **Dashboard** — Home screen with at-a-glance overview: session counts, sync health, proxy metrics, and a timestamped action audit log.
-- **Session Browser** — Browse conversations grouped by project. Full transcript with branch navigation, message graph, source file references, and subagent inspection.
-- **Settings** — Configure default terminal for session resume, switch language, and trigger index rebuilds.
-- **Full-text Search** — FTS5-powered search across titles, messages, and model names. Results highlighted in real-time.
-- **Skills & Plugins** — View installed plugins, health status, toggle enable/disable, clean orphaned entries, or reinstall broken ones.
-- **Marketplace** — Manage plugin marketplaces (add, update, remove). Expand any marketplace to browse and install plugins with one click.
-- **Real-time Sync** — OS-native file watcher detects new/changed session files instantly. Plugin config watcher picks up installs/uninstalls from external tools.
-- **Bilingual UI** — Full English and Chinese localization.
+Yeek turns the raw JSONL session files that Claude Code writes to disk into a
+browsable, searchable library. Every conversation — including subagent calls,
+tool use, and file edits — becomes a structured record you can revisit and
+inspect.
+
+Beyond session management, Yeek also ships a **local LLM proxy** that lets you
+connect any AI coding tool to multiple model providers (DeepSeek, Anthropic,
+OpenAI, Zhipu, Ollama) through a single, unified API — no cloud gateway
+required.
+
+---
+
+## Key Capabilities
+
+**Session Management**
+- Browse conversations grouped by project, with full transcript and message graph
+- Inspect subagent calls, tool executions, and source file references per message
+- Full-text search (FTS5) across titles, messages, and model names with highlighted results
+- Real-time sync — OS-native file watchers pick up new and changed sessions instantly
+
+**LLM Proxy (VendorProxy)**
+- Connect any Responses API-compatible client to DeepSeek, Anthropic, OpenAI, Zhipu, or Ollama
+- Automatic format translation: OpenAI Responses API ↔ Chat Completions ↔ Anthropic Messages
+- Streaming and batch modes with full SSE lifecycle event emission
+- Provider-specific compatibility fixes for DeepSeek thinking mode, Anthropic message format, and more
+- Built-in monitoring: request rate, latency, per-provider error tracking, error event feed
+
+**Extensibility**
+- Plugin marketplace — browse, install, enable/disable, and manage plugins from multiple registries
+- Skills management — view installed skills, check health status, clean orphaned entries
+- Bilingual UI — full English and Chinese localization
+
+---
+
+## How It Works
+
+### Data Pipeline
+
+Yeek watches your local `~/.claude/` directory for changes and builds a
+searchable SQLite index from Claude Code's JSONL session files.
+
+```
+~/.claude/projects/  ──file watcher──▶  SQLite + FTS5  ──HTTP API──▶  React UI
+~/.claude/plugins/   ──config watcher──▶  SSE events   ──▶  auto-invalidate
+```
+
+- **File watchers** detect new, modified, and deleted session files in real time
+- **Background scanner** performs full rebuilds on startup and periodically
+- **HTTP API** (Axum + REST + SSE) serves session data to the frontend and streams live updates
+- **SQLite + FTS5** provides full-text search with instant highlighted results
+
+### LLM Proxy
+
+VendorProxy is a lightweight Rust HTTP server that runs as a local sidecar
+process. It solves a concrete problem: different LLM providers speak different
+API dialects, but AI coding tools expect a single, consistent interface.
+
+```
+Any Responses API client           VendorProxy                  LLM Providers
+═══════════════════════           ═══════════                  ═════════════
+POST /v1/responses ──────▶  responses_to_chat() ──────▶  DeepSeek (Chat Completions)
+                            chat_to_anthropic()  ──────▶  Anthropic (Messages API)
+                            chat_to_responses()  ◀──────  Zhipu (Chat / Anthropic)
+◀────── Responses JSON ────                        ◀──────  OpenAI (Chat Completions)
+◀────── Responses SSE  ────  SSE translators      ◀──────  Ollama (Chat Completions)
+```
+
+**Architecture decisions:**
+
+- **Responses API as the client-facing contract.** This is the richest,
+  most structured format — it carries instructions, tools, reasoning,
+  truncation, and metadata in a single request envelope. Every provider,
+  regardless of its native format, is reached through this one interface.
+
+- **Chat Completions as the universal intermediate.** All format conversion
+  goes through Chat Completions. A `chat_completions` provider skips the
+  second hop; an `anthropic_messages` provider gets an extra Chat→Anthropic
+  translation. This two-tier design keeps the adapters simple and
+  independently testable.
+
+- **Streaming with full event lifecycle.** Both Chat SSE and Anthropic SSE
+  are translated to Responses SSE events in real time — `response.created`,
+  `output_item.added`, content deltas, `response.completed` — so streaming
+  clients receive a complete, spec-compliant event stream regardless of
+  which provider is behind the proxy.
+
+**Supported formats:**
+
+| `proxy.toml` format | Providers | Conversion path |
+|---------------------|-----------|----------------|
+| `chat_completions` | DeepSeek, OpenAI, Ollama, Zhipu | Responses ↔ Chat |
+| `anthropic_messages` | Anthropic, Zhipu-An, DeepSeek-An | Responses → Chat → Anthropic → Chat → Responses |
+
+**Provider selection** resolves at request time: `x-codex-provider` header →
+model-name matching → configured default. API keys are forwarded from the
+incoming `Authorization` header or read from environment variables.
+
+**Provider-specific fixes** (what general-purpose proxies miss):
+
+| Issue | Fix |
+|-------|-----|
+| DeepSeek thinking mode requires `reasoning_content` on every historical assistant message | Backfills `""` when missing |
+| DeepSeek rejects `[Assistant(tool_calls), User, Tool]` ordering | Reorders to `[Assistant, Tool, User]` |
+| Orphaned `tool_calls` without matching `tool` results in history | Inserts dummy result placeholder |
+| Anthropic and DeepSeek reject `content: ""` | Sanitizes to `" "` |
+
+---
+
+## Getting Started
+
+### Download (macOS)
+
+Get the latest build from [Releases](https://github.com/walnut1024/yeek/releases/latest):
+
+- **`Yeek-*-arm64.dmg`** — drag to Applications
+- **`Yeek-*-arm64-mac.zip`** — portable, run directly
+
+> First launch: right-click → Open to bypass Gatekeeper (unsigned app).
+
+### Build from Source
+
+```bash
+git clone https://github.com/walnut1024/yeek.git
+cd yeek
+
+# Frontend dependencies
+npm install
+
+# Dev mode (hot reload for both Rust and React)
+cargo tauri dev
+
+# Production build
+npm run build && cargo build --release
+```
+
+### Configure the Proxy
+
+Yeek ships with built-in provider presets. Open Settings → Proxy to enable
+providers and set API keys, or edit `proxy.toml` directly:
+
+```toml
+default_provider = "deepseek"
+
+[server]
+listen_addr = "127.0.0.1:8787"
+
+[providers.deepseek]
+format = "chat_completions"
+base_url = "https://api.deepseek.com"
+api_key_env = "DEEPSEEK_API_KEY"
+models = ["deepseek-v4-pro", "deepseek-v4-flash"]
+
+[providers.zhipu]
+format = "anthropic_messages"
+base_url = "https://open.bigmodel.cn/api/anthropic/v1"
+api_key_env = "ZHIPU_API_KEY"
+models = ["glm-5.1"]
+```
 
 ---
 
@@ -34,89 +183,62 @@ Claude Code agent sessions — with a built-in plugin marketplace.
 
 | Layer | Technology |
 |-------|-----------|
-| Backend | Rust, Axum, rusqlite (SQLite + FTS5) |
-| Proxy | vendor_proxy — Responses API → multi-provider LLM proxy |
-| Shell | Tauri v2 |
-| Frontend | React 19, TypeScript, Vite, Tailwind CSS v4, shadcn/ui |
-| State | TanStack Query, localStorage |
+| Backend | Rust · Axum (HTTP + SSE) · rusqlite (SQLite + FTS5) · Tokio |
+| Proxy | vendor_proxy — Rust sidecar: Responses API ↔ Chat ↔ Anthropic translation |
+| Desktop | Tauri v2 |
+| Frontend | React 19 · TypeScript · Vite · Tailwind CSS v4 · shadcn/ui |
+| State | TanStack Query · localStorage |
 | i18n | react-i18next (English + 中文) |
 
 ---
 
-## Install
-
-### macOS (Apple Silicon)
-
-Download from [Latest Release](https://github.com/walnut1024/yeek/releases/latest):
-
-- **DMG** — `Yeek-*-arm64.dmg` — drag to Applications
-- **ZIP** — `Yeek-*-arm64-mac.zip` — portable, run directly
-
-> Unsigned app. On first launch: right-click → Open to bypass Gatekeeper.
-
-### From Source
-
-```bash
-git clone https://github.com/walnut1024/yeek.git
-cd yeek
-npm install
-
-# Dev mode
-cargo tauri dev
-
-# Production build
-npm run build
-cargo build --release
-```
-
----
-
-## Architecture
+## Project Layout
 
 ```
-src-tauri/src/
-  adapter/claudecode/ — JSONL parser + source discovery
-  app/commands.rs     — Business logic (shared by HTTP routes)
-  http/routes.rs      — Axum HTTP API (REST + SSE)
-  bin/server.rs       — yeek-server binary entry point
-  store/              — SQLite store (sessions, messages, sources, actions)
-  sync/               — Startup sync, background scanner, file watchers
-
-vendor_proxy/src/
-  adapters/           — Provider format adapters (Anthropic, Chat Completions)
-  bridge/             — Responses API ↔ Chat Completions conversion
-  stream/             — SSE streaming translation
-  types/              — API type definitions
-
-src/
-  app/shell/          — Main layout with sidebar navigation
-  pages/              — Sessions, Dashboard, Skills, Marketplace, Proxy, Settings
-  lib/api.ts          — Typed Tauri command wrappers
-  lib/transport.ts    — HTTP API client
-  lib/events.ts       — SSE event stream
-  components/ui/      — shadcn/ui components
-  i18n/               — English and Chinese locale files
-```
-
-### Data Flow
-
-```
-~/.claude/projects/ ──file watcher──▶ SQLite ──HTTP API──▶ Tauri ──▶ React (TanStack Query)
-~/.claude/plugins/  ──config watcher──▶ SSE events ──▶ auto-invalidate
+yeek/
+├── src/                          # React frontend
+│   ├── app/shell/                #   Main layout + sidebar navigation
+│   ├── pages/                    #   Sessions, Dashboard, Skills, Marketplace, Proxy, Settings
+│   ├── lib/                      #   API client, transport, SSE events, i18n
+│   └── components/ui/            #   shadcn/ui components
+│
+├── src-tauri/src/                # Rust backend (Tauri + HTTP server)
+│   ├── adapter/claudecode/       #   Claude Code JSONL parser + source discovery
+│   ├── app/commands.rs           #   Business logic (shared by HTTP + Tauri IPC)
+│   ├── app/proxy/                #   VendorProxy lifecycle: spawn, kill, watchdog
+│   ├── http/                     #   Axum HTTP API (REST + SSE)
+│   ├── store/                    #   SQLite store (sessions, messages, sources, actions)
+│   └── sync/                     #   File watchers, background scanner, startup sync
+│
+├── vendor_proxy/                 # Standalone LLM proxy binary
+│   └── src/
+│       ├── adapters/             #   Provider adapters (Chat Completions, Anthropic)
+│       ├── bridge/               #   Responses ↔ Chat bidirectional conversion
+│       ├── stream/               #   SSE pipeline: Anthropic SSE → Chat SSE → Responses SSE
+│       ├── types/                #   API type definitions
+│       ├── client.rs             #   HTTP client (JSON + SSE streaming)
+│       ├── config.rs             #   TOML config parser + validation
+│       ├── server.rs             #   Axum server (proxy, health, admin, models)
+│       └── main.rs               #   Binary entry point (PID lock, config, startup)
+│
+├── docs/                         # Documentation
+├── DESIGN.md                     # Visual design system specification
+└── proxy.toml                    # Default proxy configuration
 ```
 
 ---
 
 ## Design
 
-Yeek uses the **Hermes Dark** design system — a black-first, warm cream interface inspired by [Nous Research's Hermes Agent](https://github.com/NousResearch/hermes-agent).
+Yeek uses **Hermes Dark** — a black-first, warm cream design system inspired
+by [Nous Research's Hermes Agent](https://github.com/NousResearch/hermes-agent).
 
-- Black canvas with warm cream (`#ffe6cb`) foreground and teal-dark (`#041C1C`) panels
-- Single accent blue (`#74ade8`) for interactive focus only
-- Flat surfaces with 1px borders — no shadows
-- Monospace for technical detail, sans-serif for body
+- Black canvas (`#000000`) with warm cream foreground (`#ffe6cb`)
+- Dark teal surfaces (`#041C1C`) with 1px cream borders — no shadows
+- Single accent blue (`#74ade8`) reserved for interactive focus
+- Monospace for technical detail, Inter for body and UI labels
 
-See [DESIGN.md](DESIGN.md) for the full specification.
+See [DESIGN.md](DESIGN.md) for the full token specification and component guidelines.
 
 ---
 
@@ -124,12 +246,12 @@ See [DESIGN.md](DESIGN.md) for the full specification.
 
 ```bash
 git clone https://github.com/walnut1024/yeek.git
-cd yeek
-npm install
+cd yeek && npm install
 cargo tauri dev
 ```
 
-PRs welcome. Keep changes surgical — see [CLAUDE.md](CLAUDE.md) for the coding guidelines used in this project.
+PRs welcome. Keep changes focused and surgical — see [CLAUDE.md](CLAUDE.md)
+for the coding conventions used in this project.
 
 ---
 

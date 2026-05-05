@@ -28,7 +28,7 @@ import {
   AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
 
-const FILTERS = ["All", "DeepSeek", "OpenAI", "Anthropic", "Zhipu", "Ollama", "Custom"] as const;
+const COMPANIES = ["All", "DeepSeek", "Zhipu", "OpenAI", "Anthropic", "Custom"] as const;
 
 export default function ProxyPage() {
   const queryClient = useQueryClient();
@@ -152,13 +152,26 @@ export default function ProxyPage() {
     saveConfigMut.mutate(updated);
   };
 
-  // Filter providers
-  const filteredProviders = useMemo(() => {
+  // Filter and group providers by company
+  const groupedProviders = useMemo(() => {
     if (!config || !config.providers) return [];
     const entries = Object.entries(config.providers);
-    if (filter === "All") return entries;
-    if (filter === "Custom") return entries.filter(([, p]) => !p.kind || p.kind !== "builtin");
-    return entries.filter(([name]) => name.toLowerCase().includes(filter.toLowerCase()));
+    let filtered: [string, ProxyProviderConfig][];
+    if (filter === "All") {
+      filtered = entries;
+    } else if (filter === "Custom") {
+      filtered = entries.filter(([, p]) => !p.kind || p.kind !== "builtin");
+    } else {
+      filtered = entries.filter(([, p]) => p.company === filter);
+    }
+    // Group by company
+    const groups = new Map<string, [string, ProxyProviderConfig][]>();
+    for (const entry of filtered) {
+      const company = entry[1].company ?? (entry[1].kind === "builtin" ? entry[1].company : "Custom") ?? "Custom";
+      if (!groups.has(company)) groups.set(company, []);
+      groups.get(company)!.push(entry);
+    }
+    return Array.from(groups.entries());
   }, [config, filter]);
 
   const isRunning = status?.running ?? false;
@@ -229,7 +242,7 @@ export default function ProxyPage() {
 
           {/* Filter chips */}
           <div className="flex items-center gap-1 pb-1">
-            {FILTERS.map((f) => {
+            {COMPANIES.map((f) => {
               const active = filter === f;
               return (
                 <button key={f} type="button" onClick={() => setFilter(f)}
@@ -244,67 +257,74 @@ export default function ProxyPage() {
             })}
           </div>
 
-          {/* Provider cards */}
-          {filteredProviders.map(([name, p]) => {
-            const isBuiltin = p.kind === "builtin";
-            const isEnabled = p.enabled !== false;
-            return (
-              <div key={name} className={`surface-card overflow-hidden ${!isEnabled ? "opacity-50" : ""}`}>
-                <div className="flex items-center justify-between px-3 py-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[13px] font-medium text-foreground">{name}</span>
-                      {isBuiltin && (
-                        <Badge variant="secondary" className="h-4 px-1 text-[10px] uppercase tracking-[0.06em]">
-                          built-in
-                        </Badge>
-                      )}
-                      {name === config?.default_provider && (
-                        <Badge variant="default" className="h-4 px-1 text-[10px] uppercase tracking-[0.06em]">
-                          default
-                        </Badge>
-                      )}
-                      {!isEnabled && (
-                        <Badge variant="secondary" className="h-4 px-1 text-[10px] uppercase tracking-[0.06em]">
-                          disabled
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="mt-0.5 flex items-center gap-2 text-[12px] text-muted-foreground">
-                      <span className="font-mono">{p.base_url}</span>
-                      {p.format && (
-                        <Badge variant="secondary" className="h-3.5 px-1 text-[10px] uppercase tracking-[0.06em]">
-                          {p.format.replace("_", " ")}
-                        </Badge>
-                      )}
-                    </div>
-                    {(p.models?.length ?? 0) > 0 && (
-                      <div className="mt-0.5 text-[12px] text-muted-foreground">{p.models.join(", ")}</div>
-                    )}
-                    {p.api_key_env && (
-                      <div className="mt-0.5 text-[12px] text-muted-foreground">key: ${p.api_key_env}</div>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1 ml-2 shrink-0">
-                    {isBuiltin && (
-                      <Button variant="outline" size="sm"
-                        className={`h-6 rounded-md px-2 text-[11px] ${isEnabled ? "" : "border-chart-2/50 text-chart-2"}`}
-                        onClick={() => toggleProvider(name, p)}>
-                        {isEnabled ? "Disable" : "Enable"}
-                      </Button>
-                    )}
-                    <Button variant="outline" size="sm" className="h-6 w-6 rounded-md p-0 text-[14px]"
-                      onClick={() => openEditProvider(name, p)}>✎</Button>
-                    {!isBuiltin && (
-                      <Button variant="outline" size="sm"
-                        className="h-6 w-6 rounded-md p-0 text-[14px] border-destructive/30 text-destructive"
-                        onClick={() => deleteProvider(name)}>✕</Button>
-                    )}
-                  </div>
-                </div>
+          {/* Provider cards grouped by company */}
+          {groupedProviders.map(([company, providers]) => (
+            <div key={company}>
+              <div className="px-1 pt-2 pb-0.5">
+                <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{company}</span>
               </div>
-            );
-          })}
+              {providers.map(([name, p]) => {
+                const isBuiltin = p.kind === "builtin";
+                const isEnabled = p.enabled !== false;
+                return (
+                  <div key={name} className={`surface-card overflow-hidden ${!isEnabled ? "opacity-50" : ""}`}>
+                    <div className="flex items-center justify-between px-3 py-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[13px] font-medium text-foreground">{name}</span>
+                          {isBuiltin && (
+                            <Badge variant="secondary" className="h-4 px-1 text-[10px] uppercase tracking-[0.06em]">
+                              built-in
+                            </Badge>
+                          )}
+                          {name === config?.default_provider && (
+                            <Badge variant="default" className="h-4 px-1 text-[10px] uppercase tracking-[0.06em]">
+                              default
+                            </Badge>
+                          )}
+                          {!isEnabled && (
+                            <Badge variant="secondary" className="h-4 px-1 text-[10px] uppercase tracking-[0.06em]">
+                              disabled
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="mt-0.5 flex items-center gap-2 text-[12px] text-muted-foreground">
+                          <span className="font-mono">{p.base_url}</span>
+                          {p.format && (
+                            <Badge variant="secondary" className="h-3.5 px-1 text-[10px] uppercase tracking-[0.06em]">
+                              {p.format.replace("_", " ")}
+                            </Badge>
+                          )}
+                        </div>
+                        {(p.models?.length ?? 0) > 0 && (
+                          <div className="mt-0.5 text-[12px] text-muted-foreground">{p.models.join(", ")}</div>
+                        )}
+                        {p.api_key_env && (
+                          <div className="mt-0.5 text-[12px] text-muted-foreground">key: ${p.api_key_env}</div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 ml-2 shrink-0">
+                        {isBuiltin && (
+                          <Button variant="outline" size="sm"
+                            className={`h-6 rounded-md px-2 text-[11px] ${isEnabled ? "" : "border-chart-2/50 text-chart-2"}`}
+                            onClick={() => toggleProvider(name, p)}>
+                            {isEnabled ? "Disable" : "Enable"}
+                          </Button>
+                        )}
+                        <Button variant="outline" size="sm" className="h-6 w-6 rounded-md p-0 text-[14px]"
+                          onClick={() => openEditProvider(name, p)}>✎</Button>
+                        {!isBuiltin && (
+                          <Button variant="outline" size="sm"
+                            className="h-6 w-6 rounded-md p-0 text-[14px] border-destructive/30 text-destructive"
+                            onClick={() => deleteProvider(name)}>✕</Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
 
           {/* Log panel toggle */}
           <div className="surface-card overflow-hidden mt-2">
