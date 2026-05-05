@@ -40,7 +40,7 @@
       "endpoints": [
         "https://github.com/walnut1024/yeek/releases/latest/download/latest.json"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQxNDlCMEM3QjRDQkRBQjgKUldTNDJzdTB4N0JKUVh0dmM3NzRPUWl1L1llWmkveDNhQVZqS3pqcUI1dXN3QWYvY0VkcmpEU1QK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDI2Q0I1NTIyMUFFRjFDOTYKUldTV0hPOGFJbFhMSnBnYlB2UDNaUVdxK3hsT3FqVVhkdVRxZWM2aHRFMTRRbWMxb1F3YUU3RWMK",
       "windows": {
         "installMode": "passive"
       }
