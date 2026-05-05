@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 import { getSystemStatus, getActionLog, getProxyMetrics, listPlugins, getProxyErrorEvents, type ProxyErrorEvent } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { UpdateBanner } from "@/components/update-banner";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { formatTime, formatRelativeTime, getCurrentLocale } from "@/lib/formatters";
 
 const VISIBLE_ACTIONS = 5;
@@ -56,7 +55,9 @@ export default function DashboardPage() {
   const pluginHealth = plugins?.health_summary;
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <div className="flex h-full overflow-hidden">
+      {/* Main content */}
+      <div className="flex h-full flex-col overflow-hidden flex-1 min-w-0">
 
         {/* Header */}
         <div className="flex flex-col gap-2 border-b border-border px-3 pb-3">
@@ -86,7 +87,7 @@ export default function DashboardPage() {
               <MetricCard label={t("dashboard.metricLatency")} value={`${metrics.avg_latency_ms.toFixed(0)}ms`} sub="avg" />
               <MetricCard label={t("dashboard.metricActive")} value={String(metrics.active_connections)} sub="connections" />
               <MetricCard label={t("dashboard.metricRequests")} value={String(metrics.request_count)} sub="total" />
-              <MetricCard label={t("dashboard.metricErrors")} value={String(metrics.error_count)} sub={`${((metrics.error_count / Math.max(metrics.request_count, 1)) * 100).toFixed(2)}%`} danger={metrics.error_count > 0} onClick={() => setShowErrorSheet(true)} />
+              <MetricCard label={t("dashboard.metricErrors")} value={String(metrics.error_count)} sub={`${((metrics.error_count / Math.max(metrics.request_count, 1)) * 100).toFixed(2)}%`} danger={metrics.error_count > 0} onClick={() => setShowErrorSheet(!showErrorSheet)} />
             </div>
           </>
         )}
@@ -165,8 +166,41 @@ export default function DashboardPage() {
         )}
 
       </div>
+      </div>
 
-      <ErrorSheet open={showErrorSheet} onOpenChange={setShowErrorSheet} events={errorEvents} />
+      {/* Error panel — inline slide-in */}
+      <div className={`shrink-0 transition-[width] duration-200 ease-out overflow-hidden ${showErrorSheet ? "w-[420px] border-l border-border" : "w-0"}`}>
+        <div className="w-[420px] h-full flex flex-col">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+            <div>
+              <h3 className="text-[14px] font-medium">Proxy Errors</h3>
+              <p className="text-[12px] text-muted-foreground">Retains last 100 errors, cleared on proxy restart</p>
+            </div>
+            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-[14px]" onClick={() => setShowErrorSheet(false)}>✕</Button>
+          </div>
+          <div className="flex-1 overflow-auto px-3 pt-2">
+            {!errorEvents || errorEvents.length === 0 ? (
+              <p className="py-8 text-center text-[13px] text-muted-foreground">{t("dashboard.noActions")}</p>
+            ) : (
+              errorEvents.map((e, i) => (
+                <div key={i} className="border-b border-border py-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className={`font-mono text-[11px] font-medium px-1.5 py-0.5 rounded ${e.status >= 500 ? "bg-destructive/10 text-destructive" : "bg-amber-400/10 text-amber-500"}`}>
+                      {e.status}
+                    </span>
+                    <span className="font-mono text-[11px] text-foreground/60">{e.provider}</span>
+                    <span className="font-mono text-[11px] text-muted-foreground truncate">{e.model}</span>
+                    <span className="ml-auto shrink-0 font-mono text-[11px] text-muted-foreground">
+                      {new Date(e.timestamp).toLocaleString(getCurrentLocale(), { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).replace(/\//g, "-")}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-[12px] text-foreground/60 leading-[1.4] break-all">{e.message}</p>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -236,42 +270,5 @@ function HealthCard({ icon, value, label, sub, health }: {
         )}
       </div>
     </div>
-  );
-}
-
-function ErrorSheet({ open, onOpenChange, events }: { open: boolean; onOpenChange: (v: boolean) => void; events?: ProxyErrorEvent[] }) {
-  const { t } = useTranslation();
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-[420px] sm:max-w-[420px] flex flex-col">
-        <SheetHeader>
-          <SheetTitle className="text-[14px] font-medium">Proxy Errors</SheetTitle>
-          <SheetDescription className="text-[12px] text-muted-foreground">
-            Retains last 100 errors, cleared on proxy restart
-          </SheetDescription>
-        </SheetHeader>
-        <div className="flex-1 overflow-auto px-1 pt-2">
-          {!events || events.length === 0 ? (
-            <p className="py-8 text-center text-[13px] text-muted-foreground">{t("dashboard.noActions")}</p>
-          ) : (
-            events.map((e, i) => (
-              <div key={i} className="border-b border-border py-2.5">
-                <div className="flex items-center gap-2">
-                  <span className={`font-mono text-[11px] font-medium px-1.5 py-0.5 rounded ${e.status >= 500 ? "bg-destructive/10 text-destructive" : "bg-amber-400/10 text-amber-500"}`}>
-                    {e.status}
-                  </span>
-                  <span className="font-mono text-[11px] text-foreground/60">{e.provider}</span>
-                  <span className="font-mono text-[11px] text-muted-foreground truncate">{e.model}</span>
-                  <span className="ml-auto shrink-0 font-mono text-[11px] text-muted-foreground">
-                    {new Date(e.timestamp).toLocaleTimeString(getCurrentLocale(), { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}
-                  </span>
-                </div>
-                <p className="mt-1 text-[12px] text-foreground/60 leading-[1.4] break-all">{e.message}</p>
-              </div>
-            ))
-          )}
-        </div>
-      </SheetContent>
-    </Sheet>
   );
 }
