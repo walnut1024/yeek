@@ -17,6 +17,23 @@ Local-first Tauri v2 desktop app for managing Claude Code agent sessions.
 - `cargo check` — fast Rust typecheck
 - `cargo test -p vendor-proxy` — run vendor_proxy tests
 
+## Release
+
+One-command release with signing + GitHub Release upload:
+
+```bash
+scripts/release.sh <version> [release-notes]
+# Example:
+scripts/release.sh 2.0.0-alpha.6 "## What's New\n- Feature X"
+```
+
+Prerequisites:
+- `.release.env` — signing key config (copy from `.release.env.example`, gitignored)
+- `gh` CLI authenticated
+- Signing keypair at `~/.tauri/yeek.key` (generate with `cargo tauri signer generate -w ~/.tauri/yeek.key`)
+
+The script: bumps version in `tauri.conf.json`/`package.json`/`Cargo.toml` → commits & tags → pushes → builds signed `.app.tar.gz` + `.dmg` → generates `latest.json` → creates GitHub Release with all artifacts.
+
 ## Architecture
 
 ```
