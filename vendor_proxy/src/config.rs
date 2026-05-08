@@ -24,6 +24,11 @@ pub struct ProviderConfig {
     pub api_key_env: Option<String>,
     #[serde(default)]
     pub models: Vec<String>,
+    /// Map incoming model names to provider-specific names.
+    /// e.g. {"gpt-5.4": "deepseek-v4-pro"} means requests for "gpt-5.4"
+    /// are sent to this provider as "deepseek-v4-pro".
+    #[serde(default)]
+    pub model_map: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]

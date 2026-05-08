@@ -128,6 +128,14 @@ pub fn destructive_delete_sessions(
 }
 
 #[tauri::command]
+pub fn get_delete_job(
+    state: State<'_, AppState>,
+    job_id: String,
+) -> Result<DeleteJobStatus, AppError> {
+    do_get_delete_job(&state, &job_id)
+}
+
+#[tauri::command]
 pub fn list_plugins(
     state: State<'_, AppState>,
     scope: String,

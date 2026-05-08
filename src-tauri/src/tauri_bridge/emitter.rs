@@ -24,6 +24,8 @@ impl EventEmitter for TauriEventEmitter {
     }
 
     fn emit_delete_progress(&self, payload: DeleteProgressPayload) {
-        let _ = self.handle.emit("delete-progress", payload);
+        if let Err(e) = self.handle.emit("delete-progress", &payload) {
+            tracing::warn!("emit_delete_progress failed: {}", e);
+        }
     }
 }

@@ -258,8 +258,19 @@ pub async fn proxy_handler(
         }
     }
 
+    let original_model = responses_req.model.clone();
     let (adapter, provider, api_key, provider_name) =
-        select_adapter(&state, &headers, &responses_req.model);
+        select_adapter(&state, &headers, &original_model);
+
+    // Map model name if provider has a model_map entry
+    let resolved_model = provider
+        .model_map
+        .get(&original_model)
+        .cloned()
+        .unwrap_or(original_model);
+    let mut req = responses_req;
+    req.model = resolved_model;
+
     tracing::info!(
         "Routed to provider: name={}, base_url={}, format={:?}, has_api_key={}",
         provider_name,
@@ -297,7 +308,7 @@ pub async fn proxy_handler(
     }
 
     let result = adapter
-        .send(&state.client, &provider.base_url, api_key.as_deref(), &responses_req)
+        .send(&state.client, &provider.base_url, api_key.as_deref(), &req)
         .await;
 
     let elapsed_ns = request_start.elapsed().as_nanos() as u64;
@@ -321,7 +332,7 @@ pub async fn proxy_handler(
                 } else {
                     None
                 };
-                let mut responses_translator = ChatSseToResponsesTranslator::new(Some(&responses_req));
+                let mut responses_translator = ChatSseToResponsesTranslator::new(Some(&req));
                 let mut rx = rx;
 
                 while let Some(raw_line) = rx.recv().await {
@@ -384,7 +395,7 @@ pub async fn proxy_handler(
                         .unwrap_or_default()
                         .as_millis() as u64,
                     provider: provider_name.clone(),
-                    model: responses_req.model.clone(),
+                    model: req.model.clone(),
                     status: match &e {
                         crate::client::ProxyError::ProviderError { status, .. } => *status,
                         _ => 500,

@@ -86,13 +86,13 @@ pub fn browse_sessions(
     };
 
     let total: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM sessions WHERE parent_session_id IS NULL",
+        "SELECT COUNT(*) FROM sessions WHERE parent_session_id IS NULL AND visibility = 'visible'",
         [],
         |row| row.get(0),
     )?;
 
     let query_sql = format!(
-        "SELECT * FROM sessions WHERE parent_session_id IS NULL ORDER BY {} LIMIT ? OFFSET ?",
+        "SELECT * FROM sessions WHERE parent_session_id IS NULL AND visibility = 'visible' ORDER BY {} LIMIT ? OFFSET ?",
         order_by
     );
 

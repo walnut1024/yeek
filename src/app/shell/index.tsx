@@ -9,6 +9,7 @@ import {
   softDeleteSessions,
   softDeleteProject,
   destructiveDeleteSessions,
+  getDeleteJob,
 } from "@/lib/api";
 import { useDebouncedValue, useLocalStorage } from "@/lib/hooks";
 import { useZoom } from "./use-zoom";
@@ -196,9 +197,12 @@ function SessionsPage({
     },
   });
 
+  const [deleteJobId, setDeleteJobId] = useState<string | null>(null);
+
   const destructiveBatch = useMutation({
     mutationFn: (ids: string[]) => destructiveDeleteSessions(ids),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      setDeleteJobId(data.job_id);
       setDeleteProgress({ processed: 0, total: selectedIds.size });
     },
     onError: (err) => {
@@ -207,6 +211,29 @@ function SessionsPage({
       setConfirmDelete(false);
     },
   });
+
+  // Poll delete job progress
+  useEffect(() => {
+    if (!deleteJobId) return;
+    const interval = setInterval(async () => {
+      try {
+        const job = await getDeleteJob(deleteJobId);
+        setDeleteProgress((prev) => prev ? { ...prev, processed: job.processed, total: job.total } : prev);
+        if (job.status === "completed" || job.status === "failed") {
+          setDeleteJobId(null);
+          setDeleteProgress(null);
+          queryClient.invalidateQueries({ queryKey: ["sessions"] });
+          queryClient.invalidateQueries({ queryKey: ["system-status"] });
+          exitManageMode();
+        }
+      } catch {
+        // job not found or other error — stop polling
+        setDeleteJobId(null);
+        setDeleteProgress(null);
+      }
+    }, 500);
+    return () => clearInterval(interval);
+  }, [deleteJobId, queryClient, exitManageMode]);
 
   const ctxDelete = useMutation({
     mutationFn: () => {
@@ -232,22 +259,6 @@ function SessionsPage({
     return () => window.removeEventListener("mousedown", handler);
   }, [ctxMenu]);
 
-  // Listen for delete progress events
-  useEffect(() => {
-    const transport = getEventTransport();
-    const unlisten = transport.on<{ processed: number; total: number; status: string }>("delete-progress", (payload) => {
-      if (payload.status === "completed" || payload.status === "failed") {
-        setDeleteProgress(null);
-        queryClient.invalidateQueries({ queryKey: ["sessions"] });
-        queryClient.invalidateQueries({ queryKey: ["system-status"] });
-        if (payload.status === "completed") exitManageMode();
-      } else {
-        setDeleteProgress({ processed: payload.processed, total: payload.total });
-      }
-    });
-    return () => { unlisten.then((f) => f()); };
-  }, [queryClient]);
-
   const toggleCollapse = (key: string) => {
     setCollapsedProjects((prev) => ({ ...prev, [key]: !prev[key] }));
   };
@@ -262,6 +273,14 @@ function SessionsPage({
       {/* Search + Manage — full width */}
       <div className="border-b border-border px-3 py-2">
         <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 shrink-0 rounded-md px-2.5 text-[12px]"
+              onClick={() => setManageMode(!manageMode)}
+            >
+              {manageMode ? t("sessions.done") : t("sessions.manage")}
+            </Button>
             <label className="block flex-1">
               <span className="sr-only">{t("sessions.searchSrLabel")}</span>
               <input
@@ -272,14 +291,6 @@ function SessionsPage({
                 className="zed-input"
               />
             </label>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 shrink-0 rounded-md px-2.5 text-[12px]"
-              onClick={() => setManageMode(!manageMode)}
-            >
-              {manageMode ? t("sessions.done") : t("sessions.manage")}
-            </Button>
           </div>
         </div>
 
@@ -432,7 +443,7 @@ function SessionsPage({
         </ScrollArea>
 
         {manageMode && (
-          <div className="border-t border-border bg-card px-3 py-2">
+          <div className="max-h-[50vh] shrink-0 overflow-y-auto border-t border-border bg-card px-3 py-2">
             {deleteError && (
               <div className="mb-2 flex items-center justify-between rounded-md border border-destructive/30 bg-destructive/10 px-2.5 py-1.5">
                 <span className="text-[12px] text-destructive">{deleteError}</span>
@@ -442,9 +453,14 @@ function SessionsPage({
             {confirmDelete ? (
               deleteProgress ? (
                 <div className="space-y-2">
-                  <p className="text-[13px] font-medium text-foreground">
-                    {t("manage.deleting")} {deleteProgress.processed}/{deleteProgress.total}
-                  </p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-[13px] font-medium text-foreground">
+                      {deleteProgress.processed}/{deleteProgress.total} {t("manage.deleting")}
+                    </p>
+                    <span className="text-[12px] text-muted-foreground">
+                      {Math.round((deleteProgress.processed / deleteProgress.total) * 100)}%
+                    </span>
+                  </div>
                   <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
                     <div
                       className="h-full rounded-full bg-primary transition-all duration-300 ease-out"

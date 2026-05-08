@@ -9,6 +9,9 @@ base_url = "https://api.deepseek.com"
 api_key_env = "DEEPSEEK_API_KEY"
 models = ["deepseek-v4-pro", "deepseek-v4-flash"]
 
+[providers.deepseek.model_map]
+gpt-5.4 = "deepseek-v4-pro"
+
 [providers.zhipu]
 format = "anthropic_messages"
 base_url = "https://open.bigmodel.cn/api/anthropic/v1"

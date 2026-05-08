@@ -1,3 +1,4 @@
+import { useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { getSessionPreview, resumeSession } from "@/lib/api";
@@ -5,6 +6,7 @@ import { useLocalStorage } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { CopyIcon, CheckIcon } from "@/components/icons";
 import { formatTime, formatRelativeTime } from "@/lib/formatters";
 import TranscriptView from "./transcript-view";
 import SourcesTab from "./sources-tab";
@@ -74,8 +76,8 @@ export default function SessionDetailPane({
                 />
               </div>
               <div className="mt-2 flex items-center gap-3 text-[12px] font-medium tracking-[0.1em] text-muted-foreground">
-                <span>{t("detail.sourceLabel", { path: record.id })}</span>
-                <span>{t("detail.sourcePath", { path: record.project_path })}</span>
+                <CopyableText label={t("detail.sourceLabel", { path: record.id })} value={record.id} />
+                <CopyableText label={t("detail.sourcePath", { path: record.project_path })} value={record.project_path} />
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
@@ -125,6 +127,31 @@ export default function SessionDetailPane({
         </section>
       </div>
     </ScrollArea>
+  );
+}
+
+function CopyableText({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(value).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }, [value]);
+
+  return (
+    <span
+      className="group inline-flex cursor-pointer items-center gap-1 transition-colors hover:text-foreground"
+      onClick={handleCopy}
+    >
+      {label}
+      {copied ? (
+        <CheckIcon className="text-primary" />
+      ) : (
+        <CopyIcon className="shrink-0" />
+      )}
+    </span>
   );
 }
 

@@ -96,12 +96,15 @@ pub(crate) fn resolve_delete_plan(
         });
     }
 
+    let deletable_count = source_plans.iter().filter(|p| p.can_delete).count();
     let (allowed, reason) = if source_plans.is_empty() {
         (true, "No source files to delete".to_string())
     } else if all_safe {
         (true, "All sources are safe to delete".to_string())
+    } else if deletable_count > 0 {
+        (true, format!("{} of {} sources can be deleted", deletable_count, source_plans.len()))
     } else {
-        (false, "One or more sources cannot be safely deleted".to_string())
+        (false, "No sources can be safely deleted".to_string())
     };
 
     Ok(DeletePlan { session_id: session_id.to_string(), sources: source_plans, allowed, reason })
@@ -146,15 +149,7 @@ pub(crate) fn execute_destructive_delete(
         }
     }
 
-    // Mark session as source_deleted
-    crate::store::sessions::set_session_field(
-        conn,
-        &[session_id.to_string()],
-        "delete_mode",
-        "source_deleted",
-    )?;
-
-    // Record action
+    // Record action before deleting the session row
     crate::store::actions::record_action(
         conn,
         Some(session_id),
@@ -165,6 +160,12 @@ pub(crate) fn execute_destructive_delete(
             failed_files,
             errors.len()
         )),
+    )?;
+
+    // Delete session row (CASCADE removes messages, sources, etc.)
+    conn.execute(
+        "DELETE FROM sessions WHERE id = ?1",
+        rusqlite::params![session_id],
     )?;
 
     Ok(DestructiveDeleteResult { success: failed_files == 0, deleted_files, failed_files, errors })

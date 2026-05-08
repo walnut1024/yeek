@@ -693,10 +693,37 @@ pub struct DeleteJobPayload {
     pub job_id: String,
 }
 
+#[derive(Debug, Serialize)]
+pub struct DeleteJobStatus {
+    pub job_id: String,
+    pub processed: i64,
+    pub total: i64,
+    pub status: String,
+}
+
+pub(crate) fn do_get_delete_job(
+    state: &AppState,
+    job_id: &str,
+) -> Result<DeleteJobStatus, AppError> {
+    let db = state.db()?;
+    let result: (i64, i64, String) = db.query_row(
+        "SELECT current_index, total_count, status FROM delete_queue WHERE id = ?1",
+        rusqlite::params![job_id],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+    ).map_err(|_| AppError::Internal(format!("Delete job {} not found", job_id)))?;
+    Ok(DeleteJobStatus {
+        job_id: job_id.to_string(),
+        processed: result.0,
+        total: result.1,
+        status: result.2,
+    })
+}
+
 pub(crate) fn do_destructive_delete_batch(
     state: &AppState,
     ids: Vec<String>,
 ) -> Result<DeleteJobPayload, AppError> {
+    tracing::info!("do_destructive_delete_batch: {} ids", ids.len());
     let job_id = uuid::Uuid::new_v4().to_string();
     let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
     let ids_json = serde_json::to_string(&ids)
@@ -723,6 +750,7 @@ pub(crate) fn do_destructive_delete_batch(
     let jid = job_id.clone();
 
     std::thread::spawn(move || {
+        tracing::info!("Delete job {}: starting background worker for {} sessions", jid, ids.len());
         let conn = match rusqlite::Connection::open(&db_path) {
             Ok(c) => c,
             Err(e) => {
@@ -762,6 +790,7 @@ pub(crate) fn do_destructive_delete_batch(
             );
 
             // Emit progress
+            tracing::info!("Delete job {}: session {}/{} ({}) done, deleted={}, failed={}", jid, processed, total, sid, total_deleted, total_failed);
             emitter.emit_delete_progress(crate::app::events::DeleteProgressPayload {
                 processed,
                 total,
@@ -792,6 +821,7 @@ pub(crate) fn do_destructive_delete_batch(
             deleted_files: total_deleted,
             failed_files: total_failed,
         });
+        tracing::info!("Delete job {}: completed, deleted={}, failed={}", jid, total_deleted, total_failed);
     });
 
     Ok(DeleteJobPayload { job_id })

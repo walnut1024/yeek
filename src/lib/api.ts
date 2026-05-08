@@ -209,6 +209,19 @@ export async function destructiveDeleteSessions(
   return getTransport().command<DeleteJobPayload>("destructive_delete_sessions", { ids });
 }
 
+export interface DeleteJobStatus {
+  job_id: string;
+  processed: number;
+  total: number;
+  status: string;
+}
+
+export async function getDeleteJob(
+  jobId: string
+): Promise<DeleteJobStatus> {
+  return getTransport().command<DeleteJobStatus>("get_delete_job", { jobId });
+}
+
 export async function getSubagentMessages(
   sessionId: string,
   subagentId: string

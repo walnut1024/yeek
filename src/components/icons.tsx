@@ -226,6 +226,23 @@ export function LanguageIcon({ className }: { className?: string }) {
   );
 }
 
+export function CopyIcon({ className }: { className?: string }) {
+  return (
+    <svg width={12} height={12} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <rect x="5" y="5" width="9" height="9" rx="1.5" />
+      <path d="M3 11V3a1.5 1.5 0 011.5-1.5H11" />
+    </svg>
+  );
+}
+
+export function CheckIcon({ className }: { className?: string }) {
+  return (
+    <svg width={12} height={12} viewBox="0 0 16 16" fill="none" className={className}>
+      <path d="M3 8.5l3 3 7-7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 export function getToolIcon(toolName: string): React.FC<{ className?: string }> | null {
   return TOOL_ICONS[toolName] ?? null;
 }

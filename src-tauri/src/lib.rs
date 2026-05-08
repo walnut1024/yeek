@@ -183,6 +183,7 @@ pub fn run() {
             tauri_bridge::commands::get_delete_plan,
             tauri_bridge::commands::destructive_delete_session,
             tauri_bridge::commands::destructive_delete_sessions,
+            tauri_bridge::commands::get_delete_job,
             tauri_bridge::commands::list_plugins,
             tauri_bridge::commands::toggle_plugin,
             tauri_bridge::commands::uninstall_plugin,
