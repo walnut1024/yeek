@@ -109,7 +109,7 @@ export function AppShell() {
         </TooltipProvider>
 
         {/* Main content */}
-        <main className="min-h-0 min-w-0 flex-1">
+        <main className="min-h-0 min-w-0 flex-1 pt-8">
           {section === "dashboard" && <DashboardPage />}
           {section === "sessions" && (
             <SessionsPage selectedId={selectedId} onSelect={setSelectedId} />

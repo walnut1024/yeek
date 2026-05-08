@@ -22,6 +22,9 @@ target/
 # Runtime data
 src-tauri/yeek.db
 
+# Release secrets
+.release.env
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
