@@ -132,7 +132,7 @@
 
 @layer components {
   .app-shell {
-    @apply relative min-h-screen overflow-hidden bg-background text-foreground;
+    @apply relative h-screen overflow-hidden bg-background text-foreground;
   }
 
   /* Amber gradient overlay — subtle warm atmosphere */
