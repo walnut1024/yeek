@@ -77,7 +77,7 @@ export default function SessionDetailPane({
               </div>
               <div className="mt-2 flex items-center gap-3 text-[12px] font-medium tracking-[0.1em] text-muted-foreground">
                 <CopyableText label={t("detail.sourceLabel", { path: record.id })} value={record.id} />
-                <CopyableText label={t("detail.sourcePath", { path: record.project_path })} value={record.project_path} />
+                <CopyableText label={t("detail.sourcePath", { path: record.project_path ?? "" })} value={record.project_path ?? ""} />
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
