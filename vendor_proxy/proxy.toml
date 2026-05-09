@@ -1,23 +1,55 @@
-default_provider = "deepseek"
-
 [server]
 listen_addr = "127.0.0.1:8787"
 
-[providers.deepseek]
-format = "chat_completions"
-base_url = "https://api.deepseek.com"
+# ── Pair 1: Claude Desktop → DeepSeek (Anthropic → Chat 转译) ──────
+
+[proxy_pairs.deepseek_chat]
+route_path = "/deepseek"
+route_format = "anthropic_messages"
+provider_base_url = "https://api.deepseek.com"
+provider_format = "chat_completions"
 api_key_env = "DEEPSEEK_API_KEY"
-models = ["deepseek-v4-pro", "deepseek-v4-flash"]
 
-[providers.deepseek.model_map]
-gpt-5.4 = "deepseek-v4-pro"
+[proxy_pairs.deepseek_chat.model_map]
+"claude-sonnet-4-20250514" = "deepseek-v4-pro"
+"claude-haiku-4-5-20251001" = "deepseek-v4-flash"
+default = "deepseek-v4-pro"
 
-[providers.zhipu]
-format = "anthropic_messages"
-base_url = "https://open.bigmodel.cn/api/anthropic/v1"
+# ── Pair 2: Claude Desktop → 智谱 (Anthropic 透传) ────────────────
+
+[proxy_pairs.zhipu]
+route_path = "/zhipu"
+route_format = "anthropic_messages"
+provider_base_url = "https://open.bigmodel.cn/api/anthropic"
+provider_format = "anthropic_messages"
 api_key_env = "ZHIPU_API_KEY"
-models = ["glm-5.1"]
 
-[providers.ollama]
-format = "chat_completions"
-base_url = "http://localhost:11434/v1"
+[proxy_pairs.zhipu.model_map]
+"claude-sonnet-4-20250514" = "glm-5.1"
+default = "glm-5.1"
+
+# ── Pair 3: Codex TUI → DeepSeek (Responses → Chat 转译) ─────────
+
+[proxy_pairs.codex]
+route_path = "/codex"
+route_format = "responses"
+provider_base_url = "https://api.deepseek.com"
+provider_format = "chat_completions"
+api_key_env = "DEEPSEEK_API_KEY"
+
+[proxy_pairs.codex.model_map]
+"gpt-5.4" = "deepseek-v4-pro"
+default = "deepseek-v4-pro"
+
+# ── Pair 4: Claude Review → DeepSeek (Anthropic → Chat, thinking) ─
+
+[proxy_pairs.deepseek_review]
+route_path = "/review"
+route_format = "anthropic_messages"
+provider_base_url = "https://api.deepseek.com"
+provider_format = "chat_completions"
+api_key_env = "DEEPSEEK_API_KEY"
+
+[proxy_pairs.deepseek_review.model_map]
+"claude-sonnet-4-20250514" = "deepseek-v4-pro"
+default = "deepseek-v4-pro"

@@ -7,6 +7,7 @@ pub mod adapters;
 pub mod bridge;
 pub mod client;
 pub mod config;
+pub mod model_mapper;
 pub mod server;
 pub mod stream;
 pub mod types;

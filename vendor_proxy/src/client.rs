@@ -12,6 +12,8 @@ pub enum ProxyError {
     Stream(String),
     #[error("Provider error: {status} — {message}")]
     ProviderError { status: u16, message: String },
+    #[error("Upstream error: {0}")]
+    UpstreamError(String),
 }
 
 pub struct HttpClient {

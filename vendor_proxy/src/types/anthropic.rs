@@ -61,7 +61,7 @@ pub struct AnthropicTool {
 }
 
 // Non-streaming response
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
 pub struct AnthropicResponse {
     pub id: String,
     #[serde(rename = "type")]
@@ -72,7 +72,7 @@ pub struct AnthropicResponse {
     pub usage: AnthropicUsage,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
 pub struct AnthropicUsage {
     pub input_tokens: u32,
     pub output_tokens: u32,

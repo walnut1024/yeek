@@ -3,7 +3,7 @@ use std::os::unix::io::AsRawFd;
 use std::sync::{atomic::AtomicI64, Arc, Mutex};
 use std::time::Instant;
 use vendor_proxy::client;
-use vendor_proxy::config;
+use vendor_proxy::config::{self, ApiFormat};
 use vendor_proxy::server;
 
 const PID_FILE: &str = "proxy.pid";
@@ -56,8 +56,8 @@ async fn main() {
     let cfg = config::ProxyConfig::load(&config_path)
         .unwrap_or_else(|e| panic!("Failed to load {}: {}", config_path, e));
 
-    tracing::info!("Proxy config loaded: {} providers", cfg.providers.len());
-    tracing::info!("Default provider: {}", cfg.default_provider);
+    tracing::info!("Proxy config loaded: {} providers, {} pairs", cfg.providers.len(), cfg.proxy_pairs.len());
+    tracing::info!("Default provider: {:?}", cfg.default_provider);
 
     let state = Arc::new(server::AppState {
         config: cfg.clone(),
@@ -72,13 +72,50 @@ async fn main() {
         error_events: Mutex::new(VecDeque::new()),
     });
 
-    let app = axum::Router::new()
+    let mut app = axum::Router::new()
         .route("/health", axum::routing::any(server::health))
         .route("/admin/status", axum::routing::get(server::admin_status))
         .route("/admin/errors", axum::routing::get(server::admin_errors))
-        .route("/v1/models", axum::routing::get(server::models_handler))
-        .route("/v1/{*path}", axum::routing::any(server::proxy_handler))
-        .with_state(state);
+        .route("/v1/models", axum::routing::get(server::models_handler));
+
+    if cfg.uses_pairs() {
+        // New proxy_pairs mode: register per-pair routes
+        for (name, pair) in &cfg.proxy_pairs {
+            let prefix = pair.route_path.trim_end_matches('/');
+            match pair.route_format {
+                ApiFormat::AnthropicMessages => {
+                    app = app.route(
+                        &format!("{}/v1/messages", prefix),
+                        axum::routing::post(server::pair_handler),
+                    );
+                }
+                ApiFormat::ChatCompletions => {
+                    app = app.route(
+                        &format!("{}/v1/chat/completions", prefix),
+                        axum::routing::post(server::pair_handler),
+                    );
+                }
+                ApiFormat::Responses => {
+                    app = app.route(
+                        &format!("{}/v1/responses", prefix),
+                        axum::routing::post(server::pair_handler),
+                    );
+                }
+            }
+            tracing::info!(
+                "Pair '{}': {} → route_path={}, format={:?}→{:?}",
+                name, pair.provider_base_url, pair.route_path,
+                pair.route_format, pair.provider_format
+            );
+        }
+    } else {
+        // Legacy mode: register old routes
+        app = app
+            .route("/v1/messages", axum::routing::post(server::anthropic_messages_handler))
+            .route("/v1/{*path}", axum::routing::any(server::proxy_handler));
+    }
+
+    let app = app.with_state(state);
 
     let listener = tokio::net::TcpListener::bind(&cfg.server.listen_addr)
         .await
