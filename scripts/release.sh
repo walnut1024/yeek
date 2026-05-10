@@ -20,6 +20,8 @@ NOTES="${2:-Release v$VERSION}"
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
+BUNDLE_DIR="target/release/bundle"
+APP_PATH="$BUNDLE_DIR/macos/Yeek.app"
 
 # ── Validate version format ─────────────────────────────────────────
 if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
@@ -40,10 +42,11 @@ sed -i '' "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" \
   src-tauri/tauri.conf.json package.json
 sed -i '' "s/^version = \"[^\"]*\"/version = \"$VERSION\"/" \
   src-tauri/Cargo.toml
+cargo metadata --format-version 1 --no-deps >/dev/null
 
 # ── Commit & tag ────────────────────────────────────────────────────
 echo "→ Committing version bump..."
-git add src-tauri/tauri.conf.json package.json src-tauri/Cargo.toml
+git add src-tauri/tauri.conf.json package.json src-tauri/Cargo.toml Cargo.lock
 git commit -m "release: v$VERSION"
 git tag "v$VERSION"
 
@@ -59,8 +62,15 @@ TAURI_SIGNING_PRIVATE_KEY="$(cat "$TAURI_SIGNING_PRIVATE_KEY_PATH")"
 export TAURI_SIGNING_PRIVATE_KEY_PASSWORD
 cargo tauri build
 
+# ── Verify macOS bundle ─────────────────────────────────────────────
+echo "→ Verifying macOS app signature..."
+codesign --verify --deep --strict --verbose=4 "$APP_PATH"
+if ! spctl --assess --type execute --verbose=4 "$APP_PATH"; then
+  echo "Warning: Gatekeeper assessment rejected the app."
+  echo "Warning: Configure an Apple Developer ID certificate and notarization for fully trusted public distribution."
+fi
+
 # ── Generate latest.json ───────────────────────────────────────────
-BUNDLE_DIR="target/release/bundle"
 SIG="$(cat "$BUNDLE_DIR/macos/Yeek.app.tar.gz.sig")"
 PUB_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
