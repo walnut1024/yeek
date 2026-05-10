@@ -1,17 +1,14 @@
-//! Proxy configuration: proxy pairs, providers, server bind address, API keys.
+//! Bridge-based proxy configuration.
 
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ProxyConfig {
     pub server: ServerConfig,
     #[serde(default)]
-    pub proxy_pairs: HashMap<String, ProxyPair>,
-    // Legacy fields (backward compat when proxy_pairs is empty)
-    #[serde(default)]
-    pub default_provider: Option<String>,
+    pub bridges: HashMap<String, BridgeConfig>,
     #[serde(default)]
     pub providers: HashMap<String, ProviderConfig>,
 }
@@ -21,27 +18,34 @@ pub struct ServerConfig {
     pub listen_addr: String,
 }
 
-/// A single proxy relationship: Agent ↔ Provider with format translation.
 #[derive(Debug, Clone, Deserialize)]
-pub struct ProxyPair {
-    /// URL path prefix for agent-side routing (e.g. "/anthropic").
-    pub route_path: String,
-    /// API format the agent sends.
-    pub route_format: ApiFormat,
-    /// Provider base URL to forward requests to.
-    pub provider_base_url: String,
-    /// API format the provider expects.
-    pub provider_format: ApiFormat,
-    /// Environment variable name holding the API key.
+pub struct BridgeConfig {
+    pub agent: AgentEndpointConfig,
+    pub provider: BridgeProviderRef,
     #[serde(default)]
-    pub api_key_env: Option<String>,
-    /// Model name mapping: agent model → provider model.
-    #[serde(default)]
-    pub model_map: HashMap<String, String>,
+    pub models: HashMap<String, String>,
 }
 
-/// API format on either side of the proxy.
-#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize)]
+pub struct AgentEndpointConfig {
+    pub base_url: String,
+    pub api_format: ApiFormat,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct BridgeProviderRef {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ProviderConfig {
+    pub base_url: String,
+    pub api_format: ApiFormat,
+    #[serde(default)]
+    pub api_key_env: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum ApiFormat {
     AnthropicMessages,
@@ -49,95 +53,109 @@ pub enum ApiFormat {
     Responses,
 }
 
-// Legacy provider config (backward compat)
-#[derive(Debug, Clone, Deserialize)]
-pub struct ProviderConfig {
-    pub format: ProviderFormat,
-    pub base_url: String,
-    #[serde(default)]
-    pub api_key_env: Option<String>,
-    #[serde(default)]
-    pub models: Vec<String>,
-    #[serde(default)]
-    pub model_map: HashMap<String, String>,
-}
-
-#[derive(Debug, Clone, Deserialize, PartialEq)]
-#[serde(rename_all = "snake_case")]
-pub enum ProviderFormat {
-    AnthropicMessages,
-    ChatCompletions,
+impl ApiFormat {
+    pub fn endpoint_path(&self) -> &'static str {
+        match self {
+            ApiFormat::AnthropicMessages => "/v1/messages",
+            ApiFormat::Responses => "/v1/responses",
+            ApiFormat::ChatCompletions => "/v1/chat/completions",
+        }
+    }
 }
 
 impl ProxyConfig {
     pub fn load(path: impl AsRef<Path>) -> Result<Self, Box<dyn std::error::Error>> {
         let content = std::fs::read_to_string(path.as_ref())?;
-        let config: Self = toml::from_str(&content)?;
+        Self::from_toml_str(&content)
+    }
+
+    pub fn from_toml_str(content: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let config: Self = toml::from_str(content)?;
         config.validate()?;
         Ok(config)
     }
 
     fn validate(&self) -> Result<(), Box<dyn std::error::Error>> {
-        if !self.proxy_pairs.is_empty() {
-            // New format: validate pairs
-            for (name, pair) in &self.proxy_pairs {
-                if !pair.route_path.starts_with('/') {
-                    return Err(format!(
-                        "proxy_pairs.{}: route_path must start with '/', got '{}'",
-                        name, pair.route_path
-                    )
-                    .into());
-                }
-                // Reject unsupported format combinations at startup
-                match (&pair.route_format, &pair.provider_format) {
-                    (ApiFormat::Responses, ApiFormat::AnthropicMessages) => {
-                        return Err(format!(
-                            "proxy_pairs.{}: Responses → AnthropicMessages translation not supported",
-                            name
-                        )
-                        .into());
-                    }
-                    (ApiFormat::ChatCompletions, ApiFormat::AnthropicMessages) => {
-                        return Err(format!(
-                            "proxy_pairs.{}: ChatCompletions → AnthropicMessages translation not supported",
-                            name
-                        )
-                        .into());
-                    }
-                    _ => {}
-                }
-            }
-        } else if !self.providers.is_empty() {
-            // Legacy format: validate providers
-            if let Some(ref default) = self.default_provider {
-                if !self.providers.contains_key(default) {
-                    return Err(format!(
-                        "default_provider '{}' not found in [providers]",
-                        default
-                    )
-                    .into());
-                }
-            }
-        } else {
-            return Err("config must have either [proxy_pairs] or [providers]".into());
+        if self.bridges.is_empty() {
+            return Err("config must define at least one [bridges.*] entry".into());
         }
+        if self.providers.is_empty() {
+            return Err("config must define at least one [providers.*] entry".into());
+        }
+
+        let mut seen_paths = HashSet::new();
+        let mut paths: Vec<(String, String)> = Vec::new();
+
+        for (name, bridge) in &self.bridges {
+            let path = normalize_agent_base_url(&bridge.agent.base_url)?;
+            if !seen_paths.insert(path.clone()) {
+                return Err(
+                    format!("bridge '{}': duplicate agent base_url '{}'", name, path).into()
+                );
+            }
+            if bridge.models.is_empty() {
+                return Err(format!("bridge '{}': models mapping must not be empty", name).into());
+            }
+            if bridge.models.contains_key("default") {
+                return Err(
+                    format!("bridge '{}': default model fallback is not supported", name).into()
+                );
+            }
+            let provider = self.providers.get(&bridge.provider.name).ok_or_else(|| {
+                format!("bridge '{}': provider '{}' not found", name, bridge.provider.name)
+            })?;
+            validate_format_pair(name, &bridge.agent.api_format, &provider.api_format)?;
+            paths.push((name.clone(), path));
+        }
+
+        for i in 0..paths.len() {
+            for j in (i + 1)..paths.len() {
+                let (left_name, left_path) = (&paths[i].0, &paths[i].1);
+                let (right_name, right_path) = (&paths[j].0, &paths[j].1);
+                if is_path_prefix(left_path, right_path) || is_path_prefix(right_path, left_path) {
+                    return Err(format!(
+                        "ambiguous bridge paths: '{}' ({}) conflicts with '{}' ({})",
+                        left_path, left_name, right_path, right_name
+                    )
+                    .into());
+                }
+            }
+        }
+
         Ok(())
     }
 
-    /// Whether using new proxy_pairs format.
-    pub fn uses_pairs(&self) -> bool {
-        !self.proxy_pairs.is_empty()
+    pub fn bridge_provider<'a>(&'a self, bridge: &'a BridgeConfig) -> Option<&'a ProviderConfig> {
+        self.providers.get(&bridge.provider.name)
     }
+}
 
-    // Legacy helpers
-
-    pub fn provider_by_name(&self, name: &str) -> Option<&ProviderConfig> {
-        self.providers.get(name)
+fn normalize_agent_base_url(base_url: &str) -> Result<String, Box<dyn std::error::Error>> {
+    if !base_url.starts_with('/') {
+        return Err(format!("agent base_url must start with '/', got '{}'", base_url).into());
     }
+    let normalized = base_url.trim_end_matches('/');
+    if normalized.is_empty() {
+        return Err("agent base_url must not be '/'".into());
+    }
+    Ok(normalized.to_string())
+}
 
-    pub fn default_provider(&self) -> &ProviderConfig {
-        self.providers
-            .get(self.default_provider.as_deref().unwrap_or(""))
-            .expect("default_provider must exist (validated in load)")
+fn is_path_prefix(left: &str, right: &str) -> bool {
+    right.strip_prefix(left).is_some_and(|suffix| suffix.starts_with('/'))
+}
+
+fn validate_format_pair(
+    bridge_name: &str,
+    agent: &ApiFormat,
+    provider: &ApiFormat,
+) -> Result<(), Box<dyn std::error::Error>> {
+    match (agent, provider) {
+        (ApiFormat::AnthropicMessages, ApiFormat::AnthropicMessages) => Ok(()),
+        _ => Err(format!(
+            "bridge '{}': unsupported format pair {:?} -> {:?}",
+            bridge_name, agent, provider
+        )
+        .into()),
     }
 }

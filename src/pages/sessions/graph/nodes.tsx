@@ -9,7 +9,7 @@ function UserNode({ data }: NodeProps) {
   return (
     <div className="graph-node" style={{ padding: "7px 10px", borderColor: "var(--ring, #47679e)", borderRadius: 6 }}>
       <Handle type="target" position={Position.Top} />
-      <div className="graph-node-tag mb-0.5" style={{ color: "var(--primary, #74ade8)" }}>
+      <div className="graph-node-tag mb-0.5" style={{ color: "var(--primary, #5e6ad2)" }}>
         {t("graph.nodeUser")}
       </div>
       <div className="graph-node-label">

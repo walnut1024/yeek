@@ -75,7 +75,7 @@ export default function SessionDetailPane({
                   value={formatRelativeTime(record.updated_at)}
                 />
               </div>
-              <div className="mt-2 flex items-center gap-3 text-[12px] font-medium tracking-[0.1em] text-muted-foreground">
+              <div className="mt-2 flex items-center gap-3 text-[12px] font-medium tracking-normal text-muted-foreground">
                 <CopyableText label={t("detail.sourceLabel", { path: record.id })} value={record.id} />
                 <CopyableText label={t("detail.sourcePath", { path: record.project_path ?? "" })} value={record.project_path ?? ""} />
               </div>

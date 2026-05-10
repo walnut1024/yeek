@@ -85,10 +85,95 @@ Color is used with restraint. The palette centers on warm cream `#ffe6cb` agains
 | `.zed-input` | Text input fields |
 | `.zed-list-row` | List items |
 
-### Buttons (via shadcn/ui Button)
-- **Default**: border + secondary bg, hover accent
-- **Outline**: transparent bg, border, muted text
-- **Destructive**: red border at 30% opacity, red text, red bg at 10%
+### Buttons & Interactive Controls
+
+Buttons are categorized by intent, not by visual decoration. A command button,
+navigation icon, filter chip, selectable row, and status badge must not share the
+same visual treatment just because they are compact UI elements.
+
+#### Command Button
+
+Use for explicit actions that run, save, reset, update, open, rebuild, or manage
+something. Prototype class: `.btn`.
+
+- Default command: border + secondary bg, foreground text
+- Primary command: accent fill, black text, no border
+- Ghost command: transparent bg, no border, muted text
+- Warning command: amber text/border for risky but recoverable actions
+- Destructive command: red text/border for stop, delete, rebuild, or irreversible actions
+
+Sizing:
+
+- Regular: 28px height, 6px radius, 10px horizontal padding, 13px text
+- Small: 24px height, 5px radius, 8px horizontal padding, 12px text
+- Icon inside command buttons: 16px square, 6px gap
+
+Rules:
+
+- Use at most one primary command in a local action group.
+- `Run`, `Resume`, and focused save actions may be primary.
+- `Stop`, `Delete`, and destructive rebuild actions must use destructive styling, not primary.
+- `Reset`, `Export`, `Toggle`, and low-priority secondary actions should use ghost styling.
+- Do not use command buttons for tabs, filters, status labels, or selectable list rows.
+
+#### Icon Button
+
+Use for icon-only navigation or compact tools. Prototype class: `.icon-btn`.
+
+- Fixed 32px square target
+- Transparent border and background by default
+- Hover/active: secondary bg, foreground icon
+- Must include `title` or an accessible label
+- No text label inside the button
+
+Use `.active` only for the current navigation destination or selected icon tool.
+
+#### Toggle / Filter Chip
+
+Use for tabs, filters, segmented choices, and mode selection. Prototype class:
+`.chip`.
+
+- 24px height, 4px radius
+- Transparent bg by default
+- Hover/active: secondary bg, foreground text
+- Represents selection state, not command execution
+
+Examples: `All / Active / Complete`, `Feed / Graph`, `English / 中文`,
+`TOML / Cards`.
+
+Rules:
+
+- `.chip.active` means selected.
+- Do not use chips for `Save`, `Run`, `Update`, `Reset`, or destructive actions.
+- Do not apply warning/error colors to chips; use badges for status and buttons for actions.
+
+#### Selectable Row Button
+
+Use when an entire row selects an item or switches an inspector/detail view.
+Prototype examples: `.proxy-row`, `.outline-row`; future shared class may be
+`.select-row`.
+
+- Full-width, text-aligned-left row button
+- No command-button border box
+- Divider border on the bottom
+- Hover: subtle element-hover bg
+- Active: subtle bg plus 2px accent inset on the leading edge
+- Focus-visible: accent outline inside the row
+
+Use for selecting a bridge, session, TOML section, plugin, or list item. Do not
+use for command execution.
+
+#### Badge
+
+Badges communicate status and are not buttons. Prototype class: `.badge`.
+
+- Use for `Healthy`, `Saved`, `Unsaved`, `Restart to apply`, `OK`, `Issues`
+- No click handlers
+- If a label needs to filter content, use `.chip` instead
+- Semantic colors are allowed only when they carry status:
+  - Success: green bg, black text
+  - Warning: amber tint/text
+  - Error: red tint/text
 
 ### Cards/Panels
 - Background: `--card` (#041C1C)

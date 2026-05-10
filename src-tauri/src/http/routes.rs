@@ -71,13 +71,15 @@ pub fn build_router(state: HttpRuntimeState) -> Router {
 fn cors_layer() -> CorsLayer {
     let origins = vec![
         "http://localhost:1420".parse().expect("invalid Vite dev URL"), // Vite dev
+        "http://127.0.0.1:1420".parse().expect("invalid Vite dev URL"),
         "http://localhost:17321".parse().expect("invalid self URL"),    // self
+        "http://127.0.0.1:17321".parse().expect("invalid self URL"),
         "tauri://localhost".parse().unwrap(),                           // Tauri
         "yeek://localhost".parse().unwrap(),                            // Electron production
     ];
     CorsLayer::new()
         .allow_origin(AllowOrigin::list(origins))
-        .allow_methods([Method::GET, Method::POST, Method::DELETE])
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
         .allow_headers([header::CONTENT_TYPE])
 }
 

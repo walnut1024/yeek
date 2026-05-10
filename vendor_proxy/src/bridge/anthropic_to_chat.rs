@@ -95,9 +95,7 @@ fn anthropic_content_to_chat(content: &AnthropicContent) -> ChatMessageContent {
                         } else {
                             format!("[Image: {}]", source.data)
                         };
-                        parts.push(ContentPart::Image {
-                            image_url: ImageUrl { url },
-                        });
+                        parts.push(ContentPart::Image { image_url: ImageUrl { url } });
                     }
                     AnthropicContentBlock::ToolResult { tool_use_id, content: result_text } => {
                         // Tool result becomes a Tool message, but we're in user content here.
@@ -161,11 +159,7 @@ fn anthropic_assistant_to_chat(
         }
     }
 
-    let text = if text_parts.is_empty() {
-        None
-    } else {
-        Some(text_parts.join(""))
-    };
+    let text = if text_parts.is_empty() { None } else { Some(text_parts.join("")) };
     let tc = if tool_calls.is_empty() { None } else { Some(tool_calls) };
 
     (text, tc)

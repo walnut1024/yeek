@@ -424,7 +424,8 @@ fn repair_orphaned_tool_calls(messages: &mut Vec<ChatMessage>) {
             j += 1;
         }
 
-        let missing: Vec<&String> = tool_call_ids.iter().filter(|id| !found_ids.contains(*id)).collect();
+        let missing: Vec<&String> =
+            tool_call_ids.iter().filter(|id| !found_ids.contains(*id)).collect();
 
         if !missing.is_empty() {
             // Insert dummy tool results right after the last tool message (or after the assistant)
@@ -433,7 +434,8 @@ fn repair_orphaned_tool_calls(messages: &mut Vec<ChatMessage>) {
                 let dummy = ChatMessage::Tool {
                     tool_call_id: (*missing_id).clone(),
                     content: ChatMessageContent::String(
-                        "[System: Tool execution skipped/interrupted. No result provided.]".to_string(),
+                        "[System: Tool execution skipped/interrupted. No result provided.]"
+                            .to_string(),
                     ),
                 };
                 insertions.push((insert_pos + offset, dummy));
@@ -479,7 +481,8 @@ fn remove_orphaned_tool_results(messages: &mut Vec<ChatMessage>) {
 fn dedup_tool_results(messages: &mut Vec<ChatMessage>) {
     let mut remove_indices: std::collections::HashSet<usize> = std::collections::HashSet::new();
     // Track tool_call_id -> first-seen index, reset at each assistant boundary
-    let mut seen_in_block: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    let mut seen_in_block: std::collections::HashMap<String, usize> =
+        std::collections::HashMap::new();
 
     for (idx, msg) in messages.iter().enumerate() {
         match msg {
@@ -518,7 +521,10 @@ fn reorder_tool_messages(messages: &mut Vec<ChatMessage>) {
             ChatMessage::Assistant { tool_calls: Some(tcs), .. } => !tcs.is_empty(),
             _ => false,
         };
-        if !has_tool_calls { i += 1; continue; }
+        if !has_tool_calls {
+            i += 1;
+            continue;
+        }
 
         // Collect all Tool messages and non-tool messages between this Assistant and the next
         let mut tools: Vec<ChatMessage> = Vec::new();
@@ -529,11 +535,15 @@ fn reorder_tool_messages(messages: &mut Vec<ChatMessage>) {
         while j < messages.len() {
             match &messages[j] {
                 ChatMessage::Tool { .. } => {
-                    if !others.is_empty() { needs_reorder = true; }
+                    if !others.is_empty() {
+                        needs_reorder = true;
+                    }
                     tools.push(messages[j].clone());
                 }
                 ChatMessage::Assistant { .. } => break,
-                _ => { others.push(messages[j].clone()); }
+                _ => {
+                    others.push(messages[j].clone());
+                }
             }
             j += 1;
         }
@@ -541,7 +551,9 @@ fn reorder_tool_messages(messages: &mut Vec<ChatMessage>) {
         if needs_reorder {
             // Replace messages[i+1..j] with: tools first, then others
             let range_len = j - (i + 1);
-            for _ in 0..range_len { messages.remove(i + 1); }
+            for _ in 0..range_len {
+                messages.remove(i + 1);
+            }
             let mut insert_pos = i + 1;
             for msg in tools.into_iter().chain(others.into_iter()) {
                 messages.insert(insert_pos, msg);
@@ -561,16 +573,16 @@ fn sanitize_empty_content(messages: &mut Vec<ChatMessage>) {
         match msg {
             ChatMessage::User { content } => {
                 if let ChatMessageContent::String(s) = content {
-                    if s.is_empty() { *s = " ".to_string(); }
+                    if s.is_empty() {
+                        *s = " ".to_string();
+                    }
                 }
             }
-            ChatMessage::Assistant { content, tool_calls: None, .. } => {
-                match content {
-                    None => *content = Some(" ".to_string()),
-                    Some(s) if s.is_empty() => *content = Some(" ".to_string()),
-                    _ => {}
-                }
-            }
+            ChatMessage::Assistant { content, tool_calls: None, .. } => match content {
+                None => *content = Some(" ".to_string()),
+                Some(s) if s.is_empty() => *content = Some(" ".to_string()),
+                _ => {}
+            },
             _ => {}
         }
     }

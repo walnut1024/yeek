@@ -4,6 +4,7 @@ pub struct SseParser;
 
 pub enum SseLine<'a> {
     Data(&'a str),
+    Event(&'a str),
     Done,
     Comment,
     Empty,
@@ -37,6 +38,10 @@ impl SseParser {
                 return Some(SseLine::Done);
             }
             return Some(SseLine::Data(data));
+        }
+
+        if let Some(event) = line.strip_prefix("event: ") {
+            return Some(SseLine::Event(event));
         }
 
         if line == "[DONE]" {

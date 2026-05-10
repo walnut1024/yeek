@@ -1,4 +1,4 @@
-# vendor_proxy proxy_pairs integration tests
+# vendor_proxy bridge-based integration tests
 #
 # Variables:
 #   {{BASE_URL}}  — proxy address (default http://127.0.0.1:8787)
@@ -23,17 +23,16 @@
         type: array
         min_length: 1
 
-# ── Anthropic → Zhipu (Anthropic passthrough) ──────────────────────
+# ── Claude Desktop → Zhipu Anthropic ────────────────────────────────
 
 - name: anthropic_passthrough_non_stream
-  description: Anthropic → Anthropic backend (Zhipu) non-streaming
+  description: Claude Desktop → Zhipu Anthropic non-streaming
   method: POST
-  path: /zhipu/v1/messages
+  path: /zhipu_anthropic/v1/messages
   headers:
-    x-api-key: "{{ZHIPU_API_KEY}}"
     content-type: application/json
   body:
-    model: claude-sonnet-4-20250514
+    model: claude-sonnet
     max_tokens: 64
     stream: false
     messages:
@@ -52,14 +51,13 @@
     latency_ms: 30000
 
 - name: anthropic_passthrough_stream
-  description: Anthropic → Anthropic backend (Zhipu) streaming
+  description: Claude Desktop → Zhipu Anthropic streaming
   method: POST
-  path: /zhipu/v1/messages
+  path: /zhipu_anthropic/v1/messages
   headers:
-    x-api-key: "{{ZHIPU_API_KEY}}"
     content-type: application/json
   body:
-    model: claude-sonnet-4-20250514
+    model: claude-sonnet
     max_tokens: 64
     stream: true
     messages:
@@ -74,16 +72,16 @@
       - message_stop
     latency_ms: 30000
 
-# ── Anthropic → Chat translation → DeepSeek ────────────────────────
+# ── Claude Desktop → DeepSeek Anthropic ─────────────────────────────
 
-- name: anthropic_to_chat_non_stream
-  description: Anthropic → Chat Completions (DeepSeek) non-streaming
+- name: deepseek_anthropic_non_stream
+  description: Claude Desktop → DeepSeek Anthropic non-streaming
   method: POST
-  path: /deepseek/v1/messages
+  path: /deepseek_anthropic/v1/messages
   headers:
     content-type: application/json
   body:
-    model: claude-sonnet-4-20250514
+    model: claude-sonnet
     max_tokens: 64
     stream: false
     messages:
@@ -101,14 +99,14 @@
         not_equals: null
     latency_ms: 30000
 
-- name: anthropic_to_chat_stream
-  description: Anthropic → Chat Completions (DeepSeek) streaming
+- name: deepseek_anthropic_stream
+  description: Claude Desktop → DeepSeek Anthropic streaming
   method: POST
-  path: /deepseek/v1/messages
+  path: /deepseek_anthropic/v1/messages
   headers:
     content-type: application/json
   body:
-    model: claude-sonnet-4-20250514
+    model: claude-sonnet
     max_tokens: 64
     stream: true
     messages:
@@ -126,13 +124,13 @@
 # ── Model mapping ───────────────────────────────────────────────────
 
 - name: model_map_exact_match
-  description: Exact model map claude-sonnet-4-20250514 → deepseek-v4-pro
+  description: Exact model map claude-sonnet → deepseek-v4-pro[1m]
   method: POST
-  path: /deepseek/v1/messages
+  path: /deepseek_anthropic/v1/messages
   headers:
     content-type: application/json
   body:
-    model: claude-sonnet-4-20250514
+    model: claude-sonnet
     max_tokens: 32
     stream: false
     messages:
@@ -145,10 +143,10 @@
         equals: message
     latency_ms: 30000
 
-- name: model_map_family_fallback
-  description: Family fallback claude-haiku-4-5 → deepseek-v4-flash
+- name: model_map_rejects_unconfigured_family
+  description: No family fallback; partial haiku model is rejected
   method: POST
-  path: /deepseek/v1/messages
+  path: /deepseek_anthropic/v1/messages
   headers:
     content-type: application/json
   body:
@@ -159,13 +157,12 @@
       - role: user
         content: "Say ok"
   expect:
-    status: 200
-    latency_ms: 30000
+    status: 400
 
-- name: model_map_default_fallback
-  description: Unknown model → default mapping
+- name: model_map_rejects_unknown_model
+  description: Unknown model is rejected instead of default fallback
   method: POST
-  path: /deepseek/v1/messages
+  path: /deepseek_anthropic/v1/messages
   headers:
     content-type: application/json
   body:
@@ -176,19 +173,18 @@
       - role: user
         content: "Say ok"
   expect:
-    status: 200
-    latency_ms: 30000
+    status: 400
 
 # ── Anthropic request with system prompt ────────────────────────────
 
 - name: anthropic_with_system_prompt
-  description: System prompt passed through to Chat backend
+  description: System prompt passed through to DeepSeek Anthropic
   method: POST
-  path: /deepseek/v1/messages
+  path: /deepseek_anthropic/v1/messages
   headers:
     content-type: application/json
   body:
-    model: claude-sonnet-4-20250514
+    model: claude-sonnet
     max_tokens: 256
     stream: false
     system: "You are a pirate. Always respond in pirate speak."
@@ -206,13 +202,13 @@
 # ── Multi-turn conversation ─────────────────────────────────────────
 
 - name: anthropic_multi_turn
-  description: Multi-turn Anthropic conversation through Chat backend
+  description: Multi-turn Anthropic conversation through DeepSeek Anthropic
   method: POST
-  path: /deepseek/v1/messages
+  path: /deepseek_anthropic/v1/messages
   headers:
     content-type: application/json
   body:
-    model: claude-sonnet-4-20250514
+    model: claude-sonnet
     max_tokens: 64
     stream: false
     messages:
@@ -231,9 +227,9 @@
 - name: invalid_json_body
   description: Invalid JSON returns error
   method: POST
-  path: /deepseek/v1/messages
+  path: /deepseek_anthropic/v1/messages
   headers:
     content-type: application/json
   body_raw: "not json at all"
   expect:
-    status: 500
+    status: 400

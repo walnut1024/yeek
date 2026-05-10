@@ -59,21 +59,17 @@ impl ChatToAnthropicSseTranslator {
         };
 
         if self.response_id.is_empty() {
-            self.response_id = parsed
-                .get("id")
-                .and_then(|v| v.as_str())
-                .unwrap_or("msg_unknown")
-                .to_string();
-            self.model = parsed
-                .get("model")
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown")
-                .to_string();
+            self.response_id =
+                parsed.get("id").and_then(|v| v.as_str()).unwrap_or("msg_unknown").to_string();
+            self.model =
+                parsed.get("model").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
         }
 
         if let Some(usage) = parsed.get("usage") {
-            self.input_tokens = usage.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
-            self.output_tokens = usage.get("completion_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+            self.input_tokens =
+                usage.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+            self.output_tokens =
+                usage.get("completion_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
         }
 
         if let Some(choices) = parsed.get("choices").and_then(|v| v.as_array()) {
@@ -81,7 +77,8 @@ impl ChatToAnthropicSseTranslator {
                 let delta = choice.get("delta");
 
                 // Text content
-                if let Some(content) = delta.and_then(|d| d.get("content")).and_then(|v| v.as_str()) {
+                if let Some(content) = delta.and_then(|d| d.get("content")).and_then(|v| v.as_str())
+                {
                     if !content.is_empty() {
                         events.extend(self.emit_message_start());
                         events.extend(self.emit_text_block_start());
@@ -94,13 +91,23 @@ impl ChatToAnthropicSseTranslator {
                 }
 
                 // Tool calls
-                if let Some(tool_calls) = delta.and_then(|d| d.get("tool_calls")).and_then(|v| v.as_array()) {
+                if let Some(tool_calls) =
+                    delta.and_then(|d| d.get("tool_calls")).and_then(|v| v.as_array())
+                {
                     for tc in tool_calls {
                         let index = tc.get("index").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
                         let tc_id = tc.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
                         let func = tc.get("function");
-                        let name = func.and_then(|f| f.get("name")).and_then(|v| v.as_str()).unwrap_or("").to_string();
-                        let args = func.and_then(|f| f.get("arguments")).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                        let name = func
+                            .and_then(|f| f.get("name"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let args = func
+                            .and_then(|f| f.get("arguments"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
 
                         events.extend(self.emit_message_start());
 
@@ -244,7 +251,6 @@ impl ChatToAnthropicSseTranslator {
 
         events
     }
-
 }
 
 fn sse_event(data: serde_json::Value) -> String {

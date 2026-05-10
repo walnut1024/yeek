@@ -1,4 +1,4 @@
-// Warm-toned icon system following DESIGN.md palette
+// Compact icon system following the Linear-style application palette.
 // All icons are 12x12 inline SVGs
 
 export function ChevronIcon({ className, expanded }: { className?: string; expanded?: boolean }) {

@@ -25,7 +25,15 @@ pub fn read_proxy_config(conn: &Connection) -> Result<ProxyConfig, AppError> {
             }
             _ => AppError::DbError(e.to_string()),
         })?;
-    serde_json::from_str(&json).map_err(|e| AppError::ParseError(format!("proxy config: {}", e)))
+    serde_json::from_str(&json).or_else(|e| {
+        tracing::warn!(
+            "stored proxy config is not compatible with bridge schema; resetting to default config: {}",
+            e
+        );
+        let config = ProxyConfig::default();
+        write_proxy_config(conn, &config)?;
+        Ok(config)
+    })
 }
 
 /// Write (insert or replace) the proxy configuration into the database.

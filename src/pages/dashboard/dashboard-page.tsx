@@ -185,7 +185,7 @@ export default function DashboardPage() {
               errorEvents.map((e, i) => (
                 <div key={i} className="border-b border-border py-2.5">
                   <div className="flex items-center gap-2">
-                    <span className={`font-mono text-[11px] font-medium px-1.5 py-0.5 rounded ${e.status >= 500 ? "bg-destructive/10 text-destructive" : "bg-amber-400/10 text-amber-500"}`}>
+                    <span className={`font-mono text-[11px] font-medium px-1.5 py-0.5 rounded ${e.status >= 500 ? "bg-destructive/10 text-destructive" : "bg-chart-3/10 text-chart-3"}`}>
                       {e.status}
                     </span>
                     <span className="font-mono text-[11px] text-foreground/60">{e.provider}</span>
@@ -209,7 +209,7 @@ export default function DashboardPage() {
 
 function StatCard({ label, value, sub, accent }: { label: string; value: string; sub: string; accent?: boolean }) {
   return (
-    <div className={`flex flex-col border p-[18px_20px_16px] ${accent ? "border-primary/15 bg-gradient-to-br from-[#0f1729] to-[#14171f]" : "bg-card border-border"}`}>
+    <div className={`flex flex-col border p-[18px_20px_16px] ${accent ? "border-primary/20 bg-[linear-gradient(135deg,rgba(94,106,210,0.16),rgba(20,21,22,1))]" : "bg-card border-border"}`}>
       <p className={`text-[12px] uppercase tracking-[0.06em] ${accent ? "text-primary" : "text-muted-foreground"}`}>{label}</p>
       <p className={`mt-2.5 font-mono text-[28px] font-medium leading-none tracking-[-0.03em] ${accent ? "text-primary" : "text-foreground"}`}>{value}</p>
       <p className="mt-auto pt-2 text-[12px] text-muted-foreground">{sub}</p>
@@ -223,7 +223,7 @@ function MetricCard({ label, value, sub, danger, onClick }: { label: string; val
       className={`border border-border bg-card px-3 py-3.5 text-center ${onClick ? "cursor-pointer hover:bg-card/80 transition-colors" : ""}`}
       onClick={onClick}
     >
-      <p className={`font-mono text-[18px] font-medium leading-none tracking-[-0.02em] ${danger ? "text-amber-400" : "text-foreground"}`}>{value}</p>
+      <p className={`font-mono text-[18px] font-medium leading-none tracking-[-0.02em] ${danger ? "text-chart-3" : "text-foreground"}`}>{value}</p>
       <p className="mt-1.5 text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">{label}</p>
       <p className="mt-1 font-mono text-[11px] text-muted-foreground/50">{sub}</p>
     </div>
@@ -257,8 +257,8 @@ function HealthCard({ icon, value, label, sub, health }: {
           <div className="mt-1">
             <div className="flex h-[3px] gap-0.5 overflow-hidden rounded-sm">
               {health.ok > 0 && <span className="h-full rounded-sm bg-emerald-500" style={{ flex: health.ok }} />}
-              {health.partial > 0 && <span className="h-full rounded-sm bg-amber-400" style={{ flex: health.partial }} />}
-              {health.hook > 0 && <span className="h-full rounded-sm bg-amber-400" style={{ flex: health.hook }} />}
+              {health.partial > 0 && <span className="h-full rounded-sm bg-chart-3" style={{ flex: health.partial }} />}
+              {health.hook > 0 && <span className="h-full rounded-sm bg-chart-5" style={{ flex: health.hook }} />}
               {health.broken > 0 && <span className="h-full rounded-sm bg-destructive" style={{ flex: health.broken }} />}
             </div>
             <p className="mt-1 font-mono text-[11px] text-muted-foreground/55">

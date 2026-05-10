@@ -7,6 +7,7 @@
 
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::process::Command;
@@ -24,91 +25,86 @@ pub enum ConfigSource {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProxyConfig {
     pub server: ServerConfig,
-    pub default_provider: String,
-    pub providers: std::collections::HashMap<String, ProviderConfig>,
+    #[serde(default)]
+    pub bridges: BTreeMap<String, BridgeConfig>,
+    #[serde(default)]
+    pub providers: BTreeMap<String, ProviderConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig { pub listen_addr: String }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProviderConfig {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub kind: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub format: Option<String>,
+pub struct BridgeConfig {
+    pub agent: AgentEndpointConfig,
+    pub provider: BridgeProviderRef,
+    #[serde(default)]
+    pub models: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentEndpointConfig {
     pub base_url: String,
+    pub api_format: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BridgeProviderRef {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderConfig {
+    pub base_url: String,
+    pub api_format: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub api_key_env: Option<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub models: Vec<String>,
-    #[serde(default = "default_enabled")]
-    pub enabled: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub company: Option<String>,
 }
-fn default_enabled() -> bool { true }
 
 impl Default for ProxyConfig {
     fn default() -> Self {
-        let mut p = std::collections::HashMap::new();
-        // DeepSeek
-        p.insert("DeepSeek".into(), ProviderConfig {
-            kind: Some("builtin".into()), format: Some("chat_completions".into()),
-            base_url: "https://api.deepseek.com".into(),
-            api_key_env: Some("DEEPSEEK_API_KEY".into()),
-            models: vec!["deepseek-v4-flash".into(), "deepseek-v4-pro".into()],
-            enabled: true, company: Some("DeepSeek".into()),
+        let mut bridges = BTreeMap::new();
+        bridges.insert("claude_desktop_deepseek".into(), BridgeConfig {
+            agent: AgentEndpointConfig {
+                base_url: "/deepseek_anthropic".into(),
+                api_format: "anthropic_messages".into(),
+            },
+            provider: BridgeProviderRef { name: "deepseek_anthropic".into() },
+            models: BTreeMap::from([
+                ("claude-sonnet".into(), "deepseek-v4-pro[1m]".into()),
+                ("claude-haiku".into(), "deepseek-v4-flash".into()),
+                ("claude-opus".into(), "deepseek-v4-pro[1m]".into()),
+            ]),
         });
-        p.insert("DeepSeek Anthropic".into(), ProviderConfig {
-            kind: Some("builtin".into()), format: Some("anthropic_messages".into()),
+        bridges.insert("claude_desktop_zhipu".into(), BridgeConfig {
+            agent: AgentEndpointConfig {
+                base_url: "/zhipu_anthropic".into(),
+                api_format: "anthropic_messages".into(),
+            },
+            provider: BridgeProviderRef { name: "zhipu_anthropic".into() },
+            models: BTreeMap::from([
+                ("claude-sonnet".into(), "glm-5.1".into()),
+                ("claude-haiku".into(), "glm-5.1".into()),
+                ("claude-opus".into(), "glm-5.1".into()),
+            ]),
+        });
+
+        let mut providers = BTreeMap::new();
+        providers.insert("deepseek_anthropic".into(), ProviderConfig {
             base_url: "https://api.deepseek.com/anthropic".into(),
+            api_format: "anthropic_messages".into(),
             api_key_env: Some("DEEPSEEK_API_KEY".into()),
-            models: vec!["deepseek-v4-flash".into(), "deepseek-v4-pro".into()],
-            enabled: false, company: Some("DeepSeek".into()),
         });
-        // Zhipu
-        p.insert("Zhipu Coding".into(), ProviderConfig {
-            kind: Some("builtin".into()), format: Some("chat_completions".into()),
-            base_url: "https://open.bigmodel.cn/api/coding/paas/v4".into(),
-            api_key_env: Some("ZHIPU_API_KEY".into()),
-            models: vec!["glm-5.1".into()],
-            enabled: false, company: Some("Zhipu".into()),
-        });
-        p.insert("Zhipu General".into(), ProviderConfig {
-            kind: Some("builtin".into()), format: Some("chat_completions".into()),
-            base_url: "https://open.bigmodel.cn/api/paas/v4".into(),
-            api_key_env: Some("ZHIPU_API_KEY".into()),
-            models: vec!["glm-5.1".into()],
-            enabled: false, company: Some("Zhipu".into()),
-        });
-        p.insert("Zhipu Anthropic".into(), ProviderConfig {
-            kind: Some("builtin".into()), format: Some("anthropic_messages".into()),
+        providers.insert("zhipu_anthropic".into(), ProviderConfig {
             base_url: "https://open.bigmodel.cn/api/anthropic".into(),
+            api_format: "anthropic_messages".into(),
             api_key_env: Some("ZHIPU_API_KEY".into()),
-            models: vec!["glm-5.1".into()],
-            enabled: false, company: Some("Zhipu".into()),
         });
-        // OpenAI
-        p.insert("OpenAI".into(), ProviderConfig {
-            kind: Some("builtin".into()), format: Some("chat_completions".into()),
-            base_url: "https://api.openai.com/v1".into(),
-            api_key_env: Some("OPENAI_API_KEY".into()),
-            models: vec!["gpt-4o".into(), "gpt-4o-mini".into()],
-            enabled: false, company: Some("OpenAI".into()),
-        });
-        // Anthropic
-        p.insert("Anthropic".into(), ProviderConfig {
-            kind: Some("builtin".into()), format: Some("anthropic_messages".into()),
-            base_url: "https://api.anthropic.com/v1".into(),
-            api_key_env: Some("ANTHROPIC_API_KEY".into()),
-            models: vec!["claude-sonnet-4-6".into(), "claude-opus-4-7".into()],
-            enabled: false, company: Some("Anthropic".into()),
-        });
+
         Self {
             server: ServerConfig { listen_addr: "127.0.0.1:8787".into() },
-            default_provider: "DeepSeek".into(),
-            providers: p,
+            bridges,
+            providers,
         }
     }
 }
@@ -180,11 +176,22 @@ impl ProxyManager {
     }
 
     pub fn status(&self) -> ProxyStatus {
-        let running = self.running.load(Ordering::Relaxed);
         let config = self.read_config().ok();
         let listen_addr = config.as_ref().map(|c| c.server.listen_addr.clone());
+        let healthy = self.probe_health(listen_addr.as_deref());
+        if healthy {
+            self.running.store(true, Ordering::Relaxed);
+            if let Some(pid) = self.read_pid_file() {
+                let mut guard = self.pid.lock().unwrap_or_else(|e| e.into_inner());
+                if guard.is_none() {
+                    *guard = Some(pid);
+                }
+            }
+        } else {
+            self.running.store(false, Ordering::Relaxed);
+        }
         ProxyStatus {
-            running: running && self.probe_health(listen_addr.as_deref()),
+            running: healthy,
             listen_addr, uptime_secs: None,
             version: env!("CARGO_PKG_VERSION").to_string(),
             unexpected_exit: self.unexpected_exit.load(Ordering::Relaxed),
@@ -223,14 +230,17 @@ impl ProxyManager {
         let temp_toml = self.write_temp_config(&config)?;
         self.unexpected_exit.store(false, Ordering::Relaxed);
 
-        let stderr_file = std::fs::File::create(&self.log_path)
+        let log_file = std::fs::File::create(&self.log_path)
+            .map_err(|e| AppError::Internal(format!("proxy log file: {}", e)))?;
+        let stderr_file = log_file
+            .try_clone()
             .map_err(|e| AppError::Internal(format!("proxy log file: {}", e)))?;
 
         let bin = self.find_binary()?;
         let mut child = Command::new(&bin)
             .arg(&temp_toml)
             .env("RUST_LOG", "info")
-            .stdout(std::process::Stdio::null())
+            .stdout(log_file)
             .stderr(stderr_file)
             .spawn()
             .map_err(|e| AppError::Internal(format!("failed to spawn proxy ({}): {}", bin.display(), e)))?;

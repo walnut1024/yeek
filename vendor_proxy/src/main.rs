@@ -3,10 +3,14 @@ use std::os::unix::io::AsRawFd;
 use std::sync::{atomic::AtomicI64, Arc, Mutex};
 use std::time::Instant;
 use vendor_proxy::client;
-use vendor_proxy::config::{self, ApiFormat};
+use vendor_proxy::config;
 use vendor_proxy::server;
 
 const PID_FILE: &str = "proxy.pid";
+
+fn current_timezone_offset() -> String {
+    chrono::Local::now().format("%:z").to_string()
+}
 
 fn acquire_pid_lock() -> std::fs::File {
     let dir = std::env::temp_dir().join("yeek");
@@ -41,23 +45,26 @@ fn acquire_pid_lock() -> std::fs::File {
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt()
+        .with_timer(tracing_subscriber::fmt::time::ChronoLocal::rfc_3339())
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info".into()),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
         )
         .init();
 
+    tracing::info!("Log timezone selected: local offset={}", current_timezone_offset());
+
     let _pid_lock = acquire_pid_lock();
 
-    let config_path = std::env::args()
-        .nth(1)
-        .unwrap_or_else(|| "proxy.toml".to_string());
+    let config_path = std::env::args().nth(1).unwrap_or_else(|| "proxy.toml".to_string());
 
     let cfg = config::ProxyConfig::load(&config_path)
         .unwrap_or_else(|e| panic!("Failed to load {}: {}", config_path, e));
 
-    tracing::info!("Proxy config loaded: {} providers, {} pairs", cfg.providers.len(), cfg.proxy_pairs.len());
-    tracing::info!("Default provider: {:?}", cfg.default_provider);
+    tracing::info!(
+        "Proxy config loaded: {} providers, {} bridges",
+        cfg.providers.len(),
+        cfg.bridges.len()
+    );
 
     let state = Arc::new(server::AppState {
         config: cfg.clone(),
@@ -76,50 +83,28 @@ async fn main() {
         .route("/health", axum::routing::any(server::health))
         .route("/admin/status", axum::routing::get(server::admin_status))
         .route("/admin/errors", axum::routing::get(server::admin_errors))
-        .route("/v1/models", axum::routing::get(server::models_handler));
+        .route("/v1/models", axum::routing::get(server::global_models_handler));
 
-    if cfg.uses_pairs() {
-        // New proxy_pairs mode: register per-pair routes
-        for (name, pair) in &cfg.proxy_pairs {
-            let prefix = pair.route_path.trim_end_matches('/');
-            match pair.route_format {
-                ApiFormat::AnthropicMessages => {
-                    app = app.route(
-                        &format!("{}/v1/messages", prefix),
-                        axum::routing::post(server::pair_handler),
-                    );
-                }
-                ApiFormat::ChatCompletions => {
-                    app = app.route(
-                        &format!("{}/v1/chat/completions", prefix),
-                        axum::routing::post(server::pair_handler),
-                    );
-                }
-                ApiFormat::Responses => {
-                    app = app.route(
-                        &format!("{}/v1/responses", prefix),
-                        axum::routing::post(server::pair_handler),
-                    );
-                }
-            }
-            tracing::info!(
-                "Pair '{}': {} → route_path={}, format={:?}→{:?}",
-                name, pair.provider_base_url, pair.route_path,
-                pair.route_format, pair.provider_format
-            );
-        }
-    } else {
-        // Legacy mode: register old routes
+    for (name, bridge) in &cfg.bridges {
+        let prefix = bridge.agent.base_url.trim_end_matches('/');
+        let request_path = format!("{}{}", prefix, bridge.agent.api_format.endpoint_path());
+        let models_path = format!("{}/v1/models", prefix);
         app = app
-            .route("/v1/messages", axum::routing::post(server::anthropic_messages_handler))
-            .route("/v1/{*path}", axum::routing::any(server::proxy_handler));
+            .route(&request_path, axum::routing::post(server::bridge_handler))
+            .route(&models_path, axum::routing::get(server::bridge_models_handler));
+        tracing::info!(
+            "Bridge '{}': agent_base_url={}, agent_api_format={:?}, provider={}",
+            name,
+            bridge.agent.base_url,
+            bridge.agent.api_format,
+            bridge.provider.name
+        );
     }
 
     let app = app.with_state(state);
 
-    let listener = tokio::net::TcpListener::bind(&cfg.server.listen_addr)
-        .await
-        .expect("Failed to bind");
+    let listener =
+        tokio::net::TcpListener::bind(&cfg.server.listen_addr).await.expect("Failed to bind");
     tracing::info!("Proxy listening on {}", cfg.server.listen_addr);
     axum::serve(listener, app).await.expect("axum serve");
 }

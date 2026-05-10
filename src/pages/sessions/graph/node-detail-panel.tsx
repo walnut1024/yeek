@@ -14,10 +14,9 @@ export default function NodeDetailPanel({
   messages,
   onClose,
 }: NodeDetailPanelProps) {
+  const { t } = useTranslation();
   const msg = messages.find((m) => m.id === nodeId);
   if (!msg) return null;
-
-  const { t } = useTranslation();
 
   const roleLabel =
     msg.role === "human"

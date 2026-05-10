@@ -12,6 +12,12 @@ class TauriEventTransport implements EventTransport {
   }
 }
 
+declare global {
+  interface Window {
+    __TAURI_INTERNALS__?: unknown;
+  }
+}
+
 class SseEventTransport implements EventTransport {
   private es: EventSource;
   private listeners: Map<string, Set<EventHandler>> = new Map();
@@ -37,9 +43,9 @@ class SseEventTransport implements EventTransport {
   }
 }
 
-const isTauri = !!(window as any).__TAURI_INTERNALS__;
+const isTauri = !!window.__TAURI_INTERNALS__;
 
-let eventTransport: EventTransport = isTauri
+const eventTransport: EventTransport = isTauri
   ? new TauriEventTransport()
   : new SseEventTransport();
 

@@ -60,9 +60,9 @@ export function AppShell() {
 
   return (
     <div className="app-shell">
-      <div className="amber-overlay" />
+      <div className="app-overlay" />
       <div className="relative z-10 flex h-screen overflow-hidden">
-        {/* Sidebar — icon only */}
+        {/* Sidebar - icon only */}
         <TooltipProvider delay={200}>
         <nav className="flex w-[48px] shrink-0 flex-col items-center border-r border-border bg-card py-3">
           <div className="flex-1 space-y-1">
@@ -77,13 +77,13 @@ export function AppShell() {
                   onClick={() => setSection(key)}
                   className={`relative flex h-8 w-8 items-center justify-center rounded-md transition-colors ${
                     section === key
-                      ? "bg-secondary text-foreground"
-                      : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+                      ? "border border-border bg-secondary text-foreground"
+                      : "border border-transparent text-muted-foreground hover:bg-element-hover hover:text-foreground"
                   }`}
                 >
                   <Icon />
                   {badge && (
-                    <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 font-mono text-[9px] font-medium text-white">
+                    <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 font-mono text-[9px] font-medium text-primary-foreground">
                       {badge}
                     </span>
                   )}
@@ -97,8 +97,8 @@ export function AppShell() {
               onClick={() => setSection("settings")}
               className={`relative flex h-8 w-8 items-center justify-center rounded-md transition-colors ${
                 section === "settings"
-                  ? "bg-secondary text-foreground"
-                  : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+                  ? "border border-border bg-secondary text-foreground"
+                  : "border border-transparent text-muted-foreground hover:bg-element-hover hover:text-foreground"
               }`}
             >
               <SettingsIcon />

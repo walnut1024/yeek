@@ -1,5 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 
+declare global {
+  interface Window {
+    __TAURI_INTERNALS__?: unknown;
+  }
+}
+
 export interface Transport {
   command<T>(name: string, args?: Record<string, unknown>): Promise<T>;
 }
@@ -138,7 +144,7 @@ class HttpTransport implements Transport {
   }
 }
 
-const isTauri = !!(window as any).__TAURI_INTERNALS__;
+const isTauri = !!window.__TAURI_INTERNALS__;
 
 let transport: Transport = isTauri
   ? new TauriTransport()

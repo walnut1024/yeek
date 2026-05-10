@@ -38,13 +38,14 @@ pub fn chat_to_anthropic_response(chat: &ChatCompletionResponse) -> AnthropicRes
         }
     }
 
-    let usage = chat.usage.as_ref().map(|u| AnthropicUsage {
-        input_tokens: u.prompt_tokens,
-        output_tokens: u.completion_tokens,
-    }).unwrap_or(AnthropicUsage {
-        input_tokens: 0,
-        output_tokens: 0,
-    });
+    let usage = chat
+        .usage
+        .as_ref()
+        .map(|u| AnthropicUsage {
+            input_tokens: u.prompt_tokens,
+            output_tokens: u.completion_tokens,
+        })
+        .unwrap_or(AnthropicUsage { input_tokens: 0, output_tokens: 0 });
 
     AnthropicResponse {
         id: chat.id.clone(),
@@ -86,11 +87,7 @@ mod tests {
                 },
                 finish_reason: Some(finish_reason.to_string()),
             }],
-            usage: Some(ChatUsage {
-                prompt_tokens: 10,
-                completion_tokens: 5,
-                total_tokens: 15,
-            }),
+            usage: Some(ChatUsage { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 }),
         }
     }
 
@@ -132,11 +129,7 @@ mod tests {
                 },
                 finish_reason: Some("tool_calls".to_string()),
             }],
-            usage: Some(ChatUsage {
-                prompt_tokens: 10,
-                completion_tokens: 5,
-                total_tokens: 15,
-            }),
+            usage: Some(ChatUsage { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 }),
         };
 
         let resp = chat_to_anthropic_response(&chat);

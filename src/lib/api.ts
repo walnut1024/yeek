@@ -395,19 +395,30 @@ export interface ProxyServerConfig {
   listen_addr: string;
 }
 
-export interface ProxyProviderConfig {
-  kind?: string | null;
-  format?: string | null;
+export interface ProxyAgentEndpointConfig {
   base_url: string;
+  api_format: string;
+}
+
+export interface ProxyBridgeProviderRef {
+  name: string;
+}
+
+export interface ProxyBridgeConfig {
+  agent: ProxyAgentEndpointConfig;
+  provider: ProxyBridgeProviderRef;
+  models: Record<string, string>;
+}
+
+export interface ProxyProviderConfig {
+  base_url: string;
+  api_format: string;
   api_key_env?: string | null;
-  models: string[];
-  enabled?: boolean;
-  company?: string | null;
 }
 
 export interface ProxyConfig {
   server: ProxyServerConfig;
-  default_provider: string;
+  bridges: Record<string, ProxyBridgeConfig>;
   providers: Record<string, ProxyProviderConfig>;
 }
 
