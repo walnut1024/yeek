@@ -42,7 +42,7 @@ sed -i '' "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" \
   src-tauri/tauri.conf.json package.json
 sed -i '' "s/^version = \"[^\"]*\"/version = \"$VERSION\"/" \
   src-tauri/Cargo.toml
-cargo metadata --format-version 1 --no-deps >/dev/null
+cargo generate-lockfile
 
 # ── Commit & tag ────────────────────────────────────────────────────
 echo "→ Committing version bump..."
