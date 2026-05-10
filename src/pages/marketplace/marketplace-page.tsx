@@ -66,6 +66,7 @@ export default function MarketplacePage() {
   const [updateAllActive, setUpdateAllActive] = useState(false);
   const [expandedName, setExpandedName] = useState<string | null>(null);
   const [pluginFilter, setPluginFilter] = useState<"all" | "ok" | "issues">("all");
+  const [projectPluginsRequested, setProjectPluginsRequested] = useState(false);
 
   // Plugin management state
   const [uninstallTarget, setUninstallTarget] = useState<PluginInfo | null>(null);
@@ -92,11 +93,17 @@ export default function MarketplacePage() {
     enabled: isClaudeCode,
   });
 
-  // Fetch project plugins for bottom section
-  const { data: projectData } = useQuery({
+  // Project plugins require touching each project's folder, which can trigger
+  // macOS Documents permission prompts. Load them only after explicit intent.
+  const {
+    data: projectData,
+    isFetching: projectLoading,
+    error: projectError,
+    refetch: refetchProjectPlugins,
+  } = useQuery({
     queryKey: ["plugins", "project"],
     queryFn: () => listPlugins("project"),
-    enabled: isClaudeCode,
+    enabled: isClaudeCode && projectPluginsRequested,
   });
 
   // Build lookup: pluginName@marketplaceName -> PluginInfo
@@ -195,6 +202,13 @@ export default function MarketplacePage() {
   }, [marketplaces, handleUpdateOne]);
 
   const projectPlugins = projectData?.plugins ?? [];
+  const loadProjectPlugins = useCallback(() => {
+    if (!projectPluginsRequested) {
+      setProjectPluginsRequested(true);
+      return;
+    }
+    void refetchProjectPlugins();
+  }, [projectPluginsRequested, refetchProjectPlugins]);
   const brokenCount = pluginsData?.health_summary?.broken ?? 0;
 
   return (
@@ -312,18 +326,43 @@ export default function MarketplacePage() {
                 <div className="grid grid-cols-2 gap-2 p-2">
                   {filteredPlugins.map(p => <PluginCard key={p.key} plugin={p} />)}
                 </div>
-                {projectPlugins.length > 0 && (
+                <Separator className="mx-2" />
+                <div className="flex items-center justify-between gap-3 px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                      {t("skills.project")}
+                    </p>
+                    <p className="mt-1 text-[12px] leading-[1.4] text-muted-foreground">
+                      Load only when you want to inspect project-level .claude skills and agents.
+                    </p>
+                    {projectError && (
+                      <p className="mt-1 text-[12px] leading-[1.4] text-destructive">
+                        Failed to load project plugins.
+                      </p>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={loadProjectPlugins}
+                    disabled={projectLoading}
+                    className="shrink-0"
+                  >
+                    {projectLoading ? "Loading" : projectPluginsRequested ? "Refresh" : "Load"}
+                  </Button>
+                </div>
+                {projectPluginsRequested && projectPlugins.length > 0 && (
                   <>
-                    <Separator className="mx-2" />
-                    <div className="px-3 pt-2 pb-1">
-                      <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                        {t("skills.project")}
-                      </span>
-                    </div>
                     <div className="grid grid-cols-2 gap-2 px-2 pb-2">
                       {projectPlugins.map(p => <PluginCard key={p.key} plugin={p} compact />)}
                     </div>
                   </>
+                )}
+                {projectPluginsRequested && !projectLoading && projectPlugins.length === 0 && !projectError && (
+                  <p className="px-3 pb-3 text-[12px] leading-[1.4] text-muted-foreground">
+                    No project-level Claude skills or agents found.
+                  </p>
                 )}
               </ScrollArea>
             </div>
