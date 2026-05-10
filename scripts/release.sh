@@ -14,6 +14,12 @@ if [[ -z "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}" ]]; then
   exit 1
 fi
 
+for var in APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID APPLE_API_KEY APPLE_API_ISSUER APPLE_API_KEY_PATH; do
+  if [[ -n "${!var:-}" ]]; then
+    export "$var"
+  fi
+done
+
 # ── Args ────────────────────────────────────────────────────────────
 VERSION="${1:?Usage: scripts/release.sh <version> [release-notes]}"
 NOTES="${2:-Release v$VERSION}"
@@ -22,6 +28,12 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 BUNDLE_DIR="target/release/bundle"
 APP_PATH="$BUNDLE_DIR/macos/Yeek.app"
+BUILD_CONFIG=""
+
+cleanup() {
+  [[ -n "$BUILD_CONFIG" && -f "$BUILD_CONFIG" ]] && rm -f "$BUILD_CONFIG"
+}
+trap cleanup EXIT
 
 # ── Validate version format ─────────────────────────────────────────
 if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
@@ -60,7 +72,32 @@ echo "→ Building signed release..."
 export TAURI_SIGNING_PRIVATE_KEY
 TAURI_SIGNING_PRIVATE_KEY="$(cat "$TAURI_SIGNING_PRIVATE_KEY_PATH")"
 export TAURI_SIGNING_PRIVATE_KEY_PASSWORD
-cargo tauri build
+
+BUILD_ARGS=(cargo tauri build)
+if [[ -n "${APPLE_SIGNING_IDENTITY:-}" ]]; then
+  echo "→ Using Apple signing identity: $APPLE_SIGNING_IDENTITY"
+  BUILD_CONFIG="$(mktemp)"
+  python3 - "$BUILD_CONFIG" "$APPLE_SIGNING_IDENTITY" <<'PY'
+import json
+import sys
+
+path, identity = sys.argv[1], sys.argv[2]
+with open(path, "w", encoding="utf-8") as f:
+    json.dump({"bundle": {"macOS": {"signingIdentity": identity}}}, f)
+PY
+  BUILD_ARGS+=(--config "$BUILD_CONFIG")
+else
+  echo "Warning: APPLE_SIGNING_IDENTITY is not set; using ad-hoc macOS signing."
+fi
+
+if [[ -n "${APPLE_ID:-}" && -n "${APPLE_PASSWORD:-}" && -n "${APPLE_TEAM_ID:-}" ]] || \
+   [[ -n "${APPLE_API_KEY:-}" && -n "${APPLE_API_ISSUER:-}" && -n "${APPLE_API_KEY_PATH:-}" ]]; then
+  echo "→ Apple notarization credentials detected."
+else
+  echo "Warning: Apple notarization credentials are not set; downloaded apps will still show a Gatekeeper warning."
+fi
+
+"${BUILD_ARGS[@]}"
 
 # ── Verify macOS bundle ─────────────────────────────────────────────
 echo "→ Verifying macOS app signature..."
