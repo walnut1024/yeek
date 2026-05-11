@@ -136,11 +136,24 @@ Install with Homebrew:
 brew install --cask walnut1024/yeek/yeek
 ```
 
+Or add the tap first:
+
+```bash
+brew tap walnut1024/yeek
+brew install --cask yeek
+```
+
+Upgrade later with:
+
+```bash
+brew upgrade --cask yeek
+```
+
 Get the latest build from [Releases](https://github.com/walnut1024/yeek/releases/latest):
 
 - **`Yeek_*_aarch64.dmg`** — drag to Applications
 
-> First launch: right-click → Open to bypass Gatekeeper (unsigned app).
+> First launch: Yeek is currently ad-hoc signed but not Apple notarized, so macOS may show a Gatekeeper warning. Right-click → Open to bypass it.
 
 ### Build from Source
 
