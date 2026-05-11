@@ -11,7 +11,9 @@ export function useZoom() {
   const [fontSize, setFontSize] = useLocalStorage("font-size", DEFAULT);
 
   useEffect(() => {
-    document.documentElement.style.zoom = String(fontSize / BASE);
+    const zoom = fontSize / BASE;
+    document.documentElement.style.zoom = String(zoom);
+    document.documentElement.style.setProperty("--app-zoom", String(zoom));
   }, [fontSize]);
 
   useEffect(() => {

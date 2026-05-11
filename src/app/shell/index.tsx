@@ -61,7 +61,7 @@ export function AppShell() {
   return (
     <div className="app-shell">
       <div className="app-overlay" />
-      <div className="relative z-10 flex h-screen overflow-hidden">
+      <div className="relative z-10 flex h-full min-h-0 overflow-hidden">
         {/* Sidebar - icon only */}
         <TooltipProvider delay={200}>
         <nav className="flex w-[48px] shrink-0 flex-col items-center border-r border-border bg-card py-3">
@@ -109,14 +109,17 @@ export function AppShell() {
         </TooltipProvider>
 
         {/* Main content */}
-        <main className="min-h-0 min-w-0 flex-1 pt-8">
-          {section === "dashboard" && <DashboardPage />}
-          {section === "sessions" && (
-            <SessionsPage selectedId={selectedId} onSelect={setSelectedId} />
-          )}
-          {section === "marketplace" && <MarketplacePage />}
-          {section === "settings" && <SettingsPage />}
-          {section === "proxy" && <ProxyPage />}
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="h-8 shrink-0" />
+          <div className="min-h-0 flex-1 overflow-hidden">
+            {section === "dashboard" && <DashboardPage />}
+            {section === "sessions" && (
+              <SessionsPage selectedId={selectedId} onSelect={setSelectedId} />
+            )}
+            {section === "marketplace" && <MarketplacePage />}
+            {section === "settings" && <SettingsPage />}
+            {section === "proxy" && <ProxyPage />}
+          </div>
         </main>
       </div>
     </div>
