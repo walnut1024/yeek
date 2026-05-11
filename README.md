@@ -130,10 +130,15 @@ incoming `Authorization` header or read from environment variables.
 
 ### Download (macOS)
 
+Install with Homebrew:
+
+```bash
+brew install --cask walnut1024/yeek/yeek
+```
+
 Get the latest build from [Releases](https://github.com/walnut1024/yeek/releases/latest):
 
-- **`Yeek-*-arm64.dmg`** — drag to Applications
-- **`Yeek-*-arm64-mac.zip`** — portable, run directly
+- **`Yeek_*_aarch64.dmg`** — drag to Applications
 
 > First launch: right-click → Open to bypass Gatekeeper (unsigned app).
 

@@ -156,4 +156,8 @@ gh release create "v$VERSION" \
   --notes "$NOTES"
 
 echo "✓ Released v$VERSION"
+if [[ "${UPDATE_HOMEBREW_TAP:-1}" != "0" && -n "$DMG" ]]; then
+  scripts/update-homebrew-cask.sh "$VERSION" "$DMG"
+fi
+
 gh release view "v$VERSION" --web
