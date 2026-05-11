@@ -54,7 +54,20 @@ sed -i '' "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" \
   src-tauri/tauri.conf.json package.json
 sed -i '' "s/^version = \"[^\"]*\"/version = \"$VERSION\"/" \
   src-tauri/Cargo.toml
-cargo generate-lockfile
+python3 - "$VERSION" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+version = sys.argv[1]
+path = Path("Cargo.lock")
+content = path.read_text()
+pattern = re.compile(r'(\[\[package\]\]\nname = "yeek"\nversion = ")[^"]+(")')
+content, count = pattern.subn(rf"\g<1>{version}\2", content, count=1)
+if count != 1:
+    raise SystemExit("failed to update yeek version in Cargo.lock")
+path.write_text(content)
+PY
 
 # ── Commit & tag ────────────────────────────────────────────────────
 echo "→ Committing version bump..."
