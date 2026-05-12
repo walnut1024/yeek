@@ -60,26 +60,26 @@ export default function DashboardPage() {
       <div className="flex h-full flex-col overflow-hidden flex-1 min-w-0">
 
         {/* Header */}
-        <div className="flex flex-col gap-2 border-b border-border px-3 pb-3">
+        <header data-ai-region="dashboard-header" className="flex flex-col gap-2 border-b border-border px-3 pb-3">
           <h2 className="text-[14px] font-medium leading-none text-foreground">{t("dashboard.title")}</h2>
           <p className="mt-2 max-w-2xl text-[14px] leading-[1.5] text-muted-foreground">{t("dashboard.description")}</p>
-        </div>
+        </header>
 
         {/* Update notification banner */}
         <UpdateBanner />
 
         <div className="min-h-0 flex-1 overflow-auto p-3">
         {/* Row 1: Hero Stats */}
-        <div className="grid grid-cols-4 gap-3">
+        <section data-ai-region="dashboard-stats" className="grid grid-cols-4 gap-3">
           <StatCard label={t("dashboard.statSessions")} value={String(status?.total_sessions ?? "-")} sub={t("dashboard.statSessionsSub")} />
           <StatCard label={t("dashboard.statSources")} value={String(status?.total_sources ?? "-")} sub={t("dashboard.statSourcesSub")} />
           <StatCard label={t("dashboard.statProjects")} value={String(status?.total_projects ?? "-")} sub={t("dashboard.statProjectsSub")} />
           <StatCard label={t("dashboard.statMessages")} value={status?.total_messages != null ? formatCount(status.total_messages) : "-"} sub={t("dashboard.statMessagesSub")} accent />
-        </div>
+        </section>
 
         {/* Row 2: Proxy Runtime */}
         {metrics && (
-          <>
+          <section data-ai-region="dashboard-metrics">
             <p className="zed-kicker mt-7 mb-2">{t("dashboard.proxyRuntime")}</p>
             <div className="grid grid-cols-6 gap-3">
               <MetricCard label={t("dashboard.metricUptime")} value={`${Math.floor(metrics.uptime_secs / 60)}m`} sub={`${metrics.uptime_secs}s`} />
@@ -89,33 +89,36 @@ export default function DashboardPage() {
               <MetricCard label={t("dashboard.metricRequests")} value={String(metrics.request_count)} sub="total" />
               <MetricCard label={t("dashboard.metricErrors")} value={String(metrics.error_count)} sub={`${((metrics.error_count / Math.max(metrics.request_count, 1)) * 100).toFixed(2)}%`} danger={metrics.error_count > 0} onClick={() => setShowErrorSheet(!showErrorSheet)} />
             </div>
-          </>
+          </section>
         )}
 
         {/* Row 3: System Health */}
-        <p className="zed-kicker mt-7 mb-2">{t("dashboard.systemHealth")}</p>
-        <div className="grid grid-cols-3 gap-3">
-          <HealthCard
-            icon="sync"
-            value={status?.last_sync_at ? formatRelativeTime(status.last_sync_at) : t("dashboard.never")}
-            label={t("dashboard.lastSync")}
-            sub={status?.last_sync_at ? formatTime(status.last_sync_at) : undefined}
-          />
-          <HealthCard
-            icon="live"
-            value={status ? t("dashboard.activeCount", { count: status.active_sessions }) : "-"}
-            label={t("dashboard.activeSessions")}
-            sub={status ? t("dashboard.sessionBreakdown", { complete: status.complete_sessions, partial: status.partial_sessions }) : undefined}
-          />
-          <HealthCard
-            icon="plugin"
-            value={plugins ? t("dashboard.pluginCount", { count: plugins.total_plugins }) : "-"}
-            label={t("dashboard.pluginHealth")}
-            health={pluginHealth}
-          />
-        </div>
+        <section data-ai-region="dashboard-health">
+          <p className="zed-kicker mt-7 mb-2">{t("dashboard.systemHealth")}</p>
+          <div className="grid grid-cols-3 gap-3">
+            <HealthCard
+              icon="sync"
+              value={status?.last_sync_at ? formatRelativeTime(status.last_sync_at) : t("dashboard.never")}
+              label={t("dashboard.lastSync")}
+              sub={status?.last_sync_at ? formatTime(status.last_sync_at) : undefined}
+            />
+            <HealthCard
+              icon="live"
+              value={status ? t("dashboard.activeCount", { count: status.active_sessions }) : "-"}
+              label={t("dashboard.activeSessions")}
+              sub={status ? t("dashboard.sessionBreakdown", { complete: status.complete_sessions, partial: status.partial_sessions }) : undefined}
+            />
+            <HealthCard
+              icon="plugin"
+              value={plugins ? t("dashboard.pluginCount", { count: plugins.total_plugins }) : "-"}
+              label={t("dashboard.pluginHealth")}
+              health={pluginHealth}
+            />
+          </div>
+        </section>
 
         {/* Activity Timeline (merged with alerts) */}
+        <section data-ai-region="dashboard-activity">
         <p className="zed-kicker mt-7 mb-2">{t("dashboard.activity")}</p>
         {allActions.length === 0 ? (
           <div className="border border-border bg-secondary px-2.5 py-2 text-[13px] text-muted-foreground">
@@ -164,12 +167,13 @@ export default function DashboardPage() {
             )}
           </div>
         )}
+        </section>
 
       </div>
       </div>
 
       {/* Error panel — inline slide-in */}
-      <div className={`shrink-0 transition-[width] duration-200 ease-out overflow-hidden ${showErrorSheet ? "w-[420px] border-l border-border" : "w-0"}`}>
+      <aside data-ai-region="dashboard-errors" className={`shrink-0 transition-[width] duration-200 ease-out overflow-hidden ${showErrorSheet ? "w-[420px] border-l border-border" : "w-0"}`}>
         <div className="w-[420px] h-full flex flex-col">
           <div className="flex items-center justify-between px-3 py-2 border-b border-border">
             <div>
@@ -200,7 +204,7 @@ export default function DashboardPage() {
             )}
           </div>
         </div>
-      </div>
+      </aside>
     </div>
   );
 }
@@ -209,24 +213,25 @@ export default function DashboardPage() {
 
 function StatCard({ label, value, sub, accent }: { label: string; value: string; sub: string; accent?: boolean }) {
   return (
-    <div className={`flex flex-col border p-[18px_20px_16px] ${accent ? "border-primary/20 bg-[linear-gradient(135deg,rgba(94,106,210,0.16),rgba(20,21,22,1))]" : "bg-card border-border"}`}>
+    <article data-ai-item="stat-card" className={`flex flex-col border p-[18px_20px_16px] ${accent ? "border-primary/20 bg-[linear-gradient(135deg,rgba(94,106,210,0.16),rgba(20,21,22,1))]" : "bg-card border-border"}`}>
       <p className={`text-[12px] uppercase tracking-[0.06em] ${accent ? "text-primary" : "text-muted-foreground"}`}>{label}</p>
       <p className={`mt-2.5 font-mono text-[28px] font-medium leading-none tracking-[-0.03em] ${accent ? "text-primary" : "text-foreground"}`}>{value}</p>
       <p className="mt-auto pt-2 text-[12px] text-muted-foreground">{sub}</p>
-    </div>
+    </article>
   );
 }
 
 function MetricCard({ label, value, sub, danger, onClick }: { label: string; value: string; sub: string; danger?: boolean; onClick?: () => void }) {
   return (
-    <div
+    <article
+      data-ai-item="metric-card"
       className={`border border-border bg-card px-3 py-3.5 text-center ${onClick ? "cursor-pointer hover:bg-card/80 transition-colors" : ""}`}
       onClick={onClick}
     >
       <p className={`font-mono text-[18px] font-medium leading-none tracking-[-0.02em] ${danger ? "text-chart-3" : "text-foreground"}`}>{value}</p>
       <p className="mt-1.5 text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">{label}</p>
       <p className="mt-1 font-mono text-[11px] text-muted-foreground/50">{sub}</p>
-    </div>
+    </article>
   );
 }
 
@@ -246,7 +251,7 @@ function HealthCard({ icon, value, label, sub, health }: {
   const total = health ? health.ok + health.partial + health.hook + health.broken : 0;
 
   return (
-    <div className="flex items-center gap-3 border border-border bg-card px-4 py-3.5">
+    <article data-ai-item="health-card" className="flex items-center gap-3 border border-border bg-card px-4 py-3.5">
       <div className={`flex size-[34px] shrink-0 items-center justify-center rounded-lg ${iconBg}`}>
         {iconEl}
       </div>
@@ -269,6 +274,6 @@ function HealthCard({ icon, value, label, sub, health }: {
           sub && <p className="mt-0.5 font-mono text-[11px] text-muted-foreground/55">{sub}</p>
         )}
       </div>
-    </div>
+    </article>
   );
 }

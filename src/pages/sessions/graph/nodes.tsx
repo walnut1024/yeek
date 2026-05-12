@@ -7,7 +7,7 @@ function UserNode({ data }: NodeProps) {
   const d = data as { label: string };
   const { t } = useTranslation();
   return (
-    <div className="graph-node" style={{ padding: "7px 10px", borderColor: "var(--ring, #47679e)", borderRadius: 6 }}>
+    <div className="graph-node" style={{ padding: "7px 10px", borderColor: "var(--ring, #47679e)", borderRadius: 0 }}>
       <Handle type="target" position={Position.Top} />
       <div className="graph-node-tag mb-0.5" style={{ color: "var(--primary, #5e6ad2)" }}>
         {t("graph.nodeUser")}
@@ -24,7 +24,7 @@ function AssistantNode({ data }: NodeProps) {
   const d = data as { label: string; model?: string };
   const { t } = useTranslation();
   return (
-    <div className="graph-node" style={{ padding: "7px 10px", border: "1px solid #5a9e7a", borderRadius: 6 }}>
+    <div className="graph-node" style={{ padding: "7px 10px", border: "1px solid #5a9e7a", borderRadius: 0 }}>
       <Handle type="target" position={Position.Top} />
       <div className="flex items-center justify-between mb-0.5">
         <span className="graph-node-tag" style={{ color: "#81b29a" }}>
@@ -48,7 +48,7 @@ function ToolUseNode({ data }: NodeProps) {
   const d = data as { label: string; toolName?: string };
   const c = toolColor(d.toolName || "");
   return (
-    <div className="graph-node" style={{ padding: "5px 9px", borderRadius: 4, border: `1px solid ${c}50` }}>
+    <div className="graph-node" style={{ padding: "5px 9px", borderRadius: 0, border: `1px solid ${c}50` }}>
       <Handle type="target" position={Position.Top} />
       <div className="flex items-center gap-1.5">
         <span className="graph-node-detail font-semibold" style={{ color: c }}>
@@ -67,7 +67,7 @@ function ToolResultNode({ data }: NodeProps) {
   const d = data as { label: string };
   const { t } = useTranslation();
   return (
-    <div className="graph-node" style={{ padding: "4px 9px", borderRadius: 4, background: "var(--editor, #282c33)" }}>
+    <div className="graph-node" style={{ padding: "4px 9px", borderRadius: 0, background: "var(--editor, #282c33)" }}>
       <Handle type="target" position={Position.Top} />
       <div className="graph-node-hint">
         {t("graph.nodeResult")}
@@ -83,7 +83,7 @@ function ToolResultNode({ data }: NodeProps) {
 function MetaNode({ data }: NodeProps) {
   const d = data as { label: string };
   return (
-    <div className="graph-node" style={{ padding: "4px 8px", borderRadius: 4, background: "transparent", border: "1px dashed var(--border, #464b57)", fontStyle: "italic" }}>
+    <div className="graph-node" style={{ padding: "4px 8px", borderRadius: 0, background: "transparent", border: "1px dashed var(--border, #464b57)", fontStyle: "italic" }}>
       <Handle type="target" position={Position.Top} />
       <span className="graph-node-detail">
         {d.label}

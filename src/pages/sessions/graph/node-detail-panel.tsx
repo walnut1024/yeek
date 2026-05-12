@@ -110,7 +110,7 @@ export default function NodeDetailPanel({
             marginTop: 10,
             padding: "6px 8px",
             background: "var(--editor, #282c33)",
-            borderRadius: 4,
+            borderRadius: 0,
           }}
         >
           <span

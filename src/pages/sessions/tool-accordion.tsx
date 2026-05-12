@@ -71,7 +71,7 @@ const ToolAccordion = React.memo(function ToolAccordion({
       : `${uniqueNames.length} tools: ${uniqueNames.join(", ")}`;
 
   return (
-    <div className="-mx-1 rounded-md border border-border/60 bg-[var(--editor)] px-1.5 py-1">
+    <article data-ai-item="tool-message" className="-mx-1 rounded-md border border-border/60 bg-[var(--editor)] px-1.5 py-1">
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
@@ -98,7 +98,7 @@ const ToolAccordion = React.memo(function ToolAccordion({
           ))}
         </div>
       )}
-    </div>
+    </article>
   );
 });
 

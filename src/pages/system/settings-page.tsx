@@ -79,7 +79,7 @@ export default function SettingsPage() {
 
   return (
     <div className="grid h-full min-h-0 xl:grid-cols-[minmax(0,1.2fr)_320px]">
-      <section className="surface-panel overflow-auto p-3">
+      <section data-ai-region="settings-content" className="surface-panel overflow-auto p-3">
         <div className="flex flex-col gap-2 border-b border-border pb-3">
           <p className="zed-kicker">{t("settings.operations")}</p>
           <h2 className="mt-1 text-[14px] font-medium leading-none text-foreground">
@@ -229,7 +229,7 @@ export default function SettingsPage() {
         )}
       </section>
 
-      <aside className="surface-panel overflow-hidden border-l border-border p-3">
+      <aside data-ai-region="settings-ops-notes" className="surface-panel overflow-hidden border-l border-border p-3">
         <p className="zed-kicker">{t("settings.opsNotes")}</p>
         <h3 className="mt-2 text-[14px] font-semibold leading-none text-foreground">
           {t("settings.opsHeading")}

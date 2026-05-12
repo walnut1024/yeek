@@ -119,14 +119,14 @@ export default function ProxyPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="border-b border-border px-3 py-3">
+      <header data-ai-region="proxy-header" className="border-b border-border px-3 py-3">
         <h2 className="text-[14px] font-medium leading-none text-foreground">{t("proxy.title")}</h2>
         <p className="mt-2 max-w-2xl text-[14px] leading-[1.5] text-muted-foreground">
           Route local Agent requests through Provider-specific formats, credentials, and explicit model mappings.
         </p>
-      </div>
+      </header>
 
-      <div className="flex items-center justify-between border-b border-border px-3 py-2">
+      <div data-ai-region="proxy-toolbar" className="flex items-center justify-between border-b border-border px-3 py-2">
         <div className="flex items-center gap-2">
           <div className="tabs">
             <button className={`chip ${mode === "cards" ? "active" : ""}`} onClick={() => setMode("cards")}>Cards</button>
@@ -144,7 +144,7 @@ export default function ProxyPage() {
         </div>
       </div>
 
-      <div className={`proxy-config-workspace ${mode === "toml" ? "toml-mode" : ""}`}>
+      <section data-ai-region="proxy-config" className={`proxy-config-workspace ${mode === "toml" ? "toml-mode" : ""}`}>
         {mode === "cards" ? (
           <ScrollArea className="min-h-0">
             <div className="proxy-config-cards">
@@ -162,7 +162,7 @@ export default function ProxyPage() {
         ) : (
           <TomlPreview toml={toml} lineCount={lineCount} dirty={dirty} issues={issues} saveDraft={saveDraft} resetDraft={resetDraft} isBusy={isBusy} />
         )}
-      </div>
+      </section>
     </div>
   );
 }
@@ -202,7 +202,7 @@ function ConfigCards({
       </div>
 
       <div className="toml-card-groups">
-        <div className="toml-group">
+        <section data-ai-region="proxy-server" className="toml-group">
           <div className="toml-group-head"><span className="zed-kicker">Server</span><span className="font-mono text-[11px] text-muted-foreground">1</span></div>
           <article className="toml-card server-card">
             <div className="toml-card-head"><span className="toml-card-title">Server: server</span></div>
@@ -213,10 +213,10 @@ function ConfigCards({
               </Field>
             </div>
           </article>
-        </div>
+        </section>
 
         <div className="toml-collections">
-          <div className="toml-group">
+          <section data-ai-region="proxy-providers" className="toml-group">
             <div className="toml-group-head">
               <span className="zed-kicker">Providers</span>
               <Button variant="outline" size="sm" onClick={() => updateDraft((next) => addProvider(next))}>Add Provider</Button>
@@ -224,9 +224,9 @@ function ConfigCards({
             {Object.entries(config.providers).map(([name, provider]) => (
               <ProviderCard key={name} name={name} provider={provider} config={config} updateDraft={updateDraft} />
             ))}
-          </div>
+          </section>
 
-          <div className="toml-group">
+          <section data-ai-region="proxy-bridges" className="toml-group">
             <div className="toml-group-head">
               <span className="zed-kicker">Bridges</span>
               <Button variant="outline" size="sm" onClick={() => updateDraft((next) => addBridge(next))}>Add Bridge</Button>
@@ -234,7 +234,7 @@ function ConfigCards({
             {Object.entries(config.bridges).map(([name, bridge]) => (
               <BridgeCard key={name} name={name} bridge={bridge} config={config} updateDraft={updateDraft} />
             ))}
-          </div>
+          </section>
         </div>
       </div>
     </>
@@ -396,7 +396,7 @@ function TomlPreview({
   isBusy: boolean;
 }) {
   return (
-    <section className="proxy-editor-shell">
+    <section data-ai-region="proxy-toml-editor" className="proxy-editor-shell">
       <div className="proxy-panel-head">
         <span className="zed-kicker">proxy.toml</span>
         <div className="flex items-center gap-2">

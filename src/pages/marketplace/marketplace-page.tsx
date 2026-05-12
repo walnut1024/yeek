@@ -214,13 +214,13 @@ export default function MarketplacePage() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Header */}
-      <div className="border-b border-border px-3 py-3">
+      <header data-ai-region="marketplace-header" className="border-b border-border px-3 py-3">
         <h2 className="text-[14px] font-medium leading-none text-foreground">{t("marketplace.title")}</h2>
         <p className="mt-2 max-w-2xl text-[14px] leading-[1.5] text-muted-foreground">{t("marketplace.description")}</p>
-      </div>
+      </header>
 
       {/* Toolbar: agent tabs + action buttons */}
-      <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
+      <div data-ai-region="marketplace-toolbar" className="flex items-center justify-between border-b border-border px-3 py-1.5">
         <div className="flex items-center gap-1">
           {AGENTS.map((a) => (
             <button key={a.key} type="button" onClick={() => setAgent(a.key)}
@@ -260,7 +260,7 @@ export default function MarketplacePage() {
       ) : (
         <>
           {/* Metrics row */}
-          <div className="grid grid-cols-4 gap-2 px-2 pt-2">
+          <section data-ai-region="marketplace-metrics" className="grid grid-cols-4 gap-2 px-2 pt-2">
             <MetricCard label="Registries" value={marketplaces.length}
               sub={marketplaces.length > 0
                 ? `${marketplaces.filter(m => m.repo?.startsWith("http")).length} remote, ${marketplaces.filter(m => !m.repo?.startsWith("http")).length} local`
@@ -272,12 +272,12 @@ export default function MarketplacePage() {
             <MetricCard label="Broken" value={brokenCount}
               sub={brokenCount > 0 ? "needs cleanup" : "all healthy"}
               variant={brokenCount > 0 ? "destructive" : "default"} />
-          </div>
+          </section>
 
           {/* Two-column layout */}
           <div className="grid min-h-0 flex-1 grid-cols-[330px_minmax(0,1fr)] gap-2 overflow-hidden p-2">
             {/* Left: Registries */}
-            <div className="flex flex-col overflow-hidden rounded-lg border border-border bg-card">
+            <section data-ai-region="marketplace-registries" className="flex flex-col overflow-hidden rounded-lg border border-border bg-card">
               <div className="flex items-center justify-between border-b border-border px-2.5 py-2">
                 <span className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted-foreground">Registries</span>
                 <span className="font-mono text-[12px] text-foreground">{marketplaces.length}</span>
@@ -307,10 +307,10 @@ export default function MarketplacePage() {
                   </div>
                 )}
               </ScrollArea>
-            </div>
+            </section>
 
             {/* Right: Installed Plugins */}
-            <div className="flex flex-col overflow-hidden rounded-lg border border-border bg-card">
+            <section data-ai-region="marketplace-installed" className="flex flex-col overflow-hidden rounded-lg border border-border bg-card">
               <div className="flex items-center justify-between border-b border-border px-2.5 py-2">
                 <span className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted-foreground">Installed Plugins</span>
                 <div className="flex items-center gap-1">
@@ -365,7 +365,7 @@ export default function MarketplacePage() {
                   </p>
                 )}
               </ScrollArea>
-            </div>
+            </section>
           </div>
         </>
       )}
@@ -502,13 +502,13 @@ function MetricCard({ label, value, sub, variant }: {
   label: string; value: number; sub: string; variant?: "default" | "destructive";
 }) {
   return (
-    <div className="rounded-lg border border-border bg-card p-3">
+    <article data-ai-item="metric-card" className="rounded-lg border border-border bg-card p-3">
       <span className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted-foreground">{label}</span>
       <div className={`mt-2 font-mono text-[26px] font-semibold leading-none ${
         variant === "destructive" ? "text-destructive" : "text-foreground"
       }`}>{value}</div>
       <div className="mt-1.5 text-[12px] text-muted-foreground">{sub}</div>
-    </div>
+    </article>
   );
 }
 
@@ -560,7 +560,7 @@ function PluginCard({ plugin, compact }: { plugin: PluginInfo; compact?: boolean
   });
 
   return (
-    <div className="surface-card overflow-hidden transition">
+    <article data-ai-item="plugin-card" className="surface-card overflow-hidden transition">
       <div className="flex cursor-pointer items-center gap-2 px-2.5 py-2 transition-colors hover:bg-accent/50" onClick={() => setExpanded(!expanded)}>
         <span className={`grid size-4 shrink-0 place-items-center rounded-sm bg-secondary text-[10px] text-foreground transition ${expanded ? "rotate-90" : ""}`}>▶</span>
         <div className="min-w-0 flex-1">
@@ -606,7 +606,7 @@ function PluginCard({ plugin, compact }: { plugin: PluginInfo; compact?: boolean
           {plugin.agents.map((a) => <SkillRow key={a.name} skill={a} />)}
         </div>
       )}
-    </div>
+    </article>
   );
 }
 
@@ -674,7 +674,7 @@ function MarketplaceRow({
   [resolved]);
 
   return (
-    <div className="surface-card overflow-hidden">
+    <article data-ai-item="marketplace-row" className="surface-card overflow-hidden">
       {/* Marketplace header */}
       <div className="relative flex cursor-pointer items-center gap-3 overflow-hidden px-3 py-2.5 transition-colors hover:bg-accent/50" onClick={onToggleExpand}>
         <span className={`grid size-4 shrink-0 place-items-center rounded-sm bg-secondary text-[10px] text-foreground transition ${expanded ? "rotate-90" : ""}`}>▶</span>
@@ -738,7 +738,7 @@ function MarketplaceRow({
           )}
         </div>
       )}
-    </div>
+    </article>
   );
 }
 

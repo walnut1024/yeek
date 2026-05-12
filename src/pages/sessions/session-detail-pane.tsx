@@ -44,7 +44,7 @@ export default function SessionDetailPane({
     <ScrollArea className="h-full">
       <div className="space-y-3 p-3">
         {/* Header */}
-        <section className="surface-card sticky top-0 z-20 bg-card/95 p-3 backdrop-blur-sm">
+        <section data-ai-region="sessions-summary" className="surface-card sticky top-0 z-20 bg-card/95 p-3 backdrop-blur-sm">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               {/* Meta pills */}
@@ -100,7 +100,7 @@ export default function SessionDetailPane({
           <SourcesTab sessionId={sessionId} />
         </section>
 
-        <section className="surface-card overflow-hidden p-1">
+        <section data-ai-region="sessions-transcript" className="surface-card overflow-hidden p-1">
           {/* Graph/Feed toggle */}
           <div className="flex items-center gap-1 border-b border-border px-2 py-1">
             <button

@@ -15,7 +15,7 @@ export default function SummarySection({
   if (!msg.content_preview) return null;
 
   return (
-    <div className="-mx-1 rounded-md border border-border/60 bg-[var(--editor)] px-2.5 py-2">
+    <section data-ai-region="sessions-summary-message" className="-mx-1 rounded-md border border-border/60 bg-[var(--editor)] px-2.5 py-2">
       <Button
         variant="ghost"
         size="sm"
@@ -33,6 +33,6 @@ export default function SummarySection({
           {msg.content_preview}
         </p>
       )}
-    </div>
+    </section>
   );
 }
