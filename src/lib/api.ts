@@ -100,6 +100,7 @@ export interface BrowseRequest {
   sort?: string;
   limit?: number;
   offset?: number;
+  agent?: string;
 }
 
 export interface SearchRequest {

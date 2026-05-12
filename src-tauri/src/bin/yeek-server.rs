@@ -35,16 +35,35 @@ async fn main() {
     let emitter: Arc<dyn yeek_lib::app::events::EventEmitter> = sse.clone();
     let scan_guard = Arc::new(ScanGuard::new());
 
-    // File watcher
+    // File watchers
     let claude_projects_dir =
         dirs::home_dir().expect("Cannot find home directory").join(".claude").join("projects");
-    let watcher = yeek_lib::sync::watcher::FileWatcher::start(
-        claude_projects_dir,
-        db_path.clone(),
-        emitter.clone(),
-        scan_guard.clone(),
-    )
-    .expect("Failed to start file watcher");
+    let codex_sessions_dir =
+        dirs::home_dir().expect("Cannot find home directory").join(".codex").join("sessions");
+
+    let mut watchers = Vec::new();
+    if claude_projects_dir.exists() {
+        watchers.push(
+            yeek_lib::sync::watcher::FileWatcher::start(
+                claude_projects_dir,
+                db_path.clone(),
+                emitter.clone(),
+                scan_guard.clone(),
+            )
+            .expect("Failed to start Claude file watcher"),
+        );
+    }
+    if codex_sessions_dir.exists() {
+        watchers.push(
+            yeek_lib::sync::watcher::FileWatcher::start(
+                codex_sessions_dir,
+                db_path.clone(),
+                emitter.clone(),
+                scan_guard.clone(),
+            )
+            .expect("Failed to start Codex file watcher"),
+        );
+    }
 
     let config_watcher =
         yeek_lib::sync::watcher::FileWatcher::start_plugin_config_watcher(emitter.clone())
@@ -54,11 +73,12 @@ async fn main() {
     let proxy_db = std::sync::Arc::new(std::sync::Mutex::new(
         rusqlite::Connection::open(&db_path).expect("failed to open proxy db"),
     ));
-    let proxy_manager = ProxyManager::with_db(proxy_db);
+    let proxy_manager = Arc::new(ProxyManager::with_db(proxy_db));
+    ProxyManager::initialize(&proxy_manager);
 
     let app_state = Arc::new(
         AppState::new(conn, db_path.clone(), emitter, proxy_manager)
-            .with_watcher(watcher)
+            .with_watchers(watchers)
             .with_config_watcher(config_watcher),
     );
 

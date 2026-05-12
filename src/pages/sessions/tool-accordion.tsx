@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
 import type { MessageRecord } from "@/lib/api";
 import SubagentExpansion from "./subagent-expansion";
-import { Setting4, ArrowRight2 } from "iconsax-reactjs";
+import { Wrench, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface ToolPair {
@@ -80,8 +80,8 @@ const ToolAccordion = React.memo(function ToolAccordion({
         onClick={() => setExpanded(!expanded)}
         className="flex w-full items-center gap-1.5 px-1.5 py-1 text-left transition-colors hover:bg-accent/40"
       >
-        <ArrowRight2 variant="Linear" size={12} className={`text-muted-foreground/50 transition-transform duration-200 ${expanded ? "rotate-90" : ""}`} />
-        <Setting4 variant="Linear" size={12} className="text-muted-foreground" />
+        <ChevronRight size={16} className={`text-muted-foreground/50 transition-transform duration-200 ${expanded ? "rotate-90" : ""}`} />
+        <Wrench size={16} className="text-muted-foreground" />
         <span className="text-[12px] font-medium text-muted-foreground">
           {t("tools.callCount", { count: flatPairs.length })} · {summary}
         </span>
@@ -163,7 +163,7 @@ function ToolItem({
         onClick={() => setExpandedTool(isOpen ? null : index)}
         className="flex w-full items-center gap-1.5 rounded-md border border-transparent bg-secondary/10 px-1.5 py-0.5 text-left transition-colors hover:border-border/50 hover:bg-accent/30"
       >
-        <ArrowRight2 variant="Linear" size={12} className={`text-muted-foreground/30 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} />
+        <ChevronRight size={16} className={`text-muted-foreground/30 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} />
         <span className="font-mono text-[13px] font-medium text-primary/90">
           {toolName}
         </span>

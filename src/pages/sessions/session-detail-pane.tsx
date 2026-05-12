@@ -6,7 +6,7 @@ import { useLocalStorage } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Copy, TickCircle } from "iconsax-reactjs";
+import { Copy, CircleCheck } from "lucide-react";
 import { formatTime, formatRelativeTime } from "@/lib/formatters";
 import TranscriptView from "./transcript-view";
 import SourcesTab from "./sources-tab";
@@ -153,9 +153,9 @@ function CopyableText({ label, value }: { label: string; value: string }) {
     >
       {label}
       {copied ? (
-        <TickCircle variant="Linear" size={12} className="text-primary" />
+        <CircleCheck size={16} className="text-primary" />
       ) : (
-        <Copy variant="Linear" size={12} className="shrink-0" />
+        <Copy size={16} className="shrink-0" />
       )}
     </span>
   );

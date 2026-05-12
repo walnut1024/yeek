@@ -15,11 +15,12 @@ pub struct BrowseParams {
     pub sort: String,
     pub limit: i64,
     pub offset: i64,
+    pub agent: Option<String>,
 }
 
 impl Default for BrowseParams {
     fn default() -> Self {
-        Self { sort: "updated_at".to_string(), limit: 50, offset: 0 }
+        Self { sort: "updated_at".to_string(), limit: 50, offset: 0, agent: None }
     }
 }
 
@@ -85,20 +86,43 @@ pub fn browse_sessions(
         _ => "updated_at DESC",
     };
 
-    let total: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM sessions WHERE parent_session_id IS NULL AND visibility = 'visible'",
-        [],
-        |row| row.get(0),
-    )?;
+    let mut where_parts = vec![
+        "parent_session_id IS NULL".to_string(),
+        "visibility = 'visible'".to_string(),
+    ];
+    let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+
+    if let Some(ref agent) = params.agent {
+        where_parts.push("agent = ?".to_string());
+        param_values.push(Box::new(agent.clone()));
+    }
+    let where_sql = where_parts.join(" AND ");
+
+    let count_sql = format!("SELECT COUNT(*) FROM sessions WHERE {}", where_sql);
+    let total: i64 = if param_values.is_empty() {
+        conn.query_row(&count_sql, [], |row| row.get(0))?
+    } else {
+        conn.query_row(
+            &count_sql,
+            rusqlite::params_from_iter(param_values.iter().map(|p| p.as_ref())),
+            |row| row.get(0),
+        )?
+    };
 
     let query_sql = format!(
-        "SELECT * FROM sessions WHERE parent_session_id IS NULL AND visibility = 'visible' ORDER BY {} LIMIT ? OFFSET ?",
-        order_by
+        "SELECT * FROM sessions WHERE {} ORDER BY {} LIMIT ? OFFSET ?",
+        where_sql, order_by
     );
+    let mut all_params = param_values;
+    all_params.push(Box::new(params.limit));
+    all_params.push(Box::new(params.offset));
 
     let mut stmt = conn.prepare(&query_sql)?;
     let sessions = stmt
-        .query_map(params![params.limit, params.offset], row_to_session)?
+        .query_map(
+            rusqlite::params_from_iter(all_params.iter().map(|p| p.as_ref())),
+            row_to_session,
+        )?
         .filter_map(|r| r.ok())
         .collect();
 

@@ -2,6 +2,8 @@ import { useState, useCallback, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { getEventTransport } from "@/lib/events";
+import { Trash2, RefreshCcw, SquarePlus } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import {
   listMarketplaces,
   addMarketplace,
@@ -63,9 +65,7 @@ export default function MarketplacePage() {
   const [removeTarget, setRemoveTarget] = useState<MarketplaceEntry | null>(null);
   const [removePlugins, setRemovePlugins] = useState(false);
   const [updatingNames, setUpdatingNames] = useState<Set<string>>(new Set());
-  const [updateAllActive, setUpdateAllActive] = useState(false);
   const [expandedName, setExpandedName] = useState<string | null>(null);
-  const [pluginFilter, setPluginFilter] = useState<"all" | "ok" | "issues">("all");
   const [projectPluginsRequested, setProjectPluginsRequested] = useState(false);
 
   // Plugin management state
@@ -125,14 +125,6 @@ export default function MarketplacePage() {
     }
     return counts;
   }, [pluginsData]);
-
-  // Filtered installed plugins
-  const filteredPlugins = useMemo(() => {
-    const plugins = pluginsData?.plugins ?? [];
-    if (pluginFilter === "ok") return plugins.filter(p => p.health === "ok");
-    if (pluginFilter === "issues") return plugins.filter(p => p.health !== "ok");
-    return plugins;
-  }, [pluginsData, pluginFilter]);
 
   // SSE listener
   useEffect(() => {
@@ -196,9 +188,7 @@ export default function MarketplacePage() {
   }, [queryClient]);
 
   const handleUpdateAll = useCallback(async () => {
-    setUpdateAllActive(true);
     for (const m of marketplaces) await handleUpdateOne(m.name);
-    setUpdateAllActive(false);
   }, [marketplaces, handleUpdateOne]);
 
   const projectPlugins = projectData?.plugins ?? [];
@@ -209,8 +199,6 @@ export default function MarketplacePage() {
     }
     void refetchProjectPlugins();
   }, [projectPluginsRequested, refetchProjectPlugins]);
-  const brokenCount = pluginsData?.health_summary?.broken ?? 0;
-
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Header */}
@@ -219,7 +207,7 @@ export default function MarketplacePage() {
         <p className="mt-2 max-w-2xl text-[14px] leading-[1.5] text-muted-foreground">{t("marketplace.description")}</p>
       </header>
 
-      {/* Toolbar: agent tabs + action buttons */}
+      {/* Toolbar: agent tabs */}
       <div data-ai-region="marketplace-toolbar" className="flex items-center justify-between border-b border-border px-3 py-1.5">
         <div className="flex items-center gap-1">
           {AGENTS.map((a) => (
@@ -229,20 +217,6 @@ export default function MarketplacePage() {
             </Button>
           ))}
         </div>
-        {isClaudeCode && (
-          <div className="flex items-center gap-1.5">
-            {marketplaces.length > 0 && (
-              <Button variant="outline" size="sm" className="h-7 rounded-md px-2.5 text-[13px]"
-                onClick={handleUpdateAll} disabled={isUpdatingAny}>
-                {updateAllActive ? t("marketplace.updating") : t("marketplace.updateAll")}
-              </Button>
-            )}
-            <Button variant="outline" size="sm" className="h-7 rounded-md px-2.5 text-[13px]"
-              onClick={() => setAddOpen(true)}>
-              {t("marketplace.add")}
-            </Button>
-          </div>
-        )}
       </div>
 
       {/* Content */}
@@ -250,7 +224,7 @@ export default function MarketplacePage() {
         <div className="flex h-72 items-center justify-center px-6">
           <div className="max-w-sm text-center">
             <p className="text-[16px] font-medium text-foreground">{AGENTS.find(a => a.key === agent)?.label}</p>
-            <p className="mt-2 text-[14px] leading-[1.5] text-muted-foreground">Plugin support coming soon.</p>
+            <p className="mt-2 text-[14px] leading-[1.5] text-muted-foreground">{t("marketplace.pluginSupportSoon")}</p>
           </div>
         </div>
       ) : mktLoading ? (
@@ -258,116 +232,83 @@ export default function MarketplacePage() {
           {Array.from({ length: 4 }).map((_, i) => (<Skeleton key={i} className="h-16 w-full rounded-md" />))}
         </div>
       ) : (
-        <>
-          {/* Metrics row */}
-          <section data-ai-region="marketplace-metrics" className="grid grid-cols-4 gap-2 px-2 pt-2">
-            <MetricCard label="Registries" value={marketplaces.length}
-              sub={marketplaces.length > 0
-                ? `${marketplaces.filter(m => m.repo?.startsWith("http")).length} remote, ${marketplaces.filter(m => !m.repo?.startsWith("http")).length} local`
-                : "—"} />
-            <MetricCard label="Plugins" value={pluginsData?.plugins.length ?? 0}
-              sub={`${pluginsData?.plugins.length ?? 0} installed`} />
-            <MetricCard label="Skills" value={pluginsData?.total_skills ?? 0}
-              sub="available commands" />
-            <MetricCard label="Broken" value={brokenCount}
-              sub={brokenCount > 0 ? "needs cleanup" : "all healthy"}
-              variant={brokenCount > 0 ? "destructive" : "default"} />
-          </section>
-
-          {/* Two-column layout */}
-          <div className="grid min-h-0 flex-1 grid-cols-[330px_minmax(0,1fr)] gap-2 overflow-hidden p-2">
-            {/* Left: Registries */}
-            <section data-ai-region="marketplace-registries" className="flex flex-col overflow-hidden rounded-lg border border-border bg-card">
-              <div className="flex items-center justify-between border-b border-border px-2.5 py-2">
-                <span className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted-foreground">Registries</span>
-                <span className="font-mono text-[12px] text-foreground">{marketplaces.length}</span>
+        <ScrollArea className="min-h-0 flex-1">
+          <div className="proxy-config-cards">
+            <div className="proxy-panel-head">
+              <span className="zed-kicker">{t("marketplace.sectionMarketplaces")}</span>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-[11px] text-muted-foreground">{t("marketplace.registries", { count: marketplaces.length })}</span>
+                {marketplaces.length > 0 && (
+                  <RefreshCcw size={16} className={`cursor-pointer text-muted-foreground hover:text-primary ${isUpdatingAny ? "pointer-events-none opacity-50" : ""}`} onClick={handleUpdateAll} />
+                )}
+                <SquarePlus size={16} className="cursor-pointer text-muted-foreground hover:text-primary" onClick={() => setAddOpen(true)} />
               </div>
-              <ScrollArea className="min-h-0 flex-1">
+            </div>
+
+            <div className="toml-card-groups">
+              <section className="toml-group">
                 {marketplaces.length === 0 ? (
                   <div className="px-3 py-6 text-center text-[13px] text-muted-foreground">{t("marketplace.empty")}</div>
                 ) : (
-                  <div className="space-y-1 p-1.5">
-                    {marketplaces.map((m) => (
-                      <MarketplaceRow
-                        key={m.name}
-                        marketplace={m}
-                        installedCount={installedPerMarketplace.get(m.name) ?? 0}
-                        isUpdating={updatingNames.has(m.name)}
-                        expanded={expandedName === m.name}
-                        onToggleExpand={() => setExpandedName(expandedName === m.name ? null : m.name)}
-                        onUpdate={() => handleUpdateOne(m.name)}
-                        onRemove={() => { setRemovePlugins(false); setRemoveTarget(m); }}
-                        pluginByKey={pluginByKey}
-                        onToggle={toggleMut.mutate}
-                        onUninstall={setUninstallTarget}
-                        onClean={setCleanTarget}
-                        onReinstall={(p) => { setReinstallTarget(p); setReinstallError(null); }}
-                      />
-                    ))}
-                  </div>
+                  marketplaces.map((m) => (
+                    <MarketplaceCard
+                      key={m.name}
+                      marketplace={m}
+                      installedCount={installedPerMarketplace.get(m.name) ?? 0}
+                      isUpdating={updatingNames.has(m.name)}
+                      expanded={expandedName === m.name}
+                      onToggleExpand={() => setExpandedName(expandedName === m.name ? null : m.name)}
+                      onUpdate={() => handleUpdateOne(m.name)}
+                      onRemove={() => { setRemovePlugins(false); setRemoveTarget(m); }}
+                      pluginByKey={pluginByKey}
+                      onToggle={toggleMut.mutate}
+                      onUninstall={setUninstallTarget}
+                      onClean={setCleanTarget}
+                      onReinstall={(p) => { setReinstallTarget(p); setReinstallError(null); }}
+                    />
+                  ))
                 )}
-              </ScrollArea>
-            </section>
+              </section>
+            </div>
 
-            {/* Right: Installed Plugins */}
-            <section data-ai-region="marketplace-installed" className="flex flex-col overflow-hidden rounded-lg border border-border bg-card">
-              <div className="flex items-center justify-between border-b border-border px-2.5 py-2">
-                <span className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted-foreground">Installed Plugins</span>
-                <div className="flex items-center gap-1">
-                  {(["all", "ok", "issues"] as const).map(f => (
-                    <Button key={f} type="button" variant="secondary" size="sm" onClick={() => setPluginFilter(f)}
-                      className={`pill-tab ${pluginFilter === f ? "pill-tab-active" : "pill-tab-idle"}`}>
-                      {f === "all" ? "All" : f === "ok" ? "OK" : "Issues"}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-              <ScrollArea className="min-h-0 flex-1">
-                <div className="grid grid-cols-2 gap-2 p-2">
-                  {filteredPlugins.map(p => <PluginCard key={p.key} plugin={p} />)}
-                </div>
-                <Separator className="mx-2" />
-                <div className="flex items-center justify-between gap-3 px-3 py-2">
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                      {t("skills.project")}
-                    </p>
-                    <p className="mt-1 text-[12px] leading-[1.4] text-muted-foreground">
-                      Load only when you want to inspect project-level .claude skills and agents.
-                    </p>
-                    {projectError && (
-                      <p className="mt-1 text-[12px] leading-[1.4] text-destructive">
-                        Failed to load project plugins.
-                      </p>
-                    )}
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={loadProjectPlugins}
-                    disabled={projectLoading}
-                    className="shrink-0"
-                  >
-                    {projectLoading ? "Loading" : projectPluginsRequested ? "Refresh" : "Load"}
-                  </Button>
-                </div>
-                {projectPluginsRequested && projectPlugins.length > 0 && (
-                  <>
-                    <div className="grid grid-cols-2 gap-2 px-2 pb-2">
-                      {projectPlugins.map(p => <PluginCard key={p.key} plugin={p} compact />)}
-                    </div>
-                  </>
-                )}
-                {projectPluginsRequested && !projectLoading && projectPlugins.length === 0 && !projectError && (
-                  <p className="px-3 pb-3 text-[12px] leading-[1.4] text-muted-foreground">
-                    No project-level Claude skills or agents found.
+            <Separator className="mt-2" />
+            <div className="flex items-center justify-between gap-3 px-3 py-2">
+              <div className="min-w-0">
+                <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                  {t("skills.project")}
+                </p>
+                <p className="mt-1 text-[12px] leading-[1.4] text-muted-foreground">
+                  {t("marketplace.projectDesc")}
+                </p>
+                {projectError && (
+                  <p className="mt-1 text-[12px] leading-[1.4] text-destructive">
+                    {t("marketplace.projectLoadError")}
                   </p>
                 )}
-              </ScrollArea>
-            </section>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={loadProjectPlugins}
+                disabled={projectLoading}
+                className="shrink-0"
+              >
+                {projectLoading ? t("marketplace.loading") : projectPluginsRequested ? t("marketplace.refreshing") : t("marketplace.load")}
+              </Button>
+            </div>
+            {projectPluginsRequested && projectPlugins.length > 0 && (
+              <div className="flex flex-col gap-1 px-2 pb-2">
+                {projectPlugins.map(p => <PluginCard key={p.key} plugin={p} compact />)}
+              </div>
+            )}
+            {projectPluginsRequested && !projectLoading && projectPlugins.length === 0 && !projectError && (
+              <p className="px-3 pb-3 text-[12px] leading-[1.4] text-muted-foreground">
+                {t("marketplace.noProjectPlugins")}
+              </p>
+            )}
           </div>
-        </>
+        </ScrollArea>
       )}
 
       {/* Add dialog */}
@@ -498,20 +439,6 @@ export default function MarketplacePage() {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function MetricCard({ label, value, sub, variant }: {
-  label: string; value: number; sub: string; variant?: "default" | "destructive";
-}) {
-  return (
-    <article data-ai-item="metric-card" className="rounded-lg border border-border bg-card p-3">
-      <span className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted-foreground">{label}</span>
-      <div className={`mt-2 font-mono text-[26px] font-semibold leading-none ${
-        variant === "destructive" ? "text-destructive" : "text-foreground"
-      }`}>{value}</div>
-      <div className="mt-1.5 text-[12px] text-muted-foreground">{sub}</div>
-    </article>
-  );
-}
-
 function HealthBadge({ health }: { health: string }) {
   const hc = HEALTH_COLORS[health] ?? HEALTH_COLORS.hook;
   return (
@@ -569,25 +496,20 @@ function PluginCard({ plugin, compact }: { plugin: PluginInfo; compact?: boolean
             <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
               <span className="zed-chip font-mono">v{plugin.version}</span>
               {plugin.skills.length + plugin.agents.length > 0 && (
-                <span className="zed-chip">{plugin.skills.length} skills · {plugin.agents.length} agents</span>
+                <span className="zed-chip">{t("skills.countChip", { skills: plugin.skills.length, agents: plugin.agents.length })}</span>
               )}
             </div>
           )}
           {compact && (
             <div className="mt-0.5 text-[11px] text-muted-foreground">
-              {plugin.skills.length} skills · {plugin.agents.length} agents
+              {t("skills.countChip", { skills: plugin.skills.length, agents: plugin.agents.length })}
             </div>
           )}
         </div>
         {!compact && <HealthBadge health={plugin.health} />}
-        <label className="relative inline-flex shrink-0 cursor-pointer" onClick={(e) => e.stopPropagation()}>
-          <input type="checkbox" className="sr-only" checked={plugin.enabled} onChange={() => toggleMut.mutate()} />
-          <span className={`block h-[18px] w-[32px] rounded-full border transition ${
-            plugin.enabled ? "bg-foreground border-foreground" : "bg-secondary border-border"
-          }`}>
-            <span className={`mt-[2px] ml-[2px] block size-3 rounded-full bg-foreground transition ${plugin.enabled ? "translate-x-[14px]" : ""}`} />
-          </span>
-        </label>
+        <div onClick={(e) => e.stopPropagation()}>
+          <Switch checked={plugin.enabled} onCheckedChange={() => toggleMut.mutate()} />
+        </div>
       </div>
       {expanded && (
         <div className="border-t border-border bg-card">
@@ -610,8 +532,8 @@ function PluginCard({ plugin, compact }: { plugin: PluginInfo; compact?: boolean
   );
 }
 
-/** Marketplace row with expandable plugin list (installed + available) */
-function MarketplaceRow({
+/** Marketplace card with expandable plugin list */
+function MarketplaceCard({
   marketplace,
   installedCount,
   isUpdating,
@@ -655,7 +577,6 @@ function MarketplaceRow({
     },
   });
 
-  // Resolve installed PluginInfo for each marketplace plugin
   const resolved = useMemo(() => {
     if (!plugins) return [];
     return plugins.map((mp): { mp: MarketplacePlugin; info: PluginInfo | null } => {
@@ -664,7 +585,6 @@ function MarketplaceRow({
     });
   }, [plugins, marketplace.name, pluginByKey]);
 
-  // Sort: installed first, then by name
   const sorted = useMemo(() =>
     [...resolved].sort((a, b) => {
       if (a.info && !b.info) return -1;
@@ -674,82 +594,63 @@ function MarketplaceRow({
   [resolved]);
 
   return (
-    <article data-ai-item="marketplace-row" className="surface-card overflow-hidden">
-      {/* Marketplace header */}
-      <div className="relative flex cursor-pointer items-center gap-3 overflow-hidden px-3 py-2.5 transition-colors hover:bg-accent/50" onClick={onToggleExpand}>
-        <span className={`grid size-4 shrink-0 place-items-center rounded-sm bg-secondary text-[10px] text-foreground transition ${expanded ? "rotate-90" : ""}`}>▶</span>
-        <div className="min-w-0 flex-1">
-          <p className="text-[13px] font-medium text-foreground">{marketplace.name}</p>
-          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-            <span className="font-mono">{marketplace.repo}</span>
-            {marketplace.last_updated && <span>· {marketplace.last_updated.split("T")[0]}</span>}
-            <span>· {installedCount}/{marketplace.plugin_count} installed</span>
-          </div>
+    <article className={`toml-card ${expanded ? "is-active" : ""}`}>
+      <div className="toml-card-head cursor-pointer" onClick={onToggleExpand}>
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="toml-card-title">{marketplace.name}</span>
+          <span className="font-mono text-[11px] text-muted-foreground truncate">{marketplace.repo}</span>
+          {marketplace.last_updated && <span className="text-[11px] text-muted-foreground shrink-0">· {marketplace.last_updated.split("T")[0]}</span>}
         </div>
-        <Button variant="outline" size="sm" className="h-6 rounded-md px-2 text-[11px]"
-          onClick={(e) => { e.stopPropagation(); onUpdate(); }} disabled={isUpdating}>
-          {isUpdating ? t("marketplace.updating") : t("marketplace.update")}
-        </Button>
-        <Button variant="outline" size="sm"
-          className="h-6 rounded-md px-2 text-[11px] text-muted-foreground hover:border-destructive hover:text-destructive hover:bg-destructive/10"
-          onClick={(e) => { e.stopPropagation(); onRemove(); }} disabled={isUpdating}>
-          {t("marketplace.remove")}
-        </Button>
-        {isUpdating && <div className="indeterminate-bar" />}
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="text-[11px] text-muted-foreground">{t("marketplace.installedCount", { installed: installedCount, total: marketplace.plugin_count })}</span>
+          <RefreshCcw size={16} className={`cursor-pointer text-muted-foreground hover:text-primary ${isUpdating ? "pointer-events-none animate-spin" : ""}`} onClick={(e) => { e.stopPropagation(); onUpdate(); }} />
+          <Trash2 size={16} className="cursor-pointer text-muted-foreground hover:text-destructive" onClick={(e) => { e.stopPropagation(); onRemove(); }} />
+        </div>
       </div>
-
-      {/* Expanded plugin list */}
       {expanded && (
-        <div className="border-t border-border bg-card">
+        <div className="toml-card-body">
           {pluginsLoading ? (
-            <div className="space-y-1 p-2">
+            <div className="space-y-1">
               {Array.from({ length: 3 }).map((_, i) => (<Skeleton key={i} className="h-8 w-full rounded-sm" />))}
             </div>
-          ) : sorted.length > 0 ? sorted.map(({ mp, info }) => {
-            if (info) {
-              // Installed plugin — full management UI
-              return (
-                <InstalledPluginRow
-                  key={mp.name}
-                  plugin={info}
-                  onToggle={() => onToggle(info.key)}
-                  onUninstall={() => onUninstall(info)}
-                  onClean={() => onClean(info)}
-                  onReinstall={() => onReinstall(info)}
-                />
-              );
-            }
-            // Not installed — install button
-            return (
-              <div key={mp.name}
-                className="flex items-center gap-2 border-b border-border px-3 py-1.5 text-[12px] transition-colors hover:bg-accent/50">
-                <span className="truncate text-foreground">{mp.name}</span>
-                <span className="min-w-0 flex-1 truncate text-muted-foreground">{mp.description}</span>
-                <Button variant="outline" size="sm"
-                  className="h-5 shrink-0 rounded-md px-1.5 text-[10px]"
-                  disabled={installMut.isPending}
-                  onClick={() => installMut.mutate(mp.name)}>
-                  {installMut.isPending ? t("marketplace.installing") : t("marketplace.install")}
-                </Button>
-              </div>
-            );
-          }) : (
-            <div className="px-3 py-3 text-[12px] text-muted-foreground">{t("marketplace.noPlugins")}</div>
+          ) : sorted.length > 0 ? (
+            <div className="grid grid-cols-3 gap-2">
+              {sorted.map(({ mp, info }) => {
+                if (info) {
+                  return (
+                    <PluginSubCard
+                      key={mp.name}
+                      plugin={info}
+                      onToggle={() => onToggle(info.key)}
+                      onUninstall={() => onUninstall(info)}
+                      onClean={() => onClean(info)}
+                      onReinstall={() => onReinstall(info)}
+                    />
+                  );
+                }
+                return (
+                  <div key={mp.name} className="flex items-center gap-2 border border-border rounded-sm px-2 py-1.5 text-[12px]">
+                    <span className="truncate text-foreground">{mp.name}</span>
+                    <span className="min-w-0 flex-1 truncate text-muted-foreground">{mp.description}</span>
+                    <Button variant="outline" size="sm" className="h-5 shrink-0 rounded-md px-1.5 text-[10px]" disabled={installMut.isPending} onClick={() => installMut.mutate(mp.name)}>
+                      {installMut.isPending ? t("marketplace.installing") : t("marketplace.install")}
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-[12px] text-muted-foreground">{t("marketplace.noPlugins")}</div>
           )}
         </div>
       )}
+      {isUpdating && <div className="indeterminate-bar" />}
     </article>
   );
 }
 
-/** Installed plugin row with health, toggle, and actions */
-function InstalledPluginRow({
-  plugin,
-  onToggle,
-  onUninstall,
-  onClean,
-  onReinstall,
-}: {
+/** Plugin sub-card inside marketplace card body */
+function PluginSubCard({ plugin, onToggle, onUninstall, onClean, onReinstall }: {
   plugin: PluginInfo;
   onToggle: () => void;
   onUninstall: () => void;
@@ -762,40 +663,24 @@ function InstalledPluginRow({
   const isBroken = plugin.health === "broken";
 
   return (
-    <div className="border-b border-border">
-      <div className="flex items-center gap-2 px-3 py-1.5 transition-colors hover:bg-accent/50">
+    <div className="border border-border overflow-hidden">
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-card transition-colors hover:bg-accent/50">
         <span className={`grid size-3 shrink-0 place-items-center rounded-sm bg-secondary text-[8px] text-foreground cursor-pointer transition ${expanded ? "rotate-90" : ""}`}
           onClick={() => setExpanded(!expanded)}>▶</span>
-        <span className={`truncate text-[12px] text-foreground ${!isEnabled ? "opacity-50" : ""}`}>{plugin.name}</span>
+        <span className={`truncate text-[12px] font-medium text-foreground ${!isEnabled ? "opacity-50" : ""}`}>{plugin.name}</span>
+        <span className="font-mono text-[10px] text-muted-foreground">v{plugin.version}</span>
         <span className="min-w-0 flex-1" />
         <HealthBadge health={plugin.health} />
-        <label className="relative inline-flex shrink-0 cursor-pointer" onClick={(e) => e.stopPropagation()}>
-          <input type="checkbox" className="sr-only" checked={isEnabled} onChange={onToggle} />
-          <span className={`block h-[16px] w-[28px] rounded-full border transition ${
-            isEnabled ? "bg-foreground border-foreground" : "bg-secondary border-border"
-          }`}>
-            <span className={`mt-[2px] ml-[2px] block size-2.5 rounded-full bg-foreground transition ${isEnabled ? "translate-x-[12px]" : ""}`} />
-          </span>
-        </label>
+        <div onClick={(e) => e.stopPropagation()}>
+          <Switch size="sm" checked={isEnabled} onCheckedChange={onToggle} />
+        </div>
         {isBroken ? (
           <>
-            <Button variant="outline" size="sm"
-              className="h-5 rounded-md px-1.5 text-[10px] text-muted-foreground hover:border-destructive hover:text-destructive hover:bg-destructive/10"
-              onClick={(e) => { e.stopPropagation(); onClean(); }}>
-              {t("skills.clean")}
-            </Button>
-            <Button variant="outline" size="sm"
-              className="h-5 rounded-md px-1.5 text-[10px] text-muted-foreground hover:border-chart-3 hover:text-chart-3 hover:bg-chart-3/10"
-              onClick={(e) => { e.stopPropagation(); onReinstall(); }}>
-              {t("skills.reinstall")}
-            </Button>
+            <Button variant="outline" size="sm" className="h-5 rounded-md px-1.5 text-[10px] text-muted-foreground hover:border-destructive hover:text-destructive hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); onClean(); }}>{t("skills.clean")}</Button>
+            <Button variant="outline" size="sm" className="h-5 rounded-md px-1.5 text-[10px] text-muted-foreground hover:border-chart-3 hover:text-chart-3 hover:bg-chart-3/10" onClick={(e) => { e.stopPropagation(); onReinstall(); }}>{t("skills.reinstall")}</Button>
           </>
         ) : (
-          <Button variant="outline" size="sm"
-            className="h-5 rounded-md px-1.5 text-[10px] text-muted-foreground hover:border-destructive hover:text-destructive hover:bg-destructive/10"
-            onClick={(e) => { e.stopPropagation(); onUninstall(); }}>
-            {t("skills.uninstall")}
-          </Button>
+          <Trash2 size={16} className="cursor-pointer text-muted-foreground hover:text-destructive" onClick={(e) => { e.stopPropagation(); onUninstall(); }} />
         )}
       </div>
       {expanded && (

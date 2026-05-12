@@ -27,9 +27,9 @@ pub struct AppState {
     pub event_emitter: Arc<dyn EventEmitter>,
     pub scan_guard: Arc<ScanGuard>,
     pub db_path: PathBuf,
-    pub watcher: Option<FileWatcher>,
+    pub watchers: Vec<FileWatcher>,
     pub config_watcher: Option<FileWatcher>,
-    pub proxy_manager: crate::app::proxy::ProxyManager,
+    pub proxy_manager: std::sync::Arc<crate::app::proxy::ProxyManager>,
 }
 
 impl AppState {
@@ -37,21 +37,26 @@ impl AppState {
         conn: Connection,
         db_path: PathBuf,
         emitter: Arc<dyn EventEmitter>,
-        proxy_manager: crate::app::proxy::ProxyManager,
+        proxy_manager: std::sync::Arc<crate::app::proxy::ProxyManager>,
     ) -> Self {
         Self {
             db: Mutex::new(conn),
             event_emitter: emitter,
             scan_guard: Arc::new(ScanGuard::new()),
             db_path,
-            watcher: None,
+            watchers: Vec::new(),
             config_watcher: None,
             proxy_manager,
         }
     }
 
     pub fn with_watcher(mut self, watcher: FileWatcher) -> Self {
-        self.watcher = Some(watcher);
+        self.watchers.push(watcher);
+        self
+    }
+
+    pub fn with_watchers(mut self, watchers: Vec<FileWatcher>) -> Self {
+        self.watchers = watchers;
         self
     }
 

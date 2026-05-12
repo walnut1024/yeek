@@ -1,7 +1,7 @@
 //! vendor_proxy lifecycle management: spawn, kill, health-check, config read/write.
 //!
 //! Monitoring:
-//! - **Watchdog**: background thread detects unexpected process exit.
+//! - **Watchdog**: background thread detects unexpected process exit and auto-restarts.
 //! - **Log capture**: stderr written to temp file, queryable from the GUI.
 //! - **Metrics**: relayed from the proxy's `/admin/status` endpoint.
 
@@ -12,8 +12,8 @@ use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::sync::{Arc, Mutex, OnceLock, Weak};
+use std::time::{Duration, Instant};
 
 use crate::app::errors::AppError;
 
@@ -138,6 +138,9 @@ pub struct ProxyErrorEvent {
     pub message: String,
 }
 
+/// Minimum time a proxy process must live to be eligible for auto-restart.
+const CRASH_THRESHOLD: Duration = Duration::from_secs(5);
+
 pub struct ProxyManager {
     config_source: ConfigSource,
     db: Option<Arc<Mutex<Connection>>>,
@@ -146,6 +149,9 @@ pub struct ProxyManager {
     running: Arc<AtomicBool>,
     pid: Mutex<Option<u32>>,
     log_path: PathBuf,
+    self_ref: OnceLock<Weak<Self>>,
+    /// Guards start/stop/restart from concurrent access.
+    lock: Mutex<()>,
 }
 
 impl ProxyManager {
@@ -159,6 +165,8 @@ impl ProxyManager {
             running: Arc::new(AtomicBool::new(false)),
             pid: Mutex::new(None),
             log_path: log_dir.join("proxy-stderr.log"),
+            self_ref: OnceLock::new(),
+            lock: Mutex::new(()),
         }
     }
 
@@ -172,7 +180,18 @@ impl ProxyManager {
             running: Arc::new(AtomicBool::new(false)),
             pid: Mutex::new(None),
             log_path: log_dir.join("proxy-stderr.log"),
+            self_ref: OnceLock::new(),
+            lock: Mutex::new(()),
         }
+    }
+
+    /// Must be called once after wrapping in Arc, before any start/stop calls.
+    pub fn initialize(arc: &Arc<Self>) {
+        arc.self_ref.set(Arc::downgrade(arc)).ok();
+    }
+
+    fn arc_self(&self) -> Option<Arc<Self>> {
+        self.self_ref.get().and_then(|w| w.upgrade())
     }
 
     pub fn status(&self) -> ProxyStatus {
@@ -199,26 +218,45 @@ impl ProxyManager {
     }
 
     pub fn start(&self) -> Result<(), AppError> {
+        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+
+        // Reset stop flag — start() is the only place that clears it.
+        self.stop_requested.store(false, Ordering::SeqCst);
+
         if self.running.load(Ordering::Relaxed) {
             return Err(AppError::Validation("proxy is already running".into()));
         }
         self.ensure_config_exists()?;
         let config = self.read_config()?;
 
-        // Detect stale proxy: if listen_addr responds to health check, adopt it
+        // Detect existing proxy on the port.
         if self.probe_health(Some(&config.server.listen_addr)) {
-            tracing::info!("Adopting existing proxy instance at {}", config.server.listen_addr);
-            let pid = self.read_pid_file();
-            *self.pid.lock().unwrap_or_else(|e| e.into_inner()) = pid;
-            self.unexpected_exit.store(false, Ordering::Relaxed);
-            self.running.store(true, Ordering::Relaxed);
-            if let Some(id) = pid {
-                self.spawn_watchdog_for_adopted(id);
+            let our_pid = self.pid.lock().unwrap_or_else(|e| e.into_inner());
+            if our_pid.is_some() {
+                // We spawned this proxy in a previous start() call — adopt it.
+                drop(our_pid);
+                tracing::info!("Adopting existing proxy instance at {}", config.server.listen_addr);
+                let pid = self.read_pid_file();
+                *self.pid.lock().unwrap_or_else(|e| e.into_inner()) = pid;
+                self.unexpected_exit.store(false, Ordering::Relaxed);
+                self.running.store(true, Ordering::Relaxed);
+                if let Some(id) = pid {
+                    self.spawn_watchdog_for_adopted(id, Instant::now());
+                }
+                return Ok(());
             }
-            return Ok(());
+            // Stale proxy from a previous app session — kill and fall through to spawn fresh.
+            drop(our_pid);
+            if let Some(stale_pid) = self.read_pid_file() {
+                tracing::warn!("Killing stale proxy from previous session (pid {})", stale_pid);
+                let _ = std::process::Command::new("kill")
+                    .arg(stale_pid.to_string())
+                    .output();
+                std::thread::sleep(Duration::from_millis(500));
+            }
         }
 
-        // Port occupied but unhealthy → kill stale process
+        // Port occupied but unhealthy → kill stale process.
         if let Some(stale_pid) = self.read_pid_file() {
             tracing::warn!("Killing stale proxy process (pid {})", stale_pid);
             let _ = std::process::Command::new("kill")
@@ -259,23 +297,40 @@ impl ProxyManager {
 
         let id = child.id();
         *self.pid.lock().unwrap_or_else(|e| e.into_inner()) = Some(id);
-        let log_path = self.log_path.clone();
         let running_flag = Arc::clone(&self.running);
         let stop_req = Arc::clone(&self.stop_requested);
+        let manager_ref = self.arc_self();
+        let started_at = Instant::now();
         self.running.store(true, Ordering::Relaxed);
+
         std::thread::Builder::new()
             .name("yeek-proxy-watchdog".into())
             .spawn(move || {
                 let status = child.wait();
+                let lived = started_at.elapsed();
                 running_flag.store(false, Ordering::Relaxed);
-                if !stop_req.load(Ordering::Relaxed) {
-                    unexpected.store(true, Ordering::Relaxed);
-                    tracing::warn!(
-                        "proxy (pid {}) exited unexpectedly: {} — check {}",
-                        id,
-                        status.map(|s| s.to_string()).unwrap_or_else(|_| "unknown".into()),
-                        log_path.display()
-                    );
+                if !stop_req.load(Ordering::SeqCst) {
+                    if lived < CRASH_THRESHOLD {
+                        tracing::error!(
+                            "proxy (pid {}) crashed after {:.1}s — not auto-restarting (crash-loop protection)",
+                            id,
+                            lived.as_secs_f64(),
+                        );
+                        unexpected.store(true, Ordering::Relaxed);
+                    } else {
+                        unexpected.store(true, Ordering::Relaxed);
+                        tracing::warn!(
+                            "proxy (pid {}) exited unexpectedly ({}) — auto-restarting",
+                            id,
+                            status.map(|s| s.to_string()).unwrap_or_else(|_| "unknown".into()),
+                        );
+                        if let Some(mgr) = manager_ref.as_ref().and_then(|a| a.arc_self()) {
+                            match mgr.start() {
+                                Ok(()) => tracing::info!("proxy auto-restarted successfully"),
+                                Err(e) => tracing::error!("proxy auto-restart failed: {}", e),
+                            }
+                        }
+                    }
                 }
             }).ok();
 
@@ -284,6 +339,8 @@ impl ProxyManager {
     }
 
     pub fn stop(&self) -> Result<(), AppError> {
+        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+
         self.stop_requested.store(true, Ordering::SeqCst);
         self.unexpected_exit.store(false, Ordering::SeqCst);
         self.running.store(false, Ordering::SeqCst);
@@ -297,7 +354,6 @@ impl ProxyManager {
             std::thread::sleep(Duration::from_millis(200));
         }
 
-        self.stop_requested.store(false, Ordering::Relaxed);
         Ok(())
     }
 
@@ -426,14 +482,14 @@ impl ProxyManager {
             .and_then(|s| s.trim().parse().ok())
     }
 
-    fn spawn_watchdog_for_adopted(&self, pid: u32) {
+    fn spawn_watchdog_for_adopted(&self, pid: u32, started_at: Instant) {
         let running_flag = Arc::clone(&self.running);
         let unexpected = Arc::clone(&self.unexpected_exit);
         let stop_req = Arc::clone(&self.stop_requested);
+        let manager_ref = self.arc_self();
         std::thread::Builder::new()
             .name("yeek-proxy-watchdog".into())
             .spawn(move || {
-                // Poll for adopted process exit
                 loop {
                     std::thread::sleep(Duration::from_secs(2));
                     if !running_flag.load(Ordering::Relaxed) {
@@ -447,9 +503,26 @@ impl ProxyManager {
                         .unwrap_or(false);
                     if !alive {
                         running_flag.store(false, Ordering::Relaxed);
-                        if !stop_req.load(Ordering::Relaxed) {
+                        if stop_req.load(Ordering::SeqCst) {
+                            return;
+                        }
+                        let lived = started_at.elapsed();
+                        if lived < CRASH_THRESHOLD {
+                            tracing::error!(
+                                "adopted proxy (pid {}) died after {:.1}s — not auto-restarting",
+                                pid,
+                                lived.as_secs_f64(),
+                            );
                             unexpected.store(true, Ordering::Relaxed);
-                            tracing::warn!("adopted proxy (pid {}) exited unexpectedly", pid);
+                            return;
+                        }
+                        unexpected.store(true, Ordering::Relaxed);
+                        tracing::warn!("adopted proxy (pid {}) exited unexpectedly — auto-restarting", pid);
+                        if let Some(mgr) = manager_ref.as_ref().and_then(|a| a.arc_self()) {
+                            match mgr.start() {
+                                Ok(()) => tracing::info!("proxy auto-restarted successfully"),
+                                Err(e) => tracing::error!("proxy auto-restart failed: {}", e),
+                            }
                         }
                         return;
                     }

@@ -3,13 +3,13 @@ import { useTranslation } from "react-i18next";
 import type { MessageRecord } from "@/lib/api";
 import { Separator } from "@/components/ui/separator";
 import {
-  FileIcon,
-  SystemIcon,
-  ErrorIcon,
-  PlanIcon,
-  CompactIcon,
-  ScheduleIcon,
-} from "@/components/icons";
+  File,
+  Info,
+  AlertTriangle,
+  TrendingUp,
+  ArrowDownUp,
+  Clock,
+} from "lucide-react";
 
 const MetaLine = React.memo(function MetaLine({
   msg,
@@ -47,7 +47,7 @@ const MetaLine = React.memo(function MetaLine({
       return (
         <div className="-mx-1 rounded-md border border-border/60 bg-[var(--editor)] px-2.5 py-2">
           <div className="flex items-center gap-1.5">
-            <PlanIcon className="text-primary" />
+            <TrendingUp size={16} className="text-primary" />
             <span className="text-[14px] font-medium text-primary">
               {label}
             </span>
@@ -68,7 +68,7 @@ const MetaLine = React.memo(function MetaLine({
       return (
         <div className="-mx-1 rounded-md border border-border/60 bg-[var(--editor)] px-2.5 py-2">
           <div className="flex items-center gap-1.5">
-            <FileIcon className="text-muted-foreground" />
+            <File size={16} className="text-muted-foreground" />
             <span className="text-[14px] text-muted-foreground">{label}</span>
             <span className="font-mono text-[14px] text-muted-foreground">
               {filename}
@@ -82,7 +82,7 @@ const MetaLine = React.memo(function MetaLine({
     return (
       <div className="-mx-1 rounded-md border border-border/60 bg-[var(--editor)] px-2.5 py-2">
         <div className="flex items-center gap-1.5">
-          <FileIcon className="text-muted-foreground" />
+          <File size={16} className="text-muted-foreground" />
           <span className="text-[14px] text-muted-foreground">
             {msg.content_preview}
           </span>
@@ -100,7 +100,7 @@ const MetaLine = React.memo(function MetaLine({
         <div className="flex items-center gap-3 py-2">
           <div className="flex-1 h-px border-t border-dashed border-border" />
           <div className="flex items-center gap-1.5">
-            <CompactIcon className="text-muted-foreground" />
+            <ArrowDownUp size={16} className="text-muted-foreground" />
             <span className="text-[14px] text-muted-foreground">{t("meta.compacted")}</span>
           </div>
           <div className="flex-1 h-px border-t border-dashed border-border" />
@@ -113,7 +113,7 @@ const MetaLine = React.memo(function MetaLine({
       return (
         <div className="-mx-1 rounded-md border border-destructive/40 bg-[var(--editor)] px-2.5 py-2">
           <div className="flex items-center gap-1.5">
-            <ErrorIcon className="text-destructive" />
+            <AlertTriangle size={16} className="text-destructive" />
             <span className="text-[14px] font-medium text-destructive">
               {t("meta.apiError")}
             </span>
@@ -132,7 +132,7 @@ const MetaLine = React.memo(function MetaLine({
       return (
         <div className="-mx-1 rounded-md border border-border/60 bg-[var(--editor)] px-2.5 py-2">
           <div className="flex items-center gap-1.5">
-            <ScheduleIcon className="text-muted-foreground" />
+            <Clock size={16} className="text-muted-foreground" />
             <span className="text-[14px] font-medium text-muted-foreground">
               {t("meta.scheduledTask")}
             </span>
@@ -145,7 +145,7 @@ const MetaLine = React.memo(function MetaLine({
     return (
       <div className="-mx-1 rounded-md border border-border/60 bg-[var(--editor)] px-2.5 py-2">
         <div className="flex items-center gap-1.5">
-          <SystemIcon className="text-muted-foreground" />
+          <Info size={16} className="text-muted-foreground" />
           <span className="text-[14px] text-muted-foreground">
             {msg.content_preview}
           </span>

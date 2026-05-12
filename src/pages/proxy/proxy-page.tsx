@@ -13,6 +13,7 @@ import {
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Trash2, SquarePlus } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 const API_FORMATS = ["anthropic_messages", "chat_completions", "responses"] as const;
@@ -122,24 +123,24 @@ export default function ProxyPage() {
       <header data-ai-region="proxy-header" className="border-b border-border px-3 py-3">
         <h2 className="text-[14px] font-medium leading-none text-foreground">{t("proxy.title")}</h2>
         <p className="mt-2 max-w-2xl text-[14px] leading-[1.5] text-muted-foreground">
-          Route local Agent requests through Provider-specific formats, credentials, and explicit model mappings.
+          {t("proxy.description")}
         </p>
       </header>
 
       <div data-ai-region="proxy-toolbar" className="flex items-center justify-between border-b border-border px-3 py-2">
         <div className="flex items-center gap-2">
           <div className="tabs">
-            <Button type="button" variant="secondary" size="sm" className={`chip ${mode === "cards" ? "active" : ""}`} onClick={() => setMode("cards")}>Cards</Button>
-            <Button type="button" variant="secondary" size="sm" className={`chip ${mode === "toml" ? "active" : ""}`} onClick={() => setMode("toml")}>TOML</Button>
+            <Button type="button" variant="secondary" size="sm" className={`chip ${mode === "cards" ? "active" : ""}`} onClick={() => setMode("cards")}>{t("proxy.cards")}</Button>
+            <Button type="button" variant="secondary" size="sm" className={`chip ${mode === "toml" ? "active" : ""}`} onClick={() => setMode("toml")}>{t("proxy.toml")}</Button>
           </div>
           <Badge variant={isRunning ? "default" : "secondary"} className="h-5 px-2 text-[11px] uppercase tracking-[0.04em]">
-            {isRunning ? "Running" : "Stopped"}
+            {isRunning ? t("proxy.running") : t("proxy.stopped")}
           </Badge>
         </div>
         <div className="flex items-center gap-1.5">
           <Button variant={isRunning ? "destructive" : "primary"} size="sm" disabled={isBusy}
             onClick={() => isRunning ? stopMut.mutate() : startMut.mutate()}>
-            {isRunning ? "Stop" : "Run"}
+            {isRunning ? t("proxy.stop") : t("proxy.run")}
           </Button>
         </div>
       </div>
@@ -184,30 +185,31 @@ function ConfigCards({
   issues: ValidationIssue[];
   isBusy: boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <>
       <div className="proxy-panel-head">
-        <span className="zed-kicker">TOML Cards</span>
+        <span className="zed-kicker">{t("proxy.tomlCards")}</span>
         <div className="flex items-center gap-2">
           <span className="font-mono text-[11px] text-muted-foreground">
-            {Object.keys(config.bridges).length + Object.keys(config.providers).length + 1} cards
+            {t("proxy.cardsCount", { count: Object.keys(config.bridges).length + Object.keys(config.providers).length + 1 })}
           </span>
           {dirty && (
             <Button variant="primary" size="sm" disabled={isBusy || issues.length > 0} onClick={saveDraft}>
-              Save
+              {t("proxy.save")}
             </Button>
           )}
-          <Button variant="outline" size="sm" disabled={isBusy} onClick={resetDraft}>Reset</Button>
+          <Button variant="outline" size="sm" disabled={isBusy} onClick={resetDraft}>{t("proxy.reset")}</Button>
         </div>
       </div>
 
       <div className="toml-card-groups">
         <section data-ai-region="proxy-server" className="toml-group">
-          <div className="toml-group-head"><span className="zed-kicker">Server</span><span className="font-mono text-[11px] text-muted-foreground">1</span></div>
+          <div className="toml-group-head"><span className="zed-kicker">{t("proxy.server")}</span><span className="font-mono text-[11px] text-muted-foreground">1</span></div>
           <article className="toml-card server-card">
-            <div className="toml-card-head"><span className="toml-card-title">Server: server</span></div>
+            <div className="toml-card-head"><span className="toml-card-title">{t("proxy.serverTitle")}</span></div>
             <div className="toml-card-body">
-              <Field label="Listen Address">
+              <Field label={t("proxy.listenAddress")}>
                 <input className="zed-input font-mono text-[12px]" value={config.server.listen_addr}
                   onChange={(e) => updateDraft((next) => { next.server.listen_addr = e.target.value; })} />
               </Field>
@@ -218,8 +220,8 @@ function ConfigCards({
         <div className="toml-collections">
           <section data-ai-region="proxy-providers" className="toml-group">
             <div className="toml-group-head">
-              <span className="zed-kicker">Providers</span>
-              <Button variant="outline" size="sm" onClick={() => updateDraft((next) => addProvider(next))}>Add Provider</Button>
+              <span className="zed-kicker">{t("proxy.providers")}</span>
+              <SquarePlus size={16} className="cursor-pointer text-muted-foreground hover:text-primary" onClick={() => updateDraft((next) => addProvider(next))} />
             </div>
             {Object.entries(config.providers).map(([name, provider]) => (
               <ProviderCard key={name} name={name} provider={provider} config={config} updateDraft={updateDraft} />
@@ -228,8 +230,8 @@ function ConfigCards({
 
           <section data-ai-region="proxy-bridges" className="toml-group">
             <div className="toml-group-head">
-              <span className="zed-kicker">Bridges</span>
-              <Button variant="outline" size="sm" onClick={() => updateDraft((next) => addBridge(next))}>Add Bridge</Button>
+              <span className="zed-kicker">{t("proxy.bridges")}</span>
+              <SquarePlus size={16} className="cursor-pointer text-muted-foreground hover:text-primary" onClick={() => updateDraft((next) => addBridge(next))} />
             </div>
             {Object.entries(config.bridges).map(([name, bridge]) => (
               <BridgeCard key={name} name={name} bridge={bridge} config={config} updateDraft={updateDraft} />
@@ -252,6 +254,7 @@ function ProviderCard({
   config: ProxyConfig;
   updateDraft: (mutator: (next: ProxyConfig) => void) => void;
 }) {
+  const { t } = useTranslation();
   const inUse = Object.values(config.bridges).some((bridge) => bridge.provider.name === name);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const deleteProvider = () => updateDraft((next) => { delete next.providers[name]; });
@@ -259,34 +262,27 @@ function ProviderCard({
   return (
     <article className={`toml-card provider-card ${inUse ? "is-active" : "is-muted"}`}>
       <div className="toml-card-head">
-        <span className="toml-card-title">Provider: {name}</span>
+        <span className="toml-card-title">{t("proxy.providerTitle", { name })}</span>
         {confirmDelete ? (
           <ConfirmDelete onCancel={() => setConfirmDelete(false)} onConfirm={deleteProvider} />
         ) : (
-          <IconButton
-            label="Delete provider"
-            disabled={inUse}
-            danger
-            onClick={() => setConfirmDelete(true)}
-          >
-            ×
-          </IconButton>
+          <Trash2 size={16} className={`cursor-pointer text-muted-foreground hover:text-destructive ${inUse ? "pointer-events-none opacity-50" : ""}`} onClick={() => !inUse && setConfirmDelete(true)} />
         )}
       </div>
       <div className="toml-card-body">
-        <Field label="Provider Name">
+        <Field label={t("proxy.providerName")}>
           <input className="zed-input font-mono text-[12px]" value={name}
             onChange={(e) => updateDraft((next) => renameProvider(next, name, e.target.value))} />
         </Field>
-        <Field label="Base URL">
+        <Field label={t("proxy.baseUrl")}>
           <input className="zed-input font-mono text-[12px]" value={provider.base_url}
             onChange={(e) => updateDraft((next) => { next.providers[name].base_url = e.target.value; })} />
         </Field>
-        <Field label="API Format">
+        <Field label={t("proxy.apiFormat")}>
           <FormatSelect value={provider.api_format}
             onChange={(value) => updateDraft((next) => { next.providers[name].api_format = value; })} />
         </Field>
-        <Field label="API Key Env">
+        <Field label={t("proxy.apiKeyEnv")}>
           <input className="zed-input font-mono text-[12px]" value={provider.api_key_env ?? ""}
             onChange={(e) => updateDraft((next) => { next.providers[name].api_key_env = e.target.value || null; })} />
         </Field>
@@ -306,6 +302,7 @@ function BridgeCard({
   config: ProxyConfig;
   updateDraft: (mutator: (next: ProxyConfig) => void) => void;
 }) {
+  const { t } = useTranslation();
   const provider = config.providers[bridge.provider.name];
   const [confirmDelete, setConfirmDelete] = useState(false);
   const deleteBridge = () => updateDraft((next) => { delete next.bridges[name]; });
@@ -313,46 +310,36 @@ function BridgeCard({
   return (
     <article className={`toml-card bridge-card ${provider ? "is-active" : "is-muted"}`}>
       <div className="toml-card-head">
-        <span className="toml-card-title">Bridge: {name}</span>
+        <span className="toml-card-title">{t("proxy.bridgeTitle", { name })}</span>
         {confirmDelete ? (
           <ConfirmDelete onCancel={() => setConfirmDelete(false)} onConfirm={deleteBridge} />
         ) : (
-          <IconButton
-            label="Delete bridge"
-            danger
-            onClick={() => setConfirmDelete(true)}
-          >
-            ×
-          </IconButton>
+          <Trash2 size={16} className="cursor-pointer text-muted-foreground hover:text-destructive" onClick={() => setConfirmDelete(true)} />
         )}
       </div>
       <div className="toml-card-body">
-        <Field label="Bridge Name">
+        <Field label={t("proxy.bridgeName")}>
           <input className="zed-input font-mono text-[12px]" value={name}
             onChange={(e) => updateDraft((next) => renameBridge(next, name, e.target.value))} />
         </Field>
-      </div>
-      <div className="bridge-card-grid">
-        <div className="bridge-fields">
-          <Field label="Agent Base URL">
-            <input className="zed-input font-mono text-[12px]" value={bridge.agent.base_url}
-              onChange={(e) => updateDraft((next) => { next.bridges[name].agent.base_url = normalizeBaseUrl(e.target.value); })} />
-          </Field>
-          <Field label="Agent API Format">
-            <FormatSelect value={bridge.agent.api_format}
-              onChange={(value) => updateDraft((next) => { next.bridges[name].agent.api_format = value; })} />
-          </Field>
-          <Field label="Provider">
-            <select className="zed-input font-mono text-[12px]" value={bridge.provider.name}
-              onChange={(e) => updateDraft((next) => { next.bridges[name].provider.name = e.target.value; })}>
-              {Object.keys(config.providers).map((providerName) => <option key={providerName} value={providerName}>{providerName}</option>)}
-            </select>
-          </Field>
-        </div>
+        <Field label={t("proxy.agentBaseUrl")}>
+          <input className="zed-input font-mono text-[12px]" value={bridge.agent.base_url}
+            onChange={(e) => updateDraft((next) => { next.bridges[name].agent.base_url = normalizeBaseUrl(e.target.value); })} />
+        </Field>
+        <Field label={t("proxy.agentApiFormat")}>
+          <FormatSelect value={bridge.agent.api_format}
+            onChange={(value) => updateDraft((next) => { next.bridges[name].agent.api_format = value; })} />
+        </Field>
+        <Field label={t("proxy.provider")}>
+          <select className="zed-input font-mono text-[12px]" value={bridge.provider.name}
+            onChange={(e) => updateDraft((next) => { next.bridges[name].provider.name = e.target.value; })}>
+            {Object.keys(config.providers).map((providerName) => <option key={providerName} value={providerName}>{providerName}</option>)}
+          </select>
+        </Field>
         <div className="bridge-mapping">
           <div className="bridge-mapping-head">
-            <span className="zed-kicker">Model Mapping</span>
-            <IconButton label="Add mapping" onClick={() => updateDraft((next) => addModelMapping(next, name))}>+</IconButton>
+            <span className="zed-kicker">{t("proxy.modelMapping")}</span>
+            <SquarePlus size={16} className="cursor-pointer text-muted-foreground hover:text-primary" onClick={() => updateDraft((next) => addModelMapping(next, name))} />
           </div>
           <div className="toml-models">
             {Object.entries(bridge.models).map(([agentModel, providerModel]) => (
@@ -362,13 +349,7 @@ function BridgeCard({
                 <span className="arrow">→</span>
                 <input className="zed-input font-mono text-[12px]" value={providerModel}
                   onChange={(e) => updateDraft((next) => { next.bridges[name].models[agentModel] = e.target.value; })} />
-                <IconButton
-                  label="Delete mapping"
-                  danger
-                  onClick={() => updateDraft((next) => { delete next.bridges[name].models[agentModel]; })}
-                >
-                  ×
-                </IconButton>
+                <Trash2 size={16} className="cursor-pointer text-muted-foreground hover:text-destructive" onClick={() => updateDraft((next) => { delete next.bridges[name].models[agentModel]; })} />
               </div>
             ))}
           </div>
@@ -395,14 +376,15 @@ function TomlPreview({
   resetDraft: () => void;
   isBusy: boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <section data-ai-region="proxy-toml-editor" className="proxy-editor-shell">
       <div className="proxy-panel-head">
         <span className="zed-kicker">proxy.toml</span>
         <div className="flex items-center gap-2">
-          <span className="font-mono text-[11px] text-muted-foreground">{lineCount} lines</span>
-          {dirty && <Button variant="primary" size="sm" disabled={isBusy || issues.length > 0} onClick={saveDraft}>Save</Button>}
-          <Button variant="outline" size="sm" disabled={isBusy} onClick={resetDraft}>Reset</Button>
+          <span className="font-mono text-[11px] text-muted-foreground">{t("proxy.lines", { count: lineCount })}</span>
+          {dirty && <Button variant="primary" size="sm" disabled={isBusy || issues.length > 0} onClick={saveDraft}>{t("proxy.save")}</Button>}
+          <Button variant="outline" size="sm" disabled={isBusy} onClick={resetDraft}>{t("proxy.reset")}</Button>
         </div>
       </div>
       <div className="proxy-editor-wrap">
@@ -417,35 +399,6 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   return <label className="toml-field"><span>{label}</span>{children}</label>;
 }
 
-function IconButton({
-  label,
-  children,
-  danger,
-  disabled,
-  onClick,
-}: {
-  label: string;
-  children: ReactNode;
-  danger?: boolean;
-  disabled?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon-xs"
-      aria-label={label}
-      title={label}
-      disabled={disabled}
-      className={`proxy-icon-button ${danger ? "danger" : ""}`}
-      onClick={onClick}
-    >
-      {children}
-    </Button>
-  );
-}
-
 function ConfirmDelete({
   onCancel,
   onConfirm,
@@ -453,11 +406,12 @@ function ConfirmDelete({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="proxy-confirm-delete" role="group" aria-label="Confirm delete">
-      <span>Delete?</span>
-      <Button type="button" variant="ghost" size="sm" className="proxy-confirm-button" onClick={onCancel}>Cancel</Button>
-      <Button type="button" variant="ghost" size="sm" className="proxy-confirm-button danger" onClick={onConfirm}>Delete</Button>
+      <span>{t("proxy.confirmDelete")}</span>
+      <Button type="button" variant="ghost" size="sm" className="proxy-confirm-button" onClick={onCancel}>{t("detail.deleteCancel")}</Button>
+      <Button type="button" variant="ghost" size="sm" className="proxy-confirm-button danger" onClick={onConfirm}>{t("proxy.delete")}</Button>
     </div>
   );
 }

@@ -76,16 +76,39 @@ pub fn run() {
                 .join(".claude")
                 .join("projects");
 
+            let codex_sessions_dir = dirs::home_dir()
+                .expect("Cannot find home directory")
+                .join(".codex")
+                .join("sessions");
+
             let scan_guard = Arc::new(sync::background::ScanGuard::new());
 
-            // Start file watcher for auto incremental updates
-            let watcher = sync::watcher::FileWatcher::start(
-                claude_projects_dir,
-                db_path.clone(),
-                emitter.clone(),
-                scan_guard.clone(),
-            )
-            .expect("Failed to start file watcher");
+            // Start file watchers for auto incremental updates
+            let mut watchers = Vec::new();
+
+            if claude_projects_dir.exists() {
+                watchers.push(
+                    sync::watcher::FileWatcher::start(
+                        claude_projects_dir,
+                        db_path.clone(),
+                        emitter.clone(),
+                        scan_guard.clone(),
+                    )
+                    .expect("Failed to start Claude file watcher"),
+                );
+            }
+
+            if codex_sessions_dir.exists() {
+                watchers.push(
+                    sync::watcher::FileWatcher::start(
+                        codex_sessions_dir,
+                        db_path.clone(),
+                        emitter.clone(),
+                        scan_guard.clone(),
+                    )
+                    .expect("Failed to start Codex file watcher"),
+                );
+            }
 
             // Start plugin config watcher for install/uninstall status updates
             let config_watcher =
@@ -96,7 +119,8 @@ pub fn run() {
             let proxy_db = std::sync::Arc::new(std::sync::Mutex::new(
                 rusqlite::Connection::open(&db_path).expect("failed to open proxy db"),
             ));
-            let proxy_manager = app::proxy::ProxyManager::with_db(proxy_db);
+            let proxy_manager = std::sync::Arc::new(app::proxy::ProxyManager::with_db(proxy_db));
+            app::proxy::ProxyManager::initialize(&proxy_manager);
 
             app.manage(
                 AppState::new(
@@ -105,7 +129,7 @@ pub fn run() {
                     emitter.clone(),
                     proxy_manager,
                 )
-                .with_watcher(watcher)
+                .with_watchers(watchers)
                 .with_config_watcher(config_watcher),
             );
 

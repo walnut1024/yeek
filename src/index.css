@@ -359,9 +359,17 @@
 
   .toml-collections {
     display: grid;
-    grid-template-columns: minmax(280px, 0.72fr) minmax(0, 1.28fr);
+    grid-template-columns: minmax(0, 1fr);
     gap: 8px;
     min-height: 0;
+  }
+
+  .toml-collections .toml-group {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .toml-group-head {
+    grid-column: 1 / -1;
   }
 
   .toml-group {
@@ -437,7 +445,9 @@
 
   .toml-field {
     display: grid;
-    gap: 4px;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: 8px;
     min-width: 0;
   }
 
@@ -451,7 +461,7 @@
 
   .bridge-card-grid {
     display: grid;
-    grid-template-columns: minmax(220px, 0.48fr) minmax(260px, 0.52fr);
+    grid-template-columns: minmax(0, 1fr);
     min-height: 0;
   }
 
@@ -489,9 +499,21 @@
     gap: 8px;
     min-height: 46px;
     border-bottom: 1px solid var(--border);
-    padding: 7px 10px;
-    font-family: var(--font-data);
-    font-size: 11px;
+    padding: 0 8px;
+  }
+
+  .toml-model-row:last-child {
+    border-bottom: 0;
+  }
+
+  .toml-model-row .arrow {
+    color: var(--muted-foreground);
+    text-align: center;
+  }
+
+  .toml-model-row > svg {
+    display: block;
+    margin: auto;
   }
 
   .toml-model-row:last-child {
@@ -741,11 +763,6 @@
 
     .proxy-inspector {
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    }
-
-    .toml-collections,
-    .bridge-card-grid {
-      grid-template-columns: minmax(0, 1fr);
     }
 
     .bridge-fields {
