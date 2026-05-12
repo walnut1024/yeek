@@ -1,8 +1,10 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import type { SessionRecord } from "@/lib/api";
 import { formatRelativeTime } from "@/lib/formatters";
+import { Check } from "iconsax-reactjs";
 import { TITLE_TRUNCATE_LEN } from "@/lib/constants";
 
 const SessionRow = React.memo(function SessionRow({
@@ -48,8 +50,10 @@ const SessionRow = React.memo(function SessionRow({
       }`}
     >
       {manageMode && (
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon-xs"
           aria-label={checked ? t("sessionRow.deselectAria") : t("sessionRow.selectAria")}
           onClick={(e) => { e.stopPropagation(); onCheck?.(); }}
           className={`mt-1 flex size-5 shrink-0 items-center justify-center rounded-sm border-2 transition ${
@@ -59,11 +63,9 @@ const SessionRow = React.memo(function SessionRow({
           }`}
         >
           {checked && (
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
+            <Check size={10} color="white" />
           )}
-        </button>
+        </Button>
       )}
       {/* <div className="mt-0.5 size-7 shrink-0 rounded-sm border border-border bg-secondary" /> */}
 

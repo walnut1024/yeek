@@ -24,7 +24,7 @@ import MarketplacePage from "@/pages/marketplace/marketplace-page";
 import ProxyPage from "@/pages/proxy/proxy-page";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { ChatIcon, DashboardIcon, StoreIcon, SettingsIcon, NetworkIcon } from "@/components/icons";
+import { Messages1, Category, ShoppingBag, Setting2, Code1, Check, Minus } from "iconsax-reactjs";
 import { SESSION_PAGE_SIZE } from "@/lib/constants";
 import { useGroupedSessions } from "./use-grouped-sessions";
 import { useSessionSelection } from "./use-session-selection";
@@ -67,10 +67,10 @@ export function AppShell() {
         <nav data-ai-region="app-sidebar" className="flex w-[48px] shrink-0 flex-col items-center border-r border-border bg-card py-3">
           <div className="flex-1 space-y-1">
             {([
-              { key: "dashboard" as const, label: t("nav.dashboard"), icon: DashboardIcon },
-              { key: "sessions" as const, label: t("nav.sessions"), icon: ChatIcon, badge: status ? String(status.total_sessions) : undefined },
-              { key: "marketplace" as const, label: t("nav.marketplace"), icon: StoreIcon },
-              { key: "proxy" as const, label: t("nav.proxy"), icon: NetworkIcon },
+              { key: "dashboard" as const, label: t("nav.dashboard"), icon: Category },
+              { key: "sessions" as const, label: t("nav.sessions"), icon: Messages1, badge: status ? String(status.total_sessions) : undefined },
+              { key: "marketplace" as const, label: t("nav.marketplace"), icon: ShoppingBag },
+              { key: "proxy" as const, label: t("nav.proxy"), icon: Code1 },
             ]).map(({ key, label, icon: Icon, badge }) => (
               <Tooltip key={key}>
                 <TooltipTrigger
@@ -81,7 +81,7 @@ export function AppShell() {
                       : "border border-transparent text-muted-foreground hover:bg-element-hover hover:text-foreground"
                   }`}
                 >
-                  <Icon />
+                  <Icon variant="Linear" size={14} />
                   {badge && (
                     <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 font-mono text-[9px] font-medium text-primary-foreground">
                       {badge}
@@ -101,7 +101,7 @@ export function AppShell() {
                   : "border border-transparent text-muted-foreground hover:bg-element-hover hover:text-foreground"
               }`}
             >
-              <SettingsIcon />
+              <Setting2 variant="Linear" size={14} />
             </TooltipTrigger>
             <TooltipContent side="right" className="text-[12px]">{t("nav.settings")}</TooltipContent>
           </Tooltip>
@@ -336,8 +336,10 @@ function SessionsPage({
                   className="flex cursor-pointer items-center gap-2 rounded-md border border-border bg-secondary px-2.5 py-2 hover:bg-accent transition-colors"
                   onClick={toggleAll}
                 >
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="icon-xs"
                     className={`flex size-5 shrink-0 items-center justify-center rounded-sm border-2 transition ${
                       allSelected
                         ? "border-primary bg-primary"
@@ -347,16 +349,12 @@ function SessionsPage({
                     }`}
                   >
                     {allSelected && (
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
+                      <Check size={10} color="white" />
                     )}
                     {someSelected && !allSelected && (
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-primary" strokeWidth="3.5" strokeLinecap="round">
-                        <line x1="5" y1="12" x2="19" y2="12" />
-                      </svg>
+                      <Minus size={10} className="text-primary" />
                     )}
-                  </button>
+                  </Button>
                   <span className="text-[13px] text-muted-foreground">
                     {t("sessions.selectAllPrefix")}<span className="font-medium text-foreground">{sessions.length}</span>{t("sessions.selectAllSuffix")}
                   </span>
@@ -372,8 +370,10 @@ function SessionsPage({
                         const allSel = selCount === g.sessions.length;
                         const someSel = selCount > 0 && !allSel;
                         return (
-                          <button
+                          <Button
                             type="button"
+                            variant="ghost"
+                            size="icon-xs"
                             onClick={() => toggleProject(g.sessions)}
                             className={`flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm border-2 transition ${
                               allSel
@@ -384,20 +384,18 @@ function SessionsPage({
                             }`}
                           >
                             {allSel && (
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="20 6 9 17 4 12" />
-                              </svg>
+                              <Check size={10} color="white" />
                             )}
                             {someSel && !allSel && (
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-primary" strokeWidth="3.5" strokeLinecap="round">
-                                <line x1="5" y1="12" x2="19" y2="12" />
-                              </svg>
+                              <Minus size={10} className="text-primary" />
                             )}
-                          </button>
+                          </Button>
                         );
                       })()}
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="sm"
                         onClick={() => toggleCollapse(g.key)}
                         onContextMenu={(e) => {
                           if (isSearching) return;
@@ -415,7 +413,7 @@ function SessionsPage({
                         <span className="shrink-0 rounded-sm border border-border bg-[var(--editor)] px-1.5 py-0.5 font-mono text-[12px] text-muted-foreground">
                           {g.sessions.length}
                         </span>
-                      </button>
+                      </Button>
                     </div>
 
                     {!collapsed && (
@@ -559,13 +557,15 @@ function SessionsPage({
           className="fixed z-50 min-w-[120px] rounded-md border border-border bg-card p-1 shadow-lg"
           style={{ left: ctxMenu.x, top: ctxMenu.y }}
         >
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[13px] text-destructive hover:bg-accent"
             onClick={() => ctxDelete.mutate()}
           >
             {ctxMenu.projectPath ? t("contextMenu.deleteProject") : t("contextMenu.delete")}
-          </button>
+          </Button>
         </div>
       )}
 

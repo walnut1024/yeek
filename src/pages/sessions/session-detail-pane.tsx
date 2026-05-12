@@ -6,7 +6,7 @@ import { useLocalStorage } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { CopyIcon, CheckIcon } from "@/components/icons";
+import { Copy, TickCircle } from "iconsax-reactjs";
 import { formatTime, formatRelativeTime } from "@/lib/formatters";
 import TranscriptView from "./transcript-view";
 import SourcesTab from "./sources-tab";
@@ -103,18 +103,24 @@ export default function SessionDetailPane({
         <section data-ai-region="sessions-transcript" className="surface-card overflow-hidden p-1">
           {/* Graph/Feed toggle */}
           <div className="flex items-center gap-1 border-b border-border px-2 py-1">
-            <button
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
               className={`pill-tab ${viewMode === "feed" ? "pill-tab-active" : "pill-tab-idle"}`}
               onClick={() => setViewMode("feed")}
             >
               {t("graph.viewFeed")}
-            </button>
-            <button
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
               className={`pill-tab ${viewMode === "graph" ? "pill-tab-active" : "pill-tab-idle"}`}
               onClick={() => setViewMode("graph")}
             >
               {t("graph.viewGraph")}
-            </button>
+            </Button>
           </div>
           {/* Conditional content */}
           <div className={viewMode === "graph" ? "h-[70vh]" : ""}>
@@ -147,9 +153,9 @@ function CopyableText({ label, value }: { label: string; value: string }) {
     >
       {label}
       {copied ? (
-        <CheckIcon className="text-primary" />
+        <TickCircle variant="Linear" size={12} className="text-primary" />
       ) : (
-        <CopyIcon className="shrink-0" />
+        <Copy variant="Linear" size={12} className="shrink-0" />
       )}
     </span>
   );

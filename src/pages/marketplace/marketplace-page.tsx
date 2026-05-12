@@ -223,10 +223,10 @@ export default function MarketplacePage() {
       <div data-ai-region="marketplace-toolbar" className="flex items-center justify-between border-b border-border px-3 py-1.5">
         <div className="flex items-center gap-1">
           {AGENTS.map((a) => (
-            <button key={a.key} type="button" onClick={() => setAgent(a.key)}
+            <Button key={a.key} type="button" variant="secondary" size="sm" onClick={() => setAgent(a.key)}
               className={`pill-tab ${agent === a.key ? "pill-tab-active" : "pill-tab-idle"}`}>
               {a.label}
-            </button>
+            </Button>
           ))}
         </div>
         {isClaudeCode && (
@@ -315,10 +315,10 @@ export default function MarketplacePage() {
                 <span className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted-foreground">Installed Plugins</span>
                 <div className="flex items-center gap-1">
                   {(["all", "ok", "issues"] as const).map(f => (
-                    <button key={f} type="button" onClick={() => setPluginFilter(f)}
+                    <Button key={f} type="button" variant="secondary" size="sm" onClick={() => setPluginFilter(f)}
                       className={`pill-tab ${pluginFilter === f ? "pill-tab-active" : "pill-tab-idle"}`}>
                       {f === "all" ? "All" : f === "ok" ? "OK" : "Issues"}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               </div>

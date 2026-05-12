@@ -1,5 +1,6 @@
 import { Component, type ReactNode } from "react";
 import i18n from "@/i18n";
+import { Button } from "@/components/ui/button";
 
 interface Props {
   children: ReactNode;
@@ -37,12 +38,14 @@ export class ErrorBoundary extends Component<Props, State> {
             <p className="text-xs text-muted-foreground">
               {this.state.error?.message || i18n.t("error.fallback")}
             </p>
-            <button
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
               onClick={() => window.location.reload()}
-              className="rounded-md bg-primary px-4 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
             >
               {i18n.t("error.reload")}
-            </button>
+            </Button>
           </div>
         </div>
       );

@@ -129,8 +129,8 @@ export default function ProxyPage() {
       <div data-ai-region="proxy-toolbar" className="flex items-center justify-between border-b border-border px-3 py-2">
         <div className="flex items-center gap-2">
           <div className="tabs">
-            <button className={`chip ${mode === "cards" ? "active" : ""}`} onClick={() => setMode("cards")}>Cards</button>
-            <button className={`chip ${mode === "toml" ? "active" : ""}`} onClick={() => setMode("toml")}>TOML</button>
+            <Button type="button" variant="secondary" size="sm" className={`chip ${mode === "cards" ? "active" : ""}`} onClick={() => setMode("cards")}>Cards</Button>
+            <Button type="button" variant="secondary" size="sm" className={`chip ${mode === "toml" ? "active" : ""}`} onClick={() => setMode("toml")}>TOML</Button>
           </div>
           <Badge variant={isRunning ? "default" : "secondary"} className="h-5 px-2 text-[11px] uppercase tracking-[0.04em]">
             {isRunning ? "Running" : "Stopped"}
@@ -431,8 +431,10 @@ function IconButton({
   onClick: () => void;
 }) {
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="icon-xs"
       aria-label={label}
       title={label}
       disabled={disabled}
@@ -440,7 +442,7 @@ function IconButton({
       onClick={onClick}
     >
       {children}
-    </button>
+    </Button>
   );
 }
 
@@ -454,8 +456,8 @@ function ConfirmDelete({
   return (
     <div className="proxy-confirm-delete" role="group" aria-label="Confirm delete">
       <span>Delete?</span>
-      <button type="button" className="proxy-confirm-button" onClick={onCancel}>Cancel</button>
-      <button type="button" className="proxy-confirm-button danger" onClick={onConfirm}>Delete</button>
+      <Button type="button" variant="ghost" size="sm" className="proxy-confirm-button" onClick={onCancel}>Cancel</Button>
+      <Button type="button" variant="ghost" size="sm" className="proxy-confirm-button danger" onClick={onConfirm}>Delete</Button>
     </div>
   );
 }

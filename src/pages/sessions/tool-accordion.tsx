@@ -3,7 +3,8 @@ import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
 import type { MessageRecord } from "@/lib/api";
 import SubagentExpansion from "./subagent-expansion";
-import { ToolIcon, ChevronIcon } from "@/components/icons";
+import { Setting4, ArrowRight2 } from "iconsax-reactjs";
+import { Button } from "@/components/ui/button";
 
 interface ToolPair {
   call: MessageRecord;
@@ -72,17 +73,19 @@ const ToolAccordion = React.memo(function ToolAccordion({
 
   return (
     <article data-ai-item="tool-message" className="-mx-1 rounded-md border border-border/60 bg-[var(--editor)] px-1.5 py-1">
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="sm"
         onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-accent/40"
+        className="flex w-full items-center gap-1.5 px-1.5 py-1 text-left transition-colors hover:bg-accent/40"
       >
-        <ChevronIcon expanded={expanded} className="text-muted-foreground/50" />
-        <ToolIcon className="text-muted-foreground" />
+        <ArrowRight2 variant="Linear" size={12} className={`text-muted-foreground/50 transition-transform duration-200 ${expanded ? "rotate-90" : ""}`} />
+        <Setting4 variant="Linear" size={12} className="text-muted-foreground" />
         <span className="text-[12px] font-medium text-muted-foreground">
           {t("tools.callCount", { count: flatPairs.length })} · {summary}
         </span>
-      </button>
+      </Button>
 
       {expanded && (
         <div className="relative ml-[7px] mt-0.5 border-l border-border/40 pl-3.5">
@@ -153,12 +156,14 @@ function ToolItem({
 
   return (
     <div className="group/item relative mt-0.5 first:mt-0">
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="sm"
         onClick={() => setExpandedTool(isOpen ? null : index)}
         className="flex w-full items-center gap-1.5 rounded-md border border-transparent bg-secondary/10 px-1.5 py-0.5 text-left transition-colors hover:border-border/50 hover:bg-accent/30"
       >
-        <ChevronIcon expanded={isOpen} className="text-muted-foreground/30" />
+        <ArrowRight2 variant="Linear" size={12} className={`text-muted-foreground/30 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} />
         <span className="font-mono text-[13px] font-medium text-primary/90">
           {toolName}
         </span>
@@ -170,7 +175,7 @@ function ToolItem({
         <span className="truncate font-mono text-[13px] text-muted-foreground/80">
           {target}
         </span>
-      </button>
+      </Button>
 
       {isOpen && (
         <div className="relative ml-[7px] mt-1 border-l border-border/40 pl-3.5">
