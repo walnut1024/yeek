@@ -86,29 +86,43 @@ pub fn browse_sessions(
         _ => "updated_at DESC",
     };
 
-    let mut where_clauses = vec![
+    let mut where_parts = vec![
         "parent_session_id IS NULL".to_string(),
         "visibility = 'visible'".to_string(),
     ];
-    if let Some(ref agent) = params.agent {
-        where_clauses.push(format!("agent = '{}'", agent.replace('\'', "''")));
-    }
-    let where_sql = where_clauses.join(" AND ");
+    let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
-    let total: i64 = conn.query_row(
-        &format!("SELECT COUNT(*) FROM sessions WHERE {}", where_sql),
-        [],
-        |row| row.get(0),
-    )?;
+    if let Some(ref agent) = params.agent {
+        where_parts.push("agent = ?".to_string());
+        param_values.push(Box::new(agent.clone()));
+    }
+    let where_sql = where_parts.join(" AND ");
+
+    let count_sql = format!("SELECT COUNT(*) FROM sessions WHERE {}", where_sql);
+    let total: i64 = if param_values.is_empty() {
+        conn.query_row(&count_sql, [], |row| row.get(0))?
+    } else {
+        conn.query_row(
+            &count_sql,
+            rusqlite::params_from_iter(param_values.iter().map(|p| p.as_ref())),
+            |row| row.get(0),
+        )?
+    };
 
     let query_sql = format!(
         "SELECT * FROM sessions WHERE {} ORDER BY {} LIMIT ? OFFSET ?",
         where_sql, order_by
     );
+    let mut all_params = param_values;
+    all_params.push(Box::new(params.limit));
+    all_params.push(Box::new(params.offset));
 
     let mut stmt = conn.prepare(&query_sql)?;
     let sessions = stmt
-        .query_map(params![params.limit, params.offset], row_to_session)?
+        .query_map(
+            rusqlite::params_from_iter(all_params.iter().map(|p| p.as_ref())),
+            row_to_session,
+        )?
         .filter_map(|r| r.ok())
         .collect();
 

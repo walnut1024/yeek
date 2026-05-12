@@ -133,11 +133,12 @@ pub(crate) fn do_browse_sessions(
     request: BrowseRequest,
 ) -> Result<SessionListResponse, AppError> {
     let db = state.db()?;
+    let agent = request.agent.filter(|a| ["claude_code", "codex"].contains(&a.as_str()));
     let params = BrowseParams {
         sort: request.sort.unwrap_or_else(|| "updated_at".to_string()),
         limit: request.limit.unwrap_or(50),
         offset: request.offset.unwrap_or(0),
-        agent: request.agent,
+        agent,
     };
 
     let result = sessions::browse_sessions(&db, &params)?;
