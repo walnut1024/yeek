@@ -26,6 +26,7 @@ const SessionRow = React.memo(function SessionRow({
   const { t } = useTranslation();
   return (
     <div
+      data-ai-item="session-row"
       role="button"
       tabIndex={0}
       onClick={onSelect}

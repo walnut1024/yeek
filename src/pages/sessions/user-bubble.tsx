@@ -10,7 +10,7 @@ const UserBubble = React.memo(function UserBubble({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="-mx-1 rounded-md border border-border/60 bg-[var(--editor)] px-2.5 py-2 transition-colors hover:bg-accent/40">
+    <article data-ai-item="user-message" className="-mx-1 rounded-md border border-border/60 bg-[var(--editor)] px-2.5 py-2 transition-colors hover:bg-accent/40">
       <div className="mb-0.5 flex items-center gap-1.5">
         <UserIcon className="text-muted-foreground" />
         <span className="text-[13px] font-medium text-foreground">
@@ -31,7 +31,7 @@ const UserBubble = React.memo(function UserBubble({
           {msg.content_preview}
         </p>
       </div>
-    </div>
+    </article>
   );
 });
 

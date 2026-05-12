@@ -75,7 +75,7 @@
     --chart-3: #b8bcc8;
     --chart-4: #d16d75;
     --chart-5: #62666d;
-    --radius: 8px;
+    --radius: 0px;
     --sidebar: #0f1011;
     --sidebar-foreground: #f7f8f8;
     --sidebar-primary: #5e6ad2;
@@ -215,7 +215,7 @@
     align-items: center;
     gap: 2px;
     border: 1px solid var(--border);
-    border-radius: 999px;
+    border-radius: 0;
     background: var(--card);
     padding: 2px;
   }
@@ -226,7 +226,7 @@
     justify-content: center;
     height: 24px;
     border: 0;
-    border-radius: 999px;
+    border-radius: 0;
     background: transparent;
     color: var(--muted-foreground);
     padding: 0 10px;
@@ -315,7 +315,7 @@
   }
   .custom-scrollbar::-webkit-scrollbar-thumb {
     background: var(--scroll-thumb);
-    border-radius: 10px;
+    border-radius: 0;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: rgba(247, 248, 248, 0.32);
@@ -377,7 +377,7 @@
     justify-content: space-between;
     gap: 10px;
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: 0;
     background: var(--card);
     padding: 10px 12px;
   }
@@ -387,7 +387,7 @@
     grid-template-rows: auto minmax(0, 1fr);
     overflow: hidden;
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: 0;
     background: var(--editor);
   }
 
@@ -509,7 +509,7 @@
     width: 26px;
     height: 26px;
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: 0;
     background: transparent;
     color: var(--muted-foreground);
     font-size: 16px;
@@ -550,7 +550,7 @@
   .proxy-confirm-button {
     height: 24px;
     border: 1px solid var(--border);
-    border-radius: 7px;
+    border-radius: 0;
     background: transparent;
     padding: 0 8px;
     color: var(--muted-foreground);
@@ -578,7 +578,7 @@
     min-height: 0;
     overflow: hidden;
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: 0;
     background: var(--card);
   }
 
@@ -689,7 +689,7 @@
 
   .validation-card {
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: 0;
     background: var(--editor);
     padding: 10px;
   }

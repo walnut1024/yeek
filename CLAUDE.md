@@ -19,7 +19,7 @@ Local-first Tauri v2 desktop app for managing Claude Code agent sessions.
 
 ## Release
 
-One-command release with signing + GitHub Release upload:
+One-command release with signing + GitHub Release upload. See `README.md` for the full release and Homebrew flow.
 
 ```bash
 scripts/release.sh <version> [release-notes]
@@ -32,49 +32,40 @@ Prerequisites:
 - `gh` CLI authenticated
 - Signing keypair at `~/.tauri/yeek.key` (generate with `cargo tauri signer generate -w ~/.tauri/yeek.key`)
 
-The script: bumps version in `tauri.conf.json`/`package.json`/`Cargo.toml` → commits & tags → pushes → builds signed `.app.tar.gz` + `.dmg` → generates `latest.json` → creates GitHub Release with all artifacts.
-
 ## Architecture
 
 ```
 src-tauri/src/
-  adapter/claudecode/   — Claude Code JSONL parser + source discovery
-  adapter/codex/        — Codex adapter (placeholder)
-  app/commands.rs       — Tauri command handlers (13 commands)
-  app/errors.rs         — AppError enum
-  app/state.rs          — AppState with Mutex<Connection>
-  domain/               — SessionRecord, SourceRef, DeletePolicy types
-  service/delete_planner.rs — Delete plan resolution + execution
-  store/                — SQLite store (sessions, messages, sources, actions)
-  sync/planner.rs       — Startup sync pipeline
-
-vendor_proxy/src/       — LLM proxy (Cargo workspace member)
-  adapters/             — Provider format adapters (Anthropic, Chat Completions)
-  bridge/               — Responses ↔ Chat Completions bidirectional conversion
-  stream/               — SSE streaming translation (Anthropic/Chat → Responses)
-  types/                — Responses API, Chat Completions, Anthropic types
-
+  app/commands.rs       — Tauri command handlers
+  adapter/              — Agent session source adapters
+  domain/               — Core session/source/delete types
+  service/              — Application workflows
+  store/                — SQLite persistence
+  sync/                 — Startup sync pipeline
+vendor_proxy/src/       — LLM proxy workspace member
 src/
-  app/shell/index.tsx   — Main UI (AppShell, SessionsPage, MemoryPage, SystemPage)
+  app/shell/index.tsx   — Main UI shell and section routing
   lib/api.ts            — Typed Tauri command wrappers
-  lib/hooks.ts          — useDebouncedValue, useLocalStorage
-  components/ui/        — shadcn/ui components
+  components/ui/        — shadcn/ui primitives
 ```
 
-## UI Guidelines
+## Frontend Guidelines
 
 - **Always reference DESIGN.md for all UI/frontend work** — it defines the Vercel-inspired design system including colors, typography, shadows, spacing, and component patterns.
 - Use shadow-as-border (`box-shadow: 0px 0px 0px 1px rgba(0,0,0,0.08)`) instead of traditional CSS borders where applicable.
 - Three font weights only: 400 (body), 500 (UI), 600 (headings).
 - Geist Sans with negative letter-spacing at display sizes.
 - Keep the palette achromatic — grays from `#171717` to `#ffffff`.
-
-## UI Component Rules
-
 - **Prioritize shadcn/ui components** — use `Button`, `Separator`, `Skeleton`, `Badge`, `Tooltip`, `AlertDialog`, `ScrollArea`, `Tabs` etc. from `@/components/ui/` before writing raw HTML elements.
 - Never use raw `<button>` — always use `<Button variant="..." size="...">`.
 - Use `<Separator />` instead of `<div className="border-t ...">` for visual dividers.
 - Use `<Skeleton />` instead of custom loading placeholders.
+- Use semantic HTML for stable structure: page titles use `<header>`, content groups use `<section>`, secondary panels use `<aside>`, and independent cards/items use `<article>`.
+- Add `data-ai-page` only to the AppShell content `<main>`; use `data-ai-region` for stable page-level areas and `data-ai-item` for repeated/interactive instances.
+- Keep AI selectors sparse and product-oriented. Prefer `data-ai-*` over class names, and do not mark every layout wrapper as a region.
+- Preserve interaction semantics before changing tags. Do not weaken keyboard behavior, focus handling, or nested button validity for semantic cleanup.
+- Use `<nav>` only for navigation. Mixed action toolbars should stay as normal containers or use `role="toolbar"`.
+- Structural refactors must not change visual styling, copy, state management, business logic, or API calls unless explicitly requested.
 
 ## Frontend Demos
 

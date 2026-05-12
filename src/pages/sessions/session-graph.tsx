@@ -79,7 +79,7 @@ function GraphCanvas({
         style={{
           background: "var(--card, #2f343e)",
           border: "1px solid var(--border, #464b57)",
-          borderRadius: 6,
+          borderRadius: 0,
         }}
       />
       <Background color="var(--border, #464b57)" gap={24} size={1} />

@@ -64,7 +64,7 @@ export function AppShell() {
       <div className="relative z-10 flex h-full min-h-0 overflow-hidden">
         {/* Sidebar - icon only */}
         <TooltipProvider delay={200}>
-        <nav className="flex w-[48px] shrink-0 flex-col items-center border-r border-border bg-card py-3">
+        <nav data-ai-region="app-sidebar" className="flex w-[48px] shrink-0 flex-col items-center border-r border-border bg-card py-3">
           <div className="flex-1 space-y-1">
             {([
               { key: "dashboard" as const, label: t("nav.dashboard"), icon: DashboardIcon },
@@ -109,7 +109,7 @@ export function AppShell() {
         </TooltipProvider>
 
         {/* Main content */}
-        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <main data-ai-page={section} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <div className="h-8 shrink-0" />
           <div className="min-h-0 flex-1 overflow-hidden">
             {section === "dashboard" && <DashboardPage />}
@@ -269,12 +269,12 @@ function SessionsPage({
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Header — full width */}
-      <div className="flex flex-col gap-2 border-b border-border px-3 pb-3">
+      <header data-ai-region="sessions-header" className="flex flex-col gap-2 border-b border-border px-3 pb-3">
         <h2 className="text-[14px] font-medium leading-none text-foreground">{t("sessions.title")}</h2>
         <p className="mt-2 text-[14px] leading-[1.5] text-muted-foreground">{t("sessions.description")}</p>
-      </div>
+      </header>
       {/* Search + Manage — full width */}
-      <div className="border-b border-border px-3 py-2">
+      <div data-ai-region="sessions-toolbar" className="border-b border-border px-3 py-2">
         <div className="flex items-center gap-2">
             <Button
               variant="outline"
@@ -298,7 +298,7 @@ function SessionsPage({
         </div>
 
       <div className="grid min-h-0 flex-1 xl:grid-cols-[360px_minmax(0,1fr)]">
-      <section className="flex min-h-0 flex-1 flex-col overflow-hidden border-r border-border">
+      <section data-ai-region="sessions-list" className="flex min-h-0 flex-1 flex-col overflow-hidden border-r border-border">
         <ScrollArea className="min-h-0 flex-1">
           {error ? (
             <div className="flex h-72 items-center justify-center px-6">
@@ -534,7 +534,7 @@ function SessionsPage({
         )}
       </section>
 
-      <section className="min-h-0 flex-1 overflow-hidden">
+      <section data-ai-region="sessions-detail" className="min-h-0 flex-1 overflow-hidden">
         {selectedId ? (
           <SessionDetailPane sessionId={selectedId} />
         ) : (

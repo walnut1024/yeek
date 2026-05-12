@@ -123,7 +123,7 @@ export default function TranscriptView({
   };
 
   return (
-    <div className="relative px-4">
+    <div data-ai-region="sessions-messages" className="relative px-4">
       <div ref={topAnchorRef} />
       <div className="mb-3 text-[14px] text-muted-foreground">
         {t("transcript.messageCount", { count: mainCount })}

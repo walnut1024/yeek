@@ -12,7 +12,7 @@ const AIBubble = React.memo(function AIBubble({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="-mx-1 rounded-md border border-border/60 bg-[var(--editor)] px-2.5 py-2 transition-colors hover:bg-accent/40">
+    <article data-ai-item="assistant-message" className="-mx-1 rounded-md border border-border/60 bg-[var(--editor)] px-2.5 py-2 transition-colors hover:bg-accent/40">
       <div className="mb-0.5 flex items-center gap-1.5">
         <AssistantIcon className="text-muted-foreground" />
         <span className="text-[13px] font-medium text-muted-foreground">
@@ -71,7 +71,7 @@ const AIBubble = React.memo(function AIBubble({
           {msg.content_preview}
         </Markdown>
       </div>
-    </div>
+    </article>
   );
 });
 
