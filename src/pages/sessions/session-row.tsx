@@ -4,8 +4,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { SessionRecord } from "@/lib/api";
 import { formatRelativeTime } from "@/lib/formatters";
-import { Check } from "iconsax-reactjs";
+import { Check } from "lucide-react";
 import { TITLE_TRUNCATE_LEN } from "@/lib/constants";
+
+function formatAgentLabel(agent: string): string {
+  if (agent === "claude_code") return "Claude Code";
+  if (agent === "claude_code_subagent") return "Claude Code";
+  if (agent === "codex") return "Codex";
+  return agent;
+}
 
 const SessionRow = React.memo(function SessionRow({
   session,
@@ -63,7 +70,7 @@ const SessionRow = React.memo(function SessionRow({
           }`}
         >
           {checked && (
-            <Check size={10} color="white" />
+            <Check size={16} color="white" />
           )}
         </Button>
       )}
@@ -73,7 +80,7 @@ const SessionRow = React.memo(function SessionRow({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
-              {session.agent === "claude_code" ? "Claude Code" : session.agent}
+              {formatAgentLabel(session.agent)}
             </p>
             <span className="mt-0.5 block truncate text-[14px] leading-[1.3] text-foreground">
               {title.length > TITLE_TRUNCATE_LEN ? `${title.slice(0, TITLE_TRUNCATE_LEN)}...` : title}

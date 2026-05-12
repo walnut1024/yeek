@@ -24,7 +24,7 @@ import MarketplacePage from "@/pages/marketplace/marketplace-page";
 import ProxyPage from "@/pages/proxy/proxy-page";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Messages1, Category, ShoppingBag, Setting2, Code1, Check, Minus } from "iconsax-reactjs";
+import { MessageSquare, LayoutGrid, ShoppingBag, Settings, Code, Check, Minus, Trash2 } from "lucide-react";
 import { SESSION_PAGE_SIZE } from "@/lib/constants";
 import { useGroupedSessions } from "./use-grouped-sessions";
 import { useSessionSelection } from "./use-session-selection";
@@ -67,10 +67,10 @@ export function AppShell() {
         <nav data-ai-region="app-sidebar" className="flex w-[48px] shrink-0 flex-col items-center border-r border-border bg-card py-3">
           <div className="flex-1 space-y-1">
             {([
-              { key: "dashboard" as const, label: t("nav.dashboard"), icon: Category },
-              { key: "sessions" as const, label: t("nav.sessions"), icon: Messages1, badge: status ? String(status.total_sessions) : undefined },
+              { key: "dashboard" as const, label: t("nav.dashboard"), icon: LayoutGrid },
+              { key: "sessions" as const, label: t("nav.sessions"), icon: MessageSquare, badge: status ? String(status.total_sessions) : undefined },
               { key: "marketplace" as const, label: t("nav.marketplace"), icon: ShoppingBag },
-              { key: "proxy" as const, label: t("nav.proxy"), icon: Code1 },
+              { key: "proxy" as const, label: t("nav.proxy"), icon: Code },
             ]).map(({ key, label, icon: Icon, badge }) => (
               <Tooltip key={key}>
                 <TooltipTrigger
@@ -81,7 +81,7 @@ export function AppShell() {
                       : "border border-transparent text-muted-foreground hover:bg-element-hover hover:text-foreground"
                   }`}
                 >
-                  <Icon variant="Linear" size={14} />
+                  <Icon size={16} />
                   {badge && (
                     <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 font-mono text-[9px] font-medium text-primary-foreground">
                       {badge}
@@ -101,7 +101,7 @@ export function AppShell() {
                   : "border border-transparent text-muted-foreground hover:bg-element-hover hover:text-foreground"
               }`}
             >
-              <Setting2 variant="Linear" size={14} />
+              <Settings size={16} />
             </TooltipTrigger>
             <TooltipContent side="right" className="text-[12px]">{t("nav.settings")}</TooltipContent>
           </Tooltip>
@@ -137,6 +137,7 @@ function SessionsPage({
   const [searchRaw, setSearchRaw] = useState("");
   const search = useDebouncedValue(searchRaw, 250);
   const [sortDesc] = useLocalStorage("sort-desc", true);
+  const [agentFilter, setAgentFilter] = useLocalStorage("agent-filter", "claude_code");
   const [collapsedProjects, setCollapsedProjects] = useLocalStorage<
     Record<string, boolean>
   >("collapsed-projects", {});
@@ -153,11 +154,12 @@ function SessionsPage({
   const sort = sortDesc ? "updated_at" : "updated_at_asc";
 
   const browseQuery = useQuery({
-    queryKey: ["sessions", "browse", { sort }],
+    queryKey: ["sessions", "browse", { sort, agent: agentFilter }],
     queryFn: () =>
       browseSessions({
         sort,
         limit: SESSION_PAGE_SIZE,
+        agent: agentFilter,
       }),
     enabled: !isSearching,
     refetchInterval: 30_000,
@@ -276,6 +278,22 @@ function SessionsPage({
       {/* Search + Manage — full width */}
       <div data-ai-region="sessions-toolbar" className="border-b border-border px-3 py-2">
         <div className="flex items-center gap-2">
+            <div className="flex items-center gap-0.5">
+              <button
+                type="button"
+                className={`pill-tab ${agentFilter === "claude_code" ? "pill-tab-active" : "pill-tab-idle"}`}
+                onClick={() => setAgentFilter("claude_code")}
+              >
+                Claude Code
+              </button>
+              <button
+                type="button"
+                className={`pill-tab ${agentFilter === "codex" ? "pill-tab-active" : "pill-tab-idle"}`}
+                onClick={() => setAgentFilter("codex")}
+              >
+                Codex
+              </button>
+            </div>
             <Button
               variant="outline"
               size="sm"
@@ -349,10 +367,10 @@ function SessionsPage({
                     }`}
                   >
                     {allSelected && (
-                      <Check size={10} color="white" />
+                      <Check size={16} color="white" />
                     )}
                     {someSelected && !allSelected && (
-                      <Minus size={10} className="text-primary" />
+                      <Minus size={16} className="text-primary" />
                     )}
                   </Button>
                   <span className="text-[13px] text-muted-foreground">
@@ -384,10 +402,10 @@ function SessionsPage({
                             }`}
                           >
                             {allSel && (
-                              <Check size={10} color="white" />
+                              <Check size={16} color="white" />
                             )}
                             {someSel && !allSel && (
-                              <Minus size={10} className="text-primary" />
+                              <Minus size={16} className="text-primary" />
                             )}
                           </Button>
                         );
@@ -508,6 +526,7 @@ function SessionsPage({
                     }}
                     disabled={deleteBatch.isPending || destructiveBatch.isPending}
                   >
+                    <Trash2 size={16} />
                     {deleteBatch.isPending || destructiveBatch.isPending ? t("manage.deleting") : t("manage.confirm")}
                   </Button>
                 </div>
@@ -523,6 +542,7 @@ function SessionsPage({
                     {t("manage.cancel")}
                   </Button>
                   <Button variant="destructive" size="sm" className="h-8 rounded-md px-3 text-[13px]" onClick={() => setConfirmDelete(true)} disabled={selectedIds.size === 0}>
+                    <Trash2 size={16} />
                     {t("manage.delete")}
                   </Button>
                 </div>
@@ -564,6 +584,7 @@ function SessionsPage({
             className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[13px] text-destructive hover:bg-accent"
             onClick={() => ctxDelete.mutate()}
           >
+            <Trash2 size={16} />
             {ctxMenu.projectPath ? t("contextMenu.deleteProject") : t("contextMenu.delete")}
           </Button>
         </div>

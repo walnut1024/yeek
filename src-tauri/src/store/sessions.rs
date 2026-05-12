@@ -15,11 +15,12 @@ pub struct BrowseParams {
     pub sort: String,
     pub limit: i64,
     pub offset: i64,
+    pub agent: Option<String>,
 }
 
 impl Default for BrowseParams {
     fn default() -> Self {
-        Self { sort: "updated_at".to_string(), limit: 50, offset: 0 }
+        Self { sort: "updated_at".to_string(), limit: 50, offset: 0, agent: None }
     }
 }
 
@@ -85,15 +86,24 @@ pub fn browse_sessions(
         _ => "updated_at DESC",
     };
 
+    let mut where_clauses = vec![
+        "parent_session_id IS NULL".to_string(),
+        "visibility = 'visible'".to_string(),
+    ];
+    if let Some(ref agent) = params.agent {
+        where_clauses.push(format!("agent = '{}'", agent.replace('\'', "''")));
+    }
+    let where_sql = where_clauses.join(" AND ");
+
     let total: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM sessions WHERE parent_session_id IS NULL AND visibility = 'visible'",
+        &format!("SELECT COUNT(*) FROM sessions WHERE {}", where_sql),
         [],
         |row| row.get(0),
     )?;
 
     let query_sql = format!(
-        "SELECT * FROM sessions WHERE parent_session_id IS NULL AND visibility = 'visible' ORDER BY {} LIMIT ? OFFSET ?",
-        order_by
+        "SELECT * FROM sessions WHERE {} ORDER BY {} LIMIT ? OFFSET ?",
+        where_sql, order_by
     );
 
     let mut stmt = conn.prepare(&query_sql)?;

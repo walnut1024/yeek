@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use crate::adapter::claudecode;
+use crate::adapter::{claudecode, codex};
 use crate::app::errors::AppError;
 use crate::app::events::{
     EventEmitter, SyncCompletedPayload, SyncProgressPayload, SyncStartedPayload,
@@ -89,26 +89,38 @@ fn run_scan(
 ) -> Result<SyncSummary, AppError> {
     let conn = open_sync_connection(db_path)?;
 
-    // Discover all sources first (pure filesystem, no DB needed)
-    let sources = claudecode::discover_sources()?;
-    let total = sources.len() as i64;
+    // Discover sources from each adapter separately
+    let claude_sources = claudecode::discover_sources()?;
+    let codex_sources = codex::discover_sources()?;
+    let total = (claude_sources.len() + codex_sources.len()) as i64;
 
     emitter.emit_sync_started(SyncStartedPayload { source_count: total });
 
-    // Delegate to incremental indexer with progress callback
-    let result = claudecode::index_sources(&conn, &sources, |processed| {
-        emitter.emit_sync_progress(SyncProgressPayload { processed, total });
+    // Index Claude sources
+    let mut processed = 0i64;
+    let claude_result = claudecode::index_sources(&conn, &claude_sources, |delta| {
+        emitter.emit_sync_progress(SyncProgressPayload { processed: processed + delta, total });
+    })?;
+    processed += claude_sources.len() as i64;
+
+    // Index Codex sources
+    let codex_result = codex::index_sources(&conn, &codex_sources, |delta| {
+        emitter.emit_sync_progress(SyncProgressPayload { processed: processed + delta, total });
     })?;
 
+    let indexed = claude_result.indexed + codex_result.indexed;
+    let updated = claude_result.updated + codex_result.updated;
+    let errors = claude_result.errors + codex_result.errors;
+
     emitter.emit_sync_completed(SyncCompletedPayload {
-        sessions_indexed: result.indexed,
-        sessions_updated: result.updated,
-        errors: result.errors,
+        sessions_indexed: indexed,
+        sessions_updated: updated,
+        errors,
     });
 
     Ok(SyncSummary {
-        sessions_indexed: result.indexed,
-        sessions_updated: result.updated,
-        errors: result.errors,
+        sessions_indexed: indexed,
+        sessions_updated: updated,
+        errors,
     })
 }

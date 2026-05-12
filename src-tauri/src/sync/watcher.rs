@@ -5,7 +5,8 @@ use std::time::Duration;
 
 use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
 
-use crate::adapter::claudecode::{self, source_descriptor_from_path};
+use crate::adapter::claudecode;
+use crate::adapter::codex;
 use crate::app::errors::AppError;
 use crate::app::events::{EventEmitter, SyncCompletedPayload};
 use crate::store::schema;
@@ -217,52 +218,50 @@ fn run_incremental_scan(
     let conn = rusqlite::Connection::open(db_path).map_err(|e| AppError::DbError(e.to_string()))?;
     schema::init_schema(&conn)?;
 
-    // Build SourceDescriptors from changed paths, skip files over 10MB
+    // Route changed paths to the correct adapter
     const MAX_WATCHER_FILE_SIZE: u64 = 10 * 1024 * 1024;
-    let sources: Vec<_> = changed_paths
-        .iter()
-        .filter_map(|p| {
-            let meta = std::fs::metadata(p).ok()?;
-            if meta.len() > MAX_WATCHER_FILE_SIZE {
-                tracing::info!(
-                    "Watcher: skipping large file ({}MB): {}",
-                    meta.len() / 1024 / 1024,
-                    p.display()
-                );
-                return None;
-            }
-            source_descriptor_from_path(p)
-        })
-        .collect();
+    let mut claude_sources = Vec::new();
+    let mut codex_sources = Vec::new();
 
-    if sources.is_empty() {
+    for p in changed_paths {
+        let meta = match std::fs::metadata(p) {
+            Ok(meta) => meta,
+            Err(_) => continue,
+        };
+        if meta.len() > MAX_WATCHER_FILE_SIZE {
+            tracing::info!(
+                "Watcher: skipping large file ({}MB): {}",
+                meta.len() / 1024 / 1024,
+                p.display()
+            );
+            continue;
+        }
+
+        if let Some(source) = codex::source_descriptor_from_path(p) {
+            codex_sources.push(source);
+        } else if let Some(source) = claudecode::source_descriptor_from_path(p) {
+            claude_sources.push(source);
+        }
+    }
+
+    if claude_sources.is_empty() && codex_sources.is_empty() {
         return Ok(());
     }
 
-    // Filter out sources already known to the DB (fingerprint matches).
-    // The watcher should only index truly new or changed sources.
-    let existing: std::collections::HashSet<String> = {
-        let mut stmt = conn.prepare("SELECT path FROM sources WHERE status = 'active'")?;
-        let rows: Vec<String> =
-            stmt.query_map([], |row| row.get::<_, String>(0))?.filter_map(|r| r.ok()).collect();
-        rows.into_iter().collect()
-    };
+    tracing::info!(
+        "Watcher: indexing {} claude + {} codex sources",
+        claude_sources.len(),
+        codex_sources.len()
+    );
 
-    let new_sources: Vec<_> = sources.into_iter().filter(|s| !existing.contains(&s.path)).collect();
-
-    if new_sources.is_empty() {
-        return Ok(());
-    }
-
-    let total = new_sources.len() as i64;
-    tracing::info!("Watcher: indexing {} new sources", total);
-
-    let result = claudecode::index_sources(&conn, &new_sources, |_| {})?;
+    // Let each adapter's fingerprint logic decide skip/update
+    let claude_result = claudecode::index_sources(&conn, &claude_sources, |_| {})?;
+    let codex_result = codex::index_sources(&conn, &codex_sources, |_| {})?;
 
     emitter.emit_sync_completed(SyncCompletedPayload {
-        sessions_indexed: result.indexed,
-        sessions_updated: result.updated,
-        errors: result.errors,
+        sessions_indexed: claude_result.indexed + codex_result.indexed,
+        sessions_updated: claude_result.updated + codex_result.updated,
+        errors: claude_result.errors + codex_result.errors,
     });
 
     Ok(())

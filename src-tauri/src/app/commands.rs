@@ -122,6 +122,7 @@ pub struct BrowseRequest {
     pub sort: Option<String>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
+    pub agent: Option<String>,
 }
 
 /// Browse top-level sessions with sorting, pagination, and optional project filter.
@@ -136,6 +137,7 @@ pub(crate) fn do_browse_sessions(
         sort: request.sort.unwrap_or_else(|| "updated_at".to_string()),
         limit: request.limit.unwrap_or(50),
         offset: request.offset.unwrap_or(0),
+        agent: request.agent,
     };
 
     let result = sessions::browse_sessions(&db, &params)?;
