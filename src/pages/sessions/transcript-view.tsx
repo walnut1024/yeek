@@ -5,7 +5,7 @@ import { getSessionTranscript } from "@/lib/api";
 import { TRANSCRIPT_INITIAL_COUNT, TRANSCRIPT_LOAD_MORE } from "@/lib/constants";
 import type { MessageRecord } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { ChevronUpIcon, ChevronDownIcon } from "@/components/icons";
+import { ChevronUp, ChevronDown } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import UserBubble from "./user-bubble";
 import AIBubble from "./ai-bubble";
@@ -158,7 +158,7 @@ export default function TranscriptView({
           aria-label="Scroll to top"
           title="Scroll to top"
         >
-          <ChevronUpIcon />
+          <ChevronUp size={16} />
         </Button>
         <Button
           variant="outline"
@@ -167,7 +167,7 @@ export default function TranscriptView({
           aria-label="Scroll to bottom"
           title="Scroll to bottom"
         >
-          <ChevronDownIcon />
+          <ChevronDown size={16} />
         </Button>
       </div>
     </div>

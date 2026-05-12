@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { MessageRecord } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { SummaryIcon } from "@/components/icons";
+import { FileText } from "lucide-react";
 
 export default function SummarySection({
   msg,
@@ -22,7 +22,7 @@ export default function SummarySection({
         onClick={() => setExpanded(!expanded)}
         className="flex h-auto w-full items-center justify-start gap-1.5 rounded-md px-1 py-0.5 hover:bg-accent/40"
       >
-        <SummaryIcon className="text-muted-foreground" />
+        <FileText size={16} className="text-muted-foreground" />
         <span className="text-[14px] font-medium text-muted-foreground">
           {t("summary.label")}
         </span>

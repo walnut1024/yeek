@@ -1,7 +1,7 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
 import type { MessageRecord } from "@/lib/api";
-import { UserIcon } from "@/components/icons";
+import { User } from "lucide-react";
 
 const UserBubble = React.memo(function UserBubble({
   msg,
@@ -12,7 +12,7 @@ const UserBubble = React.memo(function UserBubble({
   return (
     <article data-ai-item="user-message" className="-mx-1 rounded-md border border-border/60 bg-[var(--editor)] px-2.5 py-2 transition-colors hover:bg-accent/40">
       <div className="mb-0.5 flex items-center gap-1.5">
-        <UserIcon className="text-muted-foreground" />
+        <User size={16} className="text-muted-foreground" />
         <span className="text-[13px] font-medium text-foreground">
           {t("user.role")}
         </span>

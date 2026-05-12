@@ -3,7 +3,7 @@ import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useTranslation } from "react-i18next";
 import type { MessageRecord } from "@/lib/api";
-import { AssistantIcon } from "@/components/icons";
+import { Sparkles } from "lucide-react";
 
 const AIBubble = React.memo(function AIBubble({
   msg,
@@ -14,7 +14,7 @@ const AIBubble = React.memo(function AIBubble({
   return (
     <article data-ai-item="assistant-message" className="-mx-1 rounded-md border border-border/60 bg-[var(--editor)] px-2.5 py-2 transition-colors hover:bg-accent/40">
       <div className="mb-0.5 flex items-center gap-1.5">
-        <AssistantIcon className="text-muted-foreground" />
+        <Sparkles size={16} className="text-muted-foreground" />
         <span className="text-[13px] font-medium text-muted-foreground">
           {t("ai.role")}
         </span>

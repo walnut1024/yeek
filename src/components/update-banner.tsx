@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
+import { RefreshCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { checkForUpdate, downloadAndInstall } from "@/lib/updater";
 import type { Update } from "@/lib/updater";
@@ -14,6 +16,7 @@ type Phase =
 
 export function UpdateBanner() {
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
+  const { t } = useTranslation();
 
   // Defer check to avoid blocking first paint
   useEffect(() => {
@@ -59,15 +62,9 @@ export function UpdateBanner() {
               v{phase.update.version}
             </span>
             {" — "}
-            {phase.update.body ?? "New version available"}
+            {phase.update.body ?? t("update.newVersion")}
           </span>
-          <Button
-            variant="default"
-            size="sm"
-            onClick={() => handleUpgrade(phase.update)}
-          >
-            Upgrade
-          </Button>
+          <RefreshCcw size={16} className="cursor-pointer text-muted-foreground hover:text-primary" onClick={() => handleUpgrade(phase.update)} />
         </>
       )}
 
@@ -75,7 +72,7 @@ export function UpdateBanner() {
       {phase.kind === "downloading" && (
         <div className="flex flex-1 items-center gap-3">
           <span className="text-muted-foreground text-[13px]">
-            Downloading update…
+            {t("update.downloading")}
           </span>
           <div className="flex-1 h-1.5 rounded-full bg-secondary overflow-hidden">
             <div
@@ -98,7 +95,7 @@ export function UpdateBanner() {
       {/* Installing */}
       {phase.kind === "installing" && (
         <span className="text-muted-foreground">
-          Installing update — the app will restart automatically…
+          {t("update.installing")}
         </span>
       )}
 
@@ -106,14 +103,14 @@ export function UpdateBanner() {
       {phase.kind === "error" && (
         <>
           <span className="flex-1 text-destructive text-[13px]">
-            Update failed: {phase.message}
+            {t("update.failed", { message: phase.message })}
           </span>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setPhase({ kind: "idle" })}
           >
-            Dismiss
+            {t("update.dismiss")}
           </Button>
         </>
       )}
