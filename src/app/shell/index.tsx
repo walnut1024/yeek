@@ -24,7 +24,10 @@ import MarketplacePage from "@/pages/marketplace/marketplace-page";
 import ProxyPage from "@/pages/proxy/proxy-page";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { MessageSquare, LayoutGrid, ShoppingBag, Settings, Code, Check, Minus, Trash2 } from "lucide-react";
+import { PageHeader } from "@/components/ui/page-header";
+import { PageToolbar } from "@/components/ui/page-toolbar";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { MessageSquare, LayoutGrid, ShoppingBag, Settings, Code, Check, Minus, Trash2, ChevronRight } from "lucide-react";
 import { SESSION_PAGE_SIZE } from "@/lib/constants";
 import { useGroupedSessions } from "./use-grouped-sessions";
 import { useSessionSelection } from "./use-session-selection";
@@ -271,37 +274,30 @@ function SessionsPage({
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Header — full width */}
-      <header data-ai-region="sessions-header" className="flex flex-col gap-2 border-b border-border px-3 pb-3">
-        <h2 className="text-[14px] font-medium leading-none text-foreground">{t("sessions.title")}</h2>
-        <p className="mt-2 text-[14px] leading-[1.5] text-muted-foreground">{t("sessions.description")}</p>
-      </header>
+      <PageHeader title={t("sessions.title")} description={t("sessions.description")} region="sessions-header" />
       {/* Search + Manage — full width */}
-      <div data-ai-region="sessions-toolbar" className="border-b border-border px-3 py-2">
+      <PageToolbar region="sessions-toolbar">
         <div className="flex items-center gap-2">
             <div className="flex items-center gap-0.5">
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="sm"
                 className={`pill-tab ${agentFilter === "claude_code" ? "pill-tab-active" : "pill-tab-idle"}`}
                 onClick={() => setAgentFilter("claude_code")}
               >
                 Claude Code
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="secondary"
+                size="sm"
                 className={`pill-tab ${agentFilter === "codex" ? "pill-tab-active" : "pill-tab-idle"}`}
                 onClick={() => setAgentFilter("codex")}
               >
                 Codex
-              </button>
+              </Button>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 shrink-0 rounded-md px-2.5 text-[12px]"
-              onClick={() => setManageMode(!manageMode)}
-            >
-              {manageMode ? t("sessions.done") : t("sessions.manage")}
-            </Button>
             <label className="block flex-1">
               <span className="sr-only">{t("sessions.searchSrLabel")}</span>
               <input
@@ -313,7 +309,7 @@ function SessionsPage({
               />
             </label>
           </div>
-        </div>
+      </PageToolbar>
 
       <div className="grid min-h-0 flex-1 xl:grid-cols-[360px_minmax(0,1fr)]">
       <section data-ai-region="sessions-list" className="flex min-h-0 flex-1 flex-col overflow-hidden border-r border-border">
@@ -349,6 +345,16 @@ function SessionsPage({
             </div>
           ) : (
             <div className="space-y-2 p-2">
+              <div className="flex items-center gap-1.5">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 rounded-md px-2.5 text-[12px]"
+                  onClick={() => setManageMode(!manageMode)}
+                >
+                  {manageMode ? t("sessions.done") : t("sessions.manage")}
+                </Button>
+              </div>
               {manageMode && sessions.length > 0 && (
                 <div
                   className="flex cursor-pointer items-center gap-2 rounded-md border border-border bg-secondary px-2.5 py-2 hover:bg-accent transition-colors"
@@ -381,7 +387,12 @@ function SessionsPage({
               {grouped.map((g) => {
                 const collapsed = collapsedProjects[g.key];
                 return (
-                  <div key={g.key} className="space-y-1">
+                  <Collapsible
+                    key={g.key}
+                    open={!collapsed}
+                    onOpenChange={() => toggleCollapse(g.key)}
+                    className="space-y-1"
+                  >
                     <div className="flex items-center gap-1">
                       {manageMode && (() => {
                         const selCount = g.sessions.filter((s) => selectedIds.has(s.id)).length;
@@ -410,51 +421,43 @@ function SessionsPage({
                           </Button>
                         );
                       })()}
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => toggleCollapse(g.key)}
+                      <CollapsibleTrigger
+                        render={<Button type="button" variant="ghost" size="sm" className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-border bg-secondary px-2.5 py-1.5 text-left transition-colors hover:bg-accent" />}
                         onContextMenu={(e) => {
                           if (isSearching) return;
                           e.preventDefault();
                           setCtxMenu({ x: e.clientX, y: e.clientY, sessionId: "", projectPath: g.key });
                         }}
-                        className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-border bg-secondary px-2.5 py-1.5 text-left transition-colors hover:bg-accent"
                       >
-                        <span className="grid size-4 shrink-0 place-items-center rounded-sm bg-[var(--editor)] text-[10px] text-primary">
-                          {collapsed ? "\u25B6" : "\u25BC"}
-                        </span>
+                        <ChevronRight size={14} className={`shrink-0 text-muted-foreground transition-transform duration-200 ${collapsed ? "" : "rotate-90"}`} />
                         <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
                           {g.label}
                         </span>
                         <span className="shrink-0 rounded-sm border border-border bg-[var(--editor)] px-1.5 py-0.5 font-mono text-[12px] text-muted-foreground">
                           {g.sessions.length}
                         </span>
-                      </Button>
+                      </CollapsibleTrigger>
                     </div>
 
-                    {!collapsed && (
-                      <div className="space-y-1">
-                        {g.sessions.map((session) => (
-                          <SessionRow
-                            key={session.id}
-                            session={session}
-                            isSelected={selectedId === session.id}
-                            onSelect={() =>
-                              onSelect(selectedId === session.id ? null : session.id)
-                            }
-                            manageMode={manageMode}
-                            checked={selectedIds.has(session.id)}
-                            onCheck={() => toggleSession(session.id)}
-                            onContextMenu={(e, id) => {
-                              setCtxMenu({ x: e.clientX, y: e.clientY, sessionId: id });
-                            }}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                    <CollapsibleContent className="space-y-1">
+                      {g.sessions.map((session) => (
+                        <SessionRow
+                          key={session.id}
+                          session={session}
+                          isSelected={selectedId === session.id}
+                          onSelect={() =>
+                            onSelect(selectedId === session.id ? null : session.id)
+                          }
+                          manageMode={manageMode}
+                          checked={selectedIds.has(session.id)}
+                          onCheck={() => toggleSession(session.id)}
+                          onContextMenu={(e, id) => {
+                            setCtxMenu({ x: e.clientX, y: e.clientY, sessionId: id });
+                          }}
+                        />
+                      ))}
+                    </CollapsibleContent>
+                  </Collapsible>
                 );
               })}
             </div>

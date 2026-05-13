@@ -13,6 +13,8 @@ import {
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/ui/page-header";
+import { PageToolbar } from "@/components/ui/page-toolbar";
 import { Trash2, SquarePlus } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -120,18 +122,13 @@ export default function ProxyPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <header data-ai-region="proxy-header" className="border-b border-border px-3 py-3">
-        <h2 className="text-[14px] font-medium leading-none text-foreground">{t("proxy.title")}</h2>
-        <p className="mt-2 max-w-2xl text-[14px] leading-[1.5] text-muted-foreground">
-          {t("proxy.description")}
-        </p>
-      </header>
+      <PageHeader title={t("proxy.title")} description={t("proxy.description")} region="proxy-header" />
 
-      <div data-ai-region="proxy-toolbar" className="flex items-center justify-between border-b border-border px-3 py-2">
+      <PageToolbar region="proxy-toolbar">
         <div className="flex items-center gap-2">
-          <div className="tabs">
-            <Button type="button" variant="secondary" size="sm" className={`chip ${mode === "cards" ? "active" : ""}`} onClick={() => setMode("cards")}>{t("proxy.cards")}</Button>
-            <Button type="button" variant="secondary" size="sm" className={`chip ${mode === "toml" ? "active" : ""}`} onClick={() => setMode("toml")}>{t("proxy.toml")}</Button>
+          <div className="flex items-center gap-0.5">
+            <Button type="button" variant="secondary" size="sm" className={`pill-tab ${mode === "cards" ? "pill-tab-active" : "pill-tab-idle"}`} onClick={() => setMode("cards")}>{t("proxy.cards")}</Button>
+            <Button type="button" variant="secondary" size="sm" className={`pill-tab ${mode === "toml" ? "pill-tab-active" : "pill-tab-idle"}`} onClick={() => setMode("toml")}>{t("proxy.toml")}</Button>
           </div>
           <Badge variant={isRunning ? "default" : "secondary"} className="h-5 px-2 text-[11px] uppercase tracking-[0.04em]">
             {isRunning ? t("proxy.running") : t("proxy.stopped")}
@@ -143,7 +140,7 @@ export default function ProxyPage() {
             {isRunning ? t("proxy.stop") : t("proxy.run")}
           </Button>
         </div>
-      </div>
+      </PageToolbar>
 
       <section data-ai-region="proxy-config" className={`proxy-config-workspace ${mode === "toml" ? "toml-mode" : ""}`}>
         {mode === "cards" ? (

@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { getSystemStatus, getActionLog, getProxyMetrics, listPlugins, listMarketplaces, getProxyErrorEvents } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { UpdateBanner } from "@/components/update-banner";
 import { formatTime, formatRelativeTime, getCurrentLocale } from "@/lib/formatters";
 
@@ -64,10 +65,7 @@ export default function DashboardPage() {
       <div className="flex h-full flex-col overflow-hidden flex-1 min-w-0">
 
         {/* Header */}
-        <header data-ai-region="dashboard-header" className="flex flex-col gap-2 border-b border-border px-3 pb-3">
-          <h2 className="text-[14px] font-medium leading-none text-foreground">{t("dashboard.title")}</h2>
-          <p className="mt-2 max-w-2xl text-[14px] leading-[1.5] text-muted-foreground">{t("dashboard.description")}</p>
-        </header>
+        <PageHeader title={t("dashboard.title")} description={t("dashboard.description")} region="dashboard-header" />
 
         {/* Update notification banner */}
         <UpdateBanner />

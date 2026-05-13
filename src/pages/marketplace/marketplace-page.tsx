@@ -23,6 +23,8 @@ import {
 } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
+import { PageToolbar } from "@/components/ui/page-toolbar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -202,13 +204,10 @@ export default function MarketplacePage() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Header */}
-      <header data-ai-region="marketplace-header" className="border-b border-border px-3 py-3">
-        <h2 className="text-[14px] font-medium leading-none text-foreground">{t("marketplace.title")}</h2>
-        <p className="mt-2 max-w-2xl text-[14px] leading-[1.5] text-muted-foreground">{t("marketplace.description")}</p>
-      </header>
+      <PageHeader title={t("marketplace.title")} description={t("marketplace.description")} region="marketplace-header" />
 
       {/* Toolbar: agent tabs */}
-      <div data-ai-region="marketplace-toolbar" className="flex items-center justify-between border-b border-border px-3 py-1.5">
+      <PageToolbar region="marketplace-toolbar">
         <div className="flex items-center gap-1">
           {AGENTS.map((a) => (
             <Button key={a.key} type="button" variant="secondary" size="sm" onClick={() => setAgent(a.key)}
@@ -217,7 +216,7 @@ export default function MarketplacePage() {
             </Button>
           ))}
         </div>
-      </div>
+      </PageToolbar>
 
       {/* Content */}
       {!isClaudeCode ? (

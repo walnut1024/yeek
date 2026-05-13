@@ -6,6 +6,7 @@ import { getActionLog, releaseAndResync } from "@/lib/api";
 import { useLocalStorage } from "@/lib/hooks";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { formatRelativeTime } from "@/lib/formatters";
 
 const TERMINAL_OPTIONS = [
@@ -80,15 +81,7 @@ export default function SettingsPage() {
   return (
     <div className="grid h-full min-h-0 xl:grid-cols-[minmax(0,1.2fr)_320px]">
       <section data-ai-region="settings-content" className="surface-panel overflow-auto p-3">
-        <div className="flex flex-col gap-2 border-b border-border pb-3">
-          <p className="zed-kicker">{t("settings.operations")}</p>
-          <h2 className="mt-1 text-[14px] font-medium leading-none text-foreground">
-            {t("settings.title")}
-          </h2>
-          <p className="mt-2 max-w-2xl text-[14px] leading-[1.5] text-muted-foreground">
-            {t("settings.description")}
-          </p>
-        </div>
+        <PageHeader kicker={t("settings.operations")} title={t("settings.title")} description={t("settings.description")} region="settings-header" />
 
         {/* Settings */}
         <div className="mt-4">
