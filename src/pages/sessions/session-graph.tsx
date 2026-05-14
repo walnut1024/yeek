@@ -60,7 +60,7 @@ function GraphCanvas({
       onInit={onInit}
       nodeTypes={nodeTypes}
       defaultEdgeOptions={{
-        type: "default",
+        type: "smoothstep",
         markerEnd: {
           type: MarkerType.ArrowClosed,
           width: 12,
@@ -109,16 +109,23 @@ export default function SessionGraph({ sessionId }: { sessionId: string }) {
 
   const { nodes, edges, stats, truncated } = useMemo(() => {
     if (!transcript || transcript.main_path.length === 0)
-      return { nodes: [], edges: [], stats: { total: 0, users: 0, assistants: 0, tools: 0 }, truncated: false };
-    // Only include messages on the main path to keep graph manageable
-    const mainSet = new Set(transcript.main_path);
-    let mainMessages = transcript.messages.filter((m) => mainSet.has(m.id));
+      return { nodes: [], edges: [], stats: { total: 0, users: 0, assistants: 0, tools: 0, branches: 0 }, truncated: false };
+
+    let messages = transcript.messages;
     let wasTruncated = false;
-    if (mainMessages.length > GRAPH_MAX_NODES) {
-      mainMessages = mainMessages.slice(0, GRAPH_MAX_NODES);
-      wasTruncated = true;
+    if (messages.length > GRAPH_MAX_NODES) {
+      const mainSet = new Set(transcript.main_path);
+      const mainMsgs = messages.filter((m) => mainSet.has(m.id));
+      const otherMsgs = messages.filter((m) => !mainSet.has(m.id));
+      const remaining = GRAPH_MAX_NODES - mainMsgs.length;
+      messages = remaining > 0 ? [...mainMsgs, ...otherMsgs.slice(0, remaining)] : mainMsgs;
+      wasTruncated = messages.length < transcript.messages.length;
     }
-    const result = buildTree(mainMessages);
+
+    const result = buildTree(messages, {
+      mainPath: transcript.main_path,
+      branches: transcript.branches,
+    });
     return { ...result, truncated: wasTruncated };
   }, [transcript]);
 
@@ -167,12 +174,17 @@ export default function SessionGraph({ sessionId }: { sessionId: string }) {
           <Badge variant="outline" className="bg-card px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
             {t("graph.statsTools", { count: stats.tools })}
           </Badge>
+          {stats.branches > 0 && (
+            <Badge variant="outline" className="bg-card px-1.5 py-0.5 font-mono text-[10px] text-orange-400">
+              {t("graph.statsBranches", { count: stats.branches })}
+            </Badge>
+          )}
         </div>
       </div>
       <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-card">
         {truncated && (
           <div className="absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-full border border-border bg-card/95 px-3 py-1.5 text-[12px] text-muted-foreground backdrop-blur-sm">
-            {t("graph.truncated", { max: GRAPH_MAX_NODES, total: transcript!.main_path.length })}
+            {t("graph.truncated", { max: GRAPH_MAX_NODES, total: transcript!.messages.length })}
           </div>
         )}
         <ReactFlowProvider>
