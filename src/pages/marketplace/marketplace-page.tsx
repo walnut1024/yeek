@@ -379,17 +379,21 @@ function HealthBadge({ health }: { health: string }) {
 
 function SkillRow({ skill }: { skill: SkillInfo }) {
   return (
-    <div className="flex items-center gap-1.5 border-b border-border px-2.5 py-1 transition-colors hover:bg-element-hover">
+    <div className="flex items-start gap-2 border-b border-border px-2.5 py-1.5 transition-colors hover:bg-element-hover">
       <Badge variant="outline"
-        className={`grid size-4 shrink-0 place-items-center px-0 py-0 text-[9px] font-medium ${
+        className={`mt-0.5 grid size-4 shrink-0 place-items-center px-0 py-0 text-[9px] font-medium ${
           skill.skill_type === "agent" ? "text-chart-3 border-chart-3/30" : "text-foreground border-foreground/30"
         }`}>
         {skill.skill_type === "agent" ? "A" : "S"}
       </Badge>
-      <span className="truncate text-[12px] text-foreground">{skill.name}</span>
-      <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{skill.description}</span>
-      {skill.tools && <span className="zed-chip font-mono text-[10px]">{skill.tools}</span>}
-      <span className={`size-1.5 shrink-0 rounded-full ${skill.health === "ok" ? "bg-chart-2" : "bg-chart-3"}`} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          <span className="truncate text-[12px] font-medium text-foreground">{skill.name}</span>
+          {skill.tools && <span className="zed-chip shrink-0 font-mono text-[10px]">{skill.tools}</span>}
+        </div>
+        {skill.description && <p className="mt-0.5 text-[11px] leading-[1.4] text-muted-foreground line-clamp-2">{skill.description}</p>}
+      </div>
+      <span className={`mt-1 size-1.5 shrink-0 rounded-full ${skill.health === "ok" ? "bg-chart-2" : "bg-chart-3"}`} />
     </div>
   );
 }
@@ -494,7 +498,7 @@ function MarketplaceCard({
               {Array.from({ length: 3 }).map((_, i) => (<Skeleton key={i} className="h-7 w-full rounded-sm" />))}
             </div>
           ) : sorted.length > 0 ? (
-            <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
+            <div className="grid grid-cols-1 gap-2 lg:grid-cols-3">
               {sorted.map(({ mp, info }) => {
                 if (info) {
                   return (
