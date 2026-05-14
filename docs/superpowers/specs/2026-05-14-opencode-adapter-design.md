@@ -1,102 +1,253 @@
 # OpenCode Adapter Design
 
-Add a new adapter to Yeek that reads OpenCode agent sessions, following the same convention as the existing Claude Code and Codex adapters.
+## Goal
 
-## Context
+Add first-class OpenCode session ingestion to Yeek. The adapter reads OpenCode's local SQLite database directly, converts root and child sessions into Yeek's existing `SessionRecord` and `MessageRecord` model, and integrates with the same full-scan and watcher pipeline used by the Claude Code and Codex adapters.
 
-OpenCode is an open-source AI coding agent. Unlike Claude Code (centralized JSONL) and Codex (centralized JSONL), OpenCode stores all session data in a **single centralized SQLite database** per user at the XDG data directory (`~/Library/Application Support/opencode/opencode.db` on macOS).
+This is an ingestion-only feature. Yeek must not write to, migrate, compact, delete from, or otherwise mutate the OpenCode database.
 
-The database contains normalized tables: `session`, `message`, `part`, `project`, and others. Sessions link to projects via `project_id`, and subagent sessions link to parents via `parent_id`.
+## Current Context
 
-## Approach: Direct rusqlite Read
+Yeek currently has two source adapters:
 
-Open the OpenCode SQLite database directly using rusqlite (already a dependency) and execute SQL queries to extract sessions and messages. No intermediate format, no JSON parsing of the session files themselves.
+- `claudecode`: reads Claude Code JSONL transcripts from `~/.claude/projects`.
+- `codex`: reads Codex JSONL transcripts from `~/.codex/sessions` and `~/.codex/archived_sessions`.
 
-**Why not JSONL export:** OpenCode's data is relational SQLite — exporting to JSONL would add an unnecessary layer, duplicate work, and risk data loss. Yeek already uses rusqlite extensively, so direct SQL reads are natural.
+OpenCode is different. Current vendored OpenCode code defines a normalized SQLite schema under `vendor/opencode/packages/opencode/src/session/session.sql.ts`:
+
+- `session`: session metadata, including `project_id`, `parent_id`, `title`, `directory`, `agent`, `model`, `time_created`, `time_updated`, and `time_archived`.
+- `project`: project/worktree metadata, including `worktree`.
+- `message`: message metadata, with role and model details in JSON `data`.
+- `part`: message parts, with text, reasoning, tool, file, snapshot, patch, and related payloads in JSON `data`.
+
+OpenCode's default database path is `Global.Path.data/opencode.db`. The common runtime locations are:
+
+- macOS desktop: `~/Library/Application Support/opencode/opencode.db`
+- XDG/CLI: `${XDG_DATA_HOME:-~/.local/share}/opencode/opencode.db`
+- channel builds: `${data_dir}/opencode-<channel>.db`
+- explicit override: `OPENCODE_DB`
+
+Yeek should discover existing default/channel DB files from the common data directories. `OPENCODE_DB` is only used when present in Yeek's own environment.
+
+## Product Behavior
+
+OpenCode sessions appear in Yeek like other agent sessions:
+
+- Root sessions are listed in the normal session browser.
+- Child sessions with `session.parent_id` are ingested and stored with `parent_session_id`, but they remain hidden from root browse results because Yeek already filters `parent_session_id IS NULL`.
+- Search covers OpenCode message previews through the existing `messages_fts` rebuild path.
+- Session detail, transcript view, and graph view reuse the existing Yeek message model.
+- Destructive source deletion is not supported for OpenCode because one DB file can contain many sessions. Session hide/soft-delete behavior remains Yeek-local.
+
+No resume command is required in this feature. If the UI later exposes OpenCode resume, that should be a separate design because `do_resume_session` currently only supports `claude_code`, `claude_code_subagent`, and `codex`.
 
 ## Source Discovery
 
-Single file at a known path:
+Create `src-tauri/src/adapter/opencode/mod.rs` with adapter functions matching the existing convention:
 
+```rust
+pub(crate) fn discover_sources() -> Result<Vec<SourceDescriptor>, AppError>;
+pub(crate) fn source_descriptor_from_path(path: &Path) -> Option<SourceDescriptor>;
+pub(crate) fn index_sources<F>(
+    conn: &rusqlite::Connection,
+    sources: &[SourceDescriptor],
+    on_progress: F,
+) -> Result<IndexResult, AppError>
+where
+    F: Fn(i64);
 ```
-~/Library/Application Support/opencode/opencode.db   (macOS)
-~/.local/share/opencode/opencode.db                   (Linux)
+
+Discovery rules:
+
+- Candidate filenames are `opencode.db` and `opencode-*.db`.
+- Candidate directories are:
+  - `OPENCODE_DB` if set and absolute, or joined to the OpenCode data directory if relative.
+  - `~/Library/Application Support/opencode` on macOS.
+  - `${XDG_DATA_HOME}/opencode` when `XDG_DATA_HOME` is set.
+  - `~/.local/share/opencode` as the XDG fallback.
+- `source_descriptor_from_path` returns `Some` only for existing regular files whose filename is `opencode.db` or starts with `opencode-` and ends with `.db`.
+- `SourceDescriptor` values use:
+  - `source_type: "opencode_db"`
+  - `agent: "opencode"`
+  - `path`: absolute DB path
+  - `fingerprint`: `"{file_size_bytes}:{modified_time_millis}"`
+  - `last_modified`: metadata modified time as RFC3339
+
+The fingerprint is coarse by design. A changed OpenCode DB triggers a full adapter pass for that DB.
+
+## SQLite Read Strategy
+
+Open the OpenCode DB with:
+
+```rust
+Connection::open_with_flags(
+    path,
+    OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_URI,
+)
 ```
 
-Resolved via the `dirs` crate (already a dependency). `discover_sources()` checks for the file's existence and returns one `SourceDescriptor` with `source_type: "opencode_db"`.
+Then execute:
 
-Fingerprint: `"{file_size_bytes}:{modified_time_millis}"` — since the entire DB changes when any session is updated, a full re-scan is needed on every change. Unchanged fingerprints are skipped (same pattern as existing adapters).
+```sql
+PRAGMA query_only = ON;
+PRAGMA busy_timeout = 5000;
+```
 
-## Data Model Mapping
+Do not run `PRAGMA journal_mode = WAL` on the OpenCode connection. That pragma can write database metadata; the adapter must stay strictly read-only.
 
-### Sessions: OpenCode → Yeek `SessionRecord`
+Before querying, validate the minimum expected schema with `sqlite_master` or `PRAGMA table_info`:
 
-| OpenCode column | Yeek field | Transform |
+- Required tables: `session`, `project`, `message`, `part`.
+- Required columns:
+  - `session`: `id`, `project_id`, `parent_id`, `directory`, `title`, `agent`, `model`, `time_created`, `time_updated`, `time_archived`
+  - `project`: `id`, `worktree`
+  - `message`: `id`, `session_id`, `time_created`, `data`
+  - `part`: `id`, `message_id`, `session_id`, `time_created`, `data`
+
+If validation fails, return one adapter error for that source and leave Yeek data unchanged for the source savepoint.
+
+## Mapping
+
+### Session Mapping
+
+Use one Yeek session per OpenCode `session` row.
+
+| OpenCode | Yeek | Rule |
 |---|---|---|
-| `session.id` | `id` | Direct |
-| — | `agent` | Constant `"opencode"` |
-| `project.worktree` | `project_path` | JOIN `session.project_id = project.id` |
-| `session.title` | `title` | Direct |
-| `session.model.id` (JSON) | `model` | Parse JSON `{"id": "..."}`, extract `.id` |
-| — | `git_branch` | `None` (not in OpenCode schema) |
-| `session.time_created` | `started_at` | Unix ms → ISO 8601 |
-| `session.time_updated` | `ended_at` | Unix ms → ISO 8601 |
-| `session.parent_id` | `parent_session_id` | Direct |
-| — | `status` | `Active` if `time_archived` is NULL, else `Complete` |
-| — | `message_count` | Count from query |
+| `session.id` | `SessionRecord.id` | Prefix as `opencode:{id}` to avoid cross-agent collisions. |
+| constant | `agent` | `"opencode"` |
+| `project.worktree` | `project_path` | Prefer joined `project.worktree`; fallback to `session.directory`. |
+| `session.title` | `title` | Direct. Empty string becomes `None`. |
+| `session.model` JSON | `model` | Prefer `model.id`; fallback to `providerID/modelID`; fallback `None`. |
+| `session.agent` | message/session metadata | Preserve in metadata where useful; Yeek `agent` stays `"opencode"`. |
+| none | `git_branch` | `None`. |
+| `session.time_created` | `started_at` | Unix milliseconds to RFC3339 UTC. |
+| `session.time_updated` | `ended_at`, `updated_at` | Unix milliseconds to RFC3339 UTC. |
+| `session.time_archived` | `status` | `Complete` if not null, else `Active`. |
+| `session.parent_id` | `parent_session_id` | Prefix as `opencode:{parent_id}`. |
+| current message count | `message_count` | Count `message` rows for this session. |
+| Yeek defaults | visibility/delete fields | `Visible`, `false`, `None`, no archived/deleted timestamps. |
 
-Subagent sessions (`parent_id IS NOT NULL`) are included. Their IDs are prefixed as `{parent_id}:{child_id}` for uniqueness within Yeek's unified namespace.
+Do not create synthetic child IDs like `{parent_id}:{child_id}`. OpenCode session IDs are already globally unique inside the DB, and prefixing with `opencode:` is enough for Yeek's unified namespace.
 
-### Messages: OpenCode → Yeek `MessageRecord`
+### Message Mapping
 
-Each row in OpenCode's `message` table becomes one `MessageRecord`. Content details come from the `part` table:
+Use one primary Yeek `MessageRecord` per OpenCode `message` row, plus optional extra records for significant tool/reasoning parts when needed for transcript fidelity.
 
-| OpenCode | Yeek field | Notes |
+Message base fields:
+
+| OpenCode | Yeek | Rule |
 |---|---|---|
-| `message.id` | `id` | Direct |
-| `message.session_id` | `session_id` | Direct |
-| `message.data.role` (JSON) | `role` | `"user"` → `"human"`, `"assistant"` → `"assistant"` |
-| Part `type="text"` | `content_preview` | Concatenate text parts, truncate to ~500 chars |
-| Part `type="tool"` | `kind="tool_use"`, `tool_name` | Extract from `data.tool` |
-| Part `type="tool"` with completed state | `kind="tool_result"` | Extract output from `data.state.output` |
-| `message.time_created` | `timestamp` | Unix ms → ISO 8601 |
-| Subagent session | `is_sidechain` | `true` if `session.parent_id IS NOT NULL` |
-| Part `type="reasoning"` | `kind="thinking"` | Extract thinking text |
+| `message.id` | `id` | Prefix as `opencode:{message.id}`. |
+| `message.session_id` | `session_id` | Prefix as `opencode:{session_id}`. |
+| assistant `data.parentID` | `parent_id` | Prefix as `opencode:{parentID}`. User messages use `None`. |
+| `message.data.role` | `role` | `"user"` -> `"human"`, `"assistant"` -> `"assistant"`. |
+| `message.time_created` | `timestamp` | Unix milliseconds to RFC3339 UTC. |
+| session has `parent_id` | `is_sidechain` | `true` for child sessions. |
+| message JSON | `metadata` | Compact JSON with OpenCode role, agent, model/provider, and any error/finish fields. |
 
-## Architecture
+Content preview rules:
 
-### New file: `src-tauri/src/adapter/opencode/mod.rs`
+- Join `part.data.text` from `text` parts for the message.
+- Include `reasoning` text only in separate `thinking` records, not in the normal assistant preview.
+- For tool parts, include a concise line in the primary preview only if no text part exists.
+- Truncate previews using the same safe UTF-8 character boundary approach used by existing adapters.
+- Empty previews become a short type label such as `[tool: bash]`, `[reasoning]`, `[snapshot]`, or `[message]`.
 
-Three public functions matching the existing adapter convention:
+Part-specific records:
 
-1. **`discover_sources() -> Result<Vec<SourceDescriptor>>`** — Check XDG path for `opencode.db`. Return single descriptor or empty vec.
+- `part.data.type = "reasoning"` creates `kind: "thinking"`, `entry_type: "reasoning"`.
+- `part.data.type = "tool"` creates:
+  - `kind: "tool_use"` for pending/running tool state.
+  - `kind: "tool_result"` for completed/error tool state.
+  - `tool_name` from `data.tool`.
+  - `content_preview` from `state.title`, `state.output`, or `state.error`, in that order.
+- `snapshot`, `patch`, `file`, `agent`, `subtask`, `compaction`, `retry`, `step-start`, and `step-finish` parts may be folded into metadata or represented as concise system/attachment records if needed, but they must not break ingestion when unfamiliar fields appear.
 
-2. **`index_sources(conn, sources, on_progress) -> Result<IndexResult>`** — For each source:
-   - Open OpenCode's SQLite with `PRAGMA query_only = ON` and `PRAGMA journal_mode = WAL` for safe concurrent reads
-   - Query `session JOIN project` for all sessions (including subagents via `parent_id`)
-   - For each session, query `message` and `part` tables to build `MessageRecord`s
-   - Upsert into Yeek's `sessions`, `messages`, `sources`, `session_sources` tables
-   - Use SAVEPOINT per source for atomicity (same pattern as Claude Code/Codex adapters)
+Record IDs for part-derived messages must be deterministic:
 
-3. **`source_descriptor_from_path(path) -> Option<SourceDescriptor>`** — Return `Some` if path ends with `opencode.db`, `None` otherwise.
+```text
+opencode:{message_id}:part:{part_id}
+```
 
-### Integration points
+## Indexing Flow
 
-1. **`adapter/mod.rs`** — Add `pub mod opencode;`
-2. **`sync/background.rs`** — Add `opencode::discover_sources()` and `opencode::index_sources()` calls alongside existing Claude/Codex calls
-3. **`sync/watcher.rs`** — Add OpenCode routing in `run_incremental_scan`: try `opencode::source_descriptor_from_path(p)` first (since it checks for `opencode.db`), then Codex, then Claude Code
-4. **`lib.rs`** — Add file watcher for `~/Library/Application Support/opencode/` directory if it exists
+`index_sources` follows the Codex/Claude adapter pattern:
 
-## SQLite Concurrency
+1. Load active source fingerprints from Yeek's `sources` table.
+2. Begin one Yeek transaction for all OpenCode sources.
+3. For each changed source, create `SAVEPOINT sp_opencode_<i>`.
+4. Open the OpenCode DB read-only and parse sessions/messages from that source.
+5. For each parsed session:
+   - `DELETE FROM messages WHERE session_id = ?` before reinserting that session's current messages. This prevents stale messages after OpenCode compaction, retry, or part removal.
+   - Upsert `sessions`.
+   - Upsert current messages.
+   - Upsert `sources`.
+   - Link `session_sources` with `delete_policy = "not_allowed"`.
+6. Release or roll back the savepoint.
+7. Record an `opencode_sync_completed` action with indexed/updated/error counts.
+8. Commit the transaction.
+9. If any source was indexed or updated, rebuild `messages_fts` using the existing global rebuild statement.
 
-OpenCode runs with WAL mode enabled. Reading its database while OpenCode is writing is safe — WAL allows concurrent readers. The adapter opens with `PRAGMA query_only = ON` to guarantee no accidental writes, and uses `OPEN_READONLY` flag on rusqlite's `Connection::open_with_flags`.
+Stale OpenCode sessions missing from a later DB scan should not be hard-deleted from Yeek in the first version. They can remain visible until a future deletion/reconciliation design decides how to distinguish archived, compacted, and removed sessions safely.
 
-## Files Changed
+## Integration Points
 
-| File | Change |
-|---|---|
-| `src-tauri/src/adapter/opencode/mod.rs` | **New** — adapter implementation (~300-400 lines) |
-| `src-tauri/src/adapter/mod.rs` | Add `pub mod opencode;` |
-| `src-tauri/src/sync/background.rs` | Add OpenCode discover + index calls |
-| `src-tauri/src/sync/watcher.rs` | Add OpenCode path routing + watcher import |
-| `src-tauri/src/lib.rs` | Add watcher for XDG opencode directory |
+Backend integration:
+
+- `src-tauri/src/adapter/mod.rs`: add `pub mod opencode;`.
+- `src-tauri/src/sync/background.rs`: import `opencode`, discover OpenCode sources, include them in `total`, index after Codex, and add counts into the final summary.
+- `src-tauri/src/sync/watcher.rs`: add `opencode_sources`; route changed `.db` files through `opencode::source_descriptor_from_path` before JSONL adapters; remove the current 10 MB skip for OpenCode DB files because the DB can legitimately exceed that limit.
+- `src-tauri/src/lib.rs`: start file watchers for existing OpenCode data directories, not for every possible file. Watch directories that exist at startup.
+- `src-tauri/src/app/commands.rs`: allow `"opencode"` in browse filters so the frontend can filter OpenCode sessions. Do not add resume support in this feature.
+
+Frontend integration:
+
+- Add `"opencode"` to any agent filter options and labels where Claude Code/Codex are listed.
+- Display label: `OpenCode`.
+- Do not add OpenCode-specific transcript UI. Use existing message kinds.
+
+## Error Handling
+
+- Missing DB: discovery returns an empty source list.
+- Locked/busy DB: respect `busy_timeout`; if still unavailable, count one source error and keep existing Yeek rows.
+- Unknown schema: count one source error with a clear log message naming the missing table/column.
+- Invalid JSON in `session.model`, `message.data`, or `part.data`: skip only the malformed row or part, count it in source errors, and continue parsing the rest of the DB.
+- Invalid timestamp: store `None` for optional timestamps; use current UTC only where Yeek requires `updated_at` and OpenCode has no usable value.
+
+## Test Plan
+
+Add unit tests in `src-tauri/src/adapter/opencode/mod.rs` using temporary SQLite fixtures:
+
+- `source_descriptor_accepts_default_and_channel_db_names`: accepts `opencode.db` and `opencode-beta.db`; rejects unrelated `.db` files.
+- `discover_sources_finds_existing_db`: finds a fixture DB in a controlled data directory helper.
+- `indexes_root_session`: maps a root OpenCode session, project worktree, title, model JSON, timestamps, and text messages.
+- `indexes_child_session`: maps `parent_id` to prefixed `parent_session_id` and marks messages `is_sidechain`.
+- `maps_tool_and_reasoning_parts`: creates `thinking`, `tool_use`, and `tool_result` records with stable IDs and tool names.
+- `skips_unchanged_fingerprint`: second index pass with same fingerprint produces no indexed/updated sessions.
+- `rejects_missing_schema`: fixture without required tables rolls back the source savepoint and reports an error.
+- `clears_stale_messages_on_reindex`: removing a part/message from the fixture DB and updating the fingerprint removes the stale Yeek messages for that session.
+
+Run:
+
+```bash
+cargo test -p yeek opencode
+cargo check
+npm run typecheck
+```
+
+Manual checks:
+
+- Start Yeek with an existing OpenCode DB present.
+- Confirm root OpenCode sessions appear in browse.
+- Confirm search finds text from OpenCode messages.
+- Confirm child sessions are hidden from root browse but visible through session graph/detail where parent relationships are used.
+- Confirm OpenCode DB files are never deleted through destructive session cleanup.
+
+## Non-Goals
+
+- No OpenCode resume command.
+- No OpenCode write-back, migration, compaction, or deletion.
+- No new Yeek database schema migration.
+- No special UI for OpenCode-only part types in the first version.
+- No JSONL export/import bridge.
