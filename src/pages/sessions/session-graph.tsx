@@ -84,7 +84,7 @@ function GraphCanvas({
         }}
       />
       <Background color="var(--border, #464b57)" gap={24} size={1} />
-      <Panel position="top-right" style={{ padding: 12 }}>
+      <Panel position="bottom-right" style={{ padding: 12 }}>
         <Button
           variant="outline"
           size="sm"
