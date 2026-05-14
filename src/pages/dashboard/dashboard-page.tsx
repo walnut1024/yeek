@@ -5,7 +5,7 @@ import { getSystemStatus, getActionLog, getProxyMetrics, listPlugins, listMarket
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
 import { UpdateBanner } from "@/components/update-banner";
-import { formatTime, formatRelativeTime, getCurrentLocale } from "@/lib/formatters";
+import { formatTime, formatRelativeTime, formatDuration, getCurrentLocale } from "@/lib/formatters";
 
 const VISIBLE_ACTIONS = 5;
 
@@ -81,7 +81,7 @@ export default function DashboardPage() {
           <section data-ai-region="dashboard-proxy">
             <p className="zed-kicker mb-1.5 mt-5">{t("dashboard.proxyRuntime")}</p>
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 2xl:grid-cols-6">
-              <MetricCard label={t("dashboard.metricUptime")} value={`${Math.floor(metrics.uptime_secs / 60)}m`} sub={`${metrics.uptime_secs}s`} />
+              <MetricCard label={t("dashboard.metricUptime")} value={formatDuration(metrics.uptime_secs)} sub={`${metrics.uptime_secs}s`} />
               <MetricCard label={t("dashboard.metricRPS")} value={metrics.rps.toFixed(1)} sub={t("dashboard.metricReqSec")} />
               <MetricCard label={t("dashboard.metricLatency")} value={`${metrics.avg_latency_ms.toFixed(0)}ms`} sub={t("dashboard.metricAvg")} />
               <MetricCard label={t("dashboard.metricActive")} value={String(metrics.active_connections)} sub={t("dashboard.metricConnections")} />

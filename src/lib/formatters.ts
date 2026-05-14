@@ -32,6 +32,17 @@ export function formatRelativeTime(iso: string | null): string {
   }
 }
 
+export function formatDuration(secs: number): string {
+  if (secs < 60) return `${secs}s`;
+  const d = Math.floor(secs / 86400);
+  const h = Math.floor((secs % 86400) / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = Math.floor(secs % 60);
+  if (d > 0) return `${d}d ${h}h ${m}m`;
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  return `${m}m ${s}s`;
+}
+
 export function formatTime(iso: string | null): string {
   if (!iso) return i18n.t("format.notAvailable");
   try {
