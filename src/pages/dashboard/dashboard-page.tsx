@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { getSystemStatus, getActionLog, getProxyMetrics, listPlugins, listMarketplaces, getProxyErrorEvents } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
+import { X } from "lucide-react";
 import { UpdateBanner } from "@/components/update-banner";
 import { formatTime, formatRelativeTime, getCurrentLocale } from "@/lib/formatters";
 
@@ -72,7 +73,7 @@ export default function DashboardPage() {
 
         <div className="min-h-0 flex-1 overflow-auto p-3">
         {/* Overview */}
-        <section data-ai-region="dashboard-overview" className="grid grid-cols-4 gap-3">
+        <section data-ai-region="dashboard-overview" className="grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-4">
           <StatCard label={t("dashboard.statSessions")} value={String(status?.total_sessions ?? "-")} sub={t("dashboard.statAllTime")} />
           <StatCard label={t("dashboard.statMessages")} value={status?.total_messages != null ? formatCount(status.total_messages) : "-"} sub={t("dashboard.statProcessed")} accent />
           <StatCard label={t("dashboard.statActive")} value={String(status?.active_sessions ?? "-")} sub={status ? t("dashboard.statActiveSub", { complete: status.complete_sessions, partial: status.partial_sessions }) : "—"} />
@@ -82,8 +83,8 @@ export default function DashboardPage() {
         {/* Proxy */}
         {metrics && (
           <section data-ai-region="dashboard-proxy">
-            <p className="zed-kicker mt-7 mb-2">{t("dashboard.proxyRuntime")}</p>
-            <div className="grid grid-cols-6 gap-3">
+            <p className="zed-kicker mb-1.5 mt-5">{t("dashboard.proxyRuntime")}</p>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 2xl:grid-cols-6">
               <MetricCard label={t("dashboard.metricUptime")} value={`${Math.floor(metrics.uptime_secs / 60)}m`} sub={`${metrics.uptime_secs}s`} />
               <MetricCard label={t("dashboard.metricRPS")} value={metrics.rps.toFixed(1)} sub={t("dashboard.metricReqSec")} />
               <MetricCard label={t("dashboard.metricLatency")} value={`${metrics.avg_latency_ms.toFixed(0)}ms`} sub={t("dashboard.metricAvg")} />
@@ -96,8 +97,8 @@ export default function DashboardPage() {
 
         {/* Session */}
         <section data-ai-region="dashboard-session">
-          <p className="zed-kicker mt-7 mb-2">{t("dashboard.sectionSession")}</p>
-          <div className="grid grid-cols-4 gap-3">
+          <p className="zed-kicker mb-1.5 mt-5">{t("dashboard.sectionSession")}</p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-4">
             <StatCard label={t("dashboard.statSources")} value={String(status?.total_sources ?? "-")} sub={t("dashboard.statSourcesSub")} />
             <StatCard label={t("dashboard.statProjects")} value={String(status?.total_projects ?? "-")} sub={t("dashboard.statProjectsSub")} />
             <StatCard label={t("dashboard.statComplete")} value={String(status?.complete_sessions ?? "-")} sub={t("dashboard.statCompleteSub")} />
@@ -107,8 +108,8 @@ export default function DashboardPage() {
 
         {/* Marketplace */}
         <section data-ai-region="dashboard-marketplace">
-          <p className="zed-kicker mt-7 mb-2">{t("dashboard.sectionMarketplace")}</p>
-          <div className="grid grid-cols-4 gap-3">
+          <p className="zed-kicker mb-1.5 mt-5">{t("dashboard.sectionMarketplace")}</p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-4">
             <StatCard label={t("dashboard.statRegistries")} value={String(marketplaces.length)}
               sub={marketplaces.length > 0
                 ? `${marketplaces.filter(m => m.repo?.startsWith("http")).length} remote, ${marketplaces.filter(m => !m.repo?.startsWith("http")).length} local`
@@ -125,9 +126,9 @@ export default function DashboardPage() {
 
         {/* Activity Timeline (merged with alerts) */}
         <section data-ai-region="dashboard-activity">
-        <p className="zed-kicker mt-7 mb-2">{t("dashboard.activity")}</p>
+        <p className="zed-kicker mb-1.5 mt-5">{t("dashboard.activity")}</p>
         {allActions.length === 0 ? (
-          <div className="border border-border bg-secondary px-2.5 py-2 text-[13px] text-muted-foreground">
+          <div className="rounded-lg border border-border bg-secondary px-2.5 py-2 text-[12px] text-muted-foreground">
             {t("dashboard.noActions")}
           </div>
         ) : (
@@ -183,10 +184,10 @@ export default function DashboardPage() {
         <div className="w-[420px] h-full flex flex-col">
           <div className="flex items-center justify-between px-3 py-2 border-b border-border">
             <div>
-              <h3 className="text-[14px] font-medium">Proxy Errors</h3>
-              <p className="text-[12px] text-muted-foreground">Retains last 100 errors, cleared on proxy restart</p>
+              <h3 className="text-[14px] font-medium">{t("dashboard.proxyErrors")}</h3>
+              <p className="text-[12px] text-muted-foreground">{t("dashboard.proxyErrorsDesc")}</p>
             </div>
-            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-[14px]" onClick={() => setShowErrorSheet(false)}>✕</Button>
+            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setShowErrorSheet(false)} aria-label={t("common.close", { defaultValue: "Close" })}><X size={14} /></Button>
           </div>
           <div className="flex-1 overflow-auto px-3 pt-2">
             {!errorEvents || errorEvents.length === 0 ? (
@@ -220,18 +221,18 @@ export default function DashboardPage() {
 function StatCard({ label, value, sub, accent, danger }: { label: string; value: string; sub: string; accent?: boolean; danger?: boolean }) {
   const c = accent ? "accent" : danger ? "danger" : "default";
   return (
-    <article data-ai-item="stat-card" className={`flex flex-col border p-[18px_20px_16px] ${
-      c === "accent" ? "border-primary/20 bg-[linear-gradient(135deg,rgba(94,106,210,0.16),rgba(20,21,22,1))]" :
+    <article data-ai-item="stat-card" className={`metric-tile flex min-h-[112px] flex-col ${
+      c === "accent" ? "border-primary/20 bg-[rgba(28,28,28,0.035)]" :
       c === "danger" ? "border-destructive/20 bg-destructive/5" :
-      "bg-card border-border"
+      ""
     }`}>
       <p className={`text-[12px] uppercase tracking-[0.06em] ${
         c === "accent" ? "text-primary" : c === "danger" ? "text-destructive" : "text-muted-foreground"
       }`}>{label}</p>
-      <p className={`mt-2.5 font-mono text-[28px] font-medium leading-none tracking-[-0.03em] ${
+      <p className={`mt-2 font-mono text-[24px] font-medium leading-none tracking-[-0.03em] ${
         c === "accent" ? "text-primary" : c === "danger" ? "text-destructive" : "text-foreground"
       }`}>{value}</p>
-      <p className="mt-auto pt-2 text-[12px] text-muted-foreground">{sub}</p>
+      <p className="mt-auto pt-1.5 text-[11px] text-muted-foreground">{sub}</p>
     </article>
   );
 }
@@ -240,12 +241,12 @@ function MetricCard({ label, value, sub, danger, onClick }: { label: string; val
   return (
     <article
       data-ai-item="metric-card"
-      className={`border border-border bg-card px-3 py-3.5 text-center ${onClick ? "cursor-pointer hover:bg-card/80 transition-colors" : ""}`}
+      className={`metric-tile text-center ${onClick ? "cursor-pointer transition-colors hover:bg-element-hover" : ""}`}
       onClick={onClick}
     >
-      <p className={`font-mono text-[18px] font-medium leading-none tracking-[-0.02em] ${danger ? "text-chart-3" : "text-foreground"}`}>{value}</p>
-      <p className="mt-1.5 text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">{label}</p>
-      <p className="mt-1 font-mono text-[11px] text-muted-foreground/50">{sub}</p>
+      <p className={`font-mono text-[17px] font-medium leading-none tracking-[-0.02em] ${danger ? "text-chart-3" : "text-foreground"}`}>{value}</p>
+      <p className="mt-1 text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground">{label}</p>
+      <p className="mt-0.5 font-mono text-[10px] text-muted-foreground/60">{sub}</p>
     </article>
   );
 }
