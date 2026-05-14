@@ -5,7 +5,7 @@ import { getSessionTranscript } from "@/lib/api";
 import { TRANSCRIPT_INITIAL_COUNT, TRANSCRIPT_LOAD_MORE } from "@/lib/constants";
 import type { MessageRecord } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { ChevronUp, ChevronDown, Rows3, GitBranch } from "lucide-react";
+import { ChevronUp, ChevronDown } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import UserBubble from "./user-bubble";
 import AIBubble from "./ai-bubble";
@@ -107,7 +107,6 @@ export default function TranscriptView({
 
   const visibleGroups = groups.slice(0, visibleCount);
   const hasMore = groups.length > visibleCount;
-  const branchCount = transcript?.branches.length ?? 0;
 
   const scrollToTop = () => {
     topAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -125,25 +124,6 @@ export default function TranscriptView({
   return (
     <div data-ai-region="sessions-messages" className="relative px-4 py-4">
       <div ref={topAnchorRef} />
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-secondary px-3 py-2">
-        <div className="flex flex-wrap items-center gap-1.5 text-[12px] text-muted-foreground">
-          <span className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-1.5 py-0.5 font-mono text-[10px]">
-            <Rows3 size={12} />
-            {t("transcript.messageCount", { count: mainCount })}
-          </span>
-          {branchCount > 0 && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-1.5 py-0.5 font-mono text-[10px]">
-              <GitBranch size={12} />
-              {t("transcript.branchCount", { count: branchCount })}
-            </span>
-          )}
-        </div>
-        {hasMore && (
-          <Button variant="outline" size="xs" onClick={() => setVisibleCount(groups.length)}>
-            {t("transcript.showAll")}
-          </Button>
-        )}
-      </div>
 
       <div className="space-y-1.5">
         {visibleGroups.map((group, i) => (

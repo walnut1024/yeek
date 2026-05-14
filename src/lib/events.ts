@@ -18,28 +18,9 @@ declare global {
   }
 }
 
-class SseEventTransport implements EventTransport {
-  private es: EventSource;
-  private listeners: Map<string, Set<EventHandler>> = new Map();
-
-  constructor(url = "http://localhost:17321/api/events") {
-    this.es = new EventSource(url);
-    this.es.onmessage = (msg) => {
-      try {
-        const { event, payload } = JSON.parse(msg.data);
-        this.listeners.get(event)?.forEach((h) => h(payload));
-      } catch {
-        /* ignore malformed messages */
-      }
-    };
-  }
-
-  async on<T = unknown>(event: string, handler: EventHandler<T>): Promise<UnlistenFn> {
-    if (!this.listeners.has(event)) this.listeners.set(event, new Set());
-    this.listeners.get(event)!.add(handler as EventHandler);
-    return () => {
-      this.listeners.get(event)?.delete(handler as EventHandler);
-    };
+class NoopEventTransport implements EventTransport {
+  async on<T = unknown>(_event: string, _handler: EventHandler<T>): Promise<UnlistenFn> {
+    return () => {};
   }
 }
 
@@ -47,7 +28,7 @@ const isTauri = !!window.__TAURI_INTERNALS__;
 
 const eventTransport: EventTransport = isTauri
   ? new TauriEventTransport()
-  : new SseEventTransport();
+  : new NoopEventTransport();
 
 export function getEventTransport(): EventTransport {
   return eventTransport;

@@ -1,49 +1,41 @@
-# Logs
-logs
-*.log
-npm-debug.log*
 
-# Dependencies
-node_modules
-
+!.vscode/extensions.json
 # Build output
+# Claude Code / agent config
+# Dependencies
+# Editor directories and files
+# Logs
+# Reference & prototypes
+# Release artifacts
+# Release secrets
+# Runtime data
+# Rust build
+*.local
+*.log
+*.njsproj
+*.ntvs*
+*.sln
+*.suo
+*.sw?
+.DS_Store
+.agents/
+.claude/
+.idea
+.release.env
+.superpowers/
+.vscode/*
+demo/
 dist
 dist-ssr
-*.local
-
-# Release artifacts
-release/
-
-# Rust build
-src-tauri/target
-vendor_proxy/target
-target/
-
-# Runtime data
-src-tauri/yeek.db
-
-# Release secrets
-.release.env
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
-# Claude Code / agent config
-.claude/
-.agents/
-.superpowers/
-
-# Reference & prototypes
+logs
+node_modules
+npm-debug.log*
+prototype/
 reference/
-demo/
+release/
+src-tauri/target
+src-tauri/yeek.db
+target/
 ui_design/
 vendor/
-prototype/
+vendor_proxy/target

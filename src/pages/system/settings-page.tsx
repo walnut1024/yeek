@@ -6,7 +6,6 @@ import { getActionLog, releaseAndResync } from "@/lib/api";
 import { useLocalStorage } from "@/lib/hooks";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { PageHeader } from "@/components/ui/page-header";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -95,7 +94,6 @@ export default function SettingsPage() {
   return (
     <div className="grid h-full min-h-0 xl:grid-cols-[minmax(0,1.2fr)_320px]">
       <section data-ai-region="settings-content" className="overflow-auto p-3">
-        <PageHeader kicker={t("settings.operations")} title={t("settings.title")} description={t("settings.description")} region="settings-header" />
 
         <div className="mt-3 space-y-3">
           <section className="surface-card p-3">

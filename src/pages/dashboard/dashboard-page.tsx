@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { getSystemStatus, getActionLog, getProxyMetrics, listPlugins, listMarketplaces, getProxyErrorEvents } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { PageHeader } from "@/components/ui/page-header";
 import { X } from "lucide-react";
 import { UpdateBanner } from "@/components/update-banner";
 import { formatTime, formatRelativeTime, getCurrentLocale } from "@/lib/formatters";
@@ -64,9 +63,6 @@ export default function DashboardPage() {
     <div className="flex h-full overflow-hidden">
       {/* Main content */}
       <div className="flex h-full flex-col overflow-hidden flex-1 min-w-0">
-
-        {/* Header */}
-        <PageHeader title={t("dashboard.title")} description={t("dashboard.description")} region="dashboard-header" />
 
         {/* Update notification banner */}
         <UpdateBanner />

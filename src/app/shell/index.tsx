@@ -10,14 +10,15 @@ import {
   softDeleteProject,
   destructiveDeleteSessions,
   getDeleteJob,
+  getDeletePlan,
 } from "@/lib/api";
+import type { SessionRecord, SourceDeletePlan } from "@/lib/api";
 import { useDebouncedValue, useLocalStorage } from "@/lib/hooks";
 import { useZoom } from "./use-zoom";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import SessionRow from "@/pages/sessions/session-row";
-import { PageHeader } from "@/components/ui/page-header";
 import { PageToolbar } from "@/components/ui/page-toolbar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
@@ -30,7 +31,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { MessageSquare, LayoutGrid, ShoppingBag, Settings, Code, Check, Minus, Trash2, ChevronRight } from "lucide-react";
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/app-sidebar";
+import { SiteHeader } from "@/components/site-header";
+import { Check, Minus, Trash2, ChevronRight } from "lucide-react";
 import { SESSION_PAGE_SIZE } from "@/lib/constants";
 import { useGroupedSessions } from "./use-grouped-sessions";
 import { useSessionSelection } from "./use-session-selection";
@@ -45,8 +49,8 @@ const SessionDetailPane = lazy(() => import("@/pages/sessions/session-detail-pan
 export function AppShell() {
   const [section, setSection] = useState<"dashboard" | "sessions" | "marketplace" | "settings" | "proxy">("dashboard");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [agentFilter, setAgentFilter] = useLocalStorage("agent-filter", "claude_code");
   const queryClient = useQueryClient();
-  const { t } = useTranslation();
   useZoom();
 
   const { data: status } = useQuery({
@@ -54,13 +58,6 @@ export function AppShell() {
     queryFn: getSystemStatus,
     refetchInterval: 30_000,
   });
-
-  const navItems = [
-    { key: "dashboard" as const, label: t("nav.dashboard"), icon: LayoutGrid },
-    { key: "sessions" as const, label: t("nav.sessions"), icon: MessageSquare, badge: status ? String(status.total_sessions) : undefined },
-    { key: "marketplace" as const, label: t("nav.marketplace"), icon: ShoppingBag },
-    { key: "proxy" as const, label: t("nav.proxy"), icon: Code },
-  ];
 
   useEffect(() => {
     const transport = getEventTransport();
@@ -80,64 +77,109 @@ export function AppShell() {
   return (
     <div className="app-shell">
       <div className="app-overlay" />
-      <div className="relative z-10 flex h-full min-h-0 overflow-hidden">
-        <nav data-ai-region="app-sidebar" className="flex w-[184px] shrink-0 flex-col border-r border-border bg-card px-2.5 py-3">
-          <div className="border-b border-border pb-2.5">
-            <p className="zed-kicker">{t("app.title")}</p>
-            <p className="mt-0.5 truncate text-[11px] leading-[1.4] text-muted-foreground">
-              {t("app.sessionBrowser")}
-            </p>
-          </div>
-          <div className="flex-1 space-y-1 pt-2.5">
-            {navItems.map(({ key, label, icon: Icon, badge }) => (
-              <Button
-                key={key}
-                type="button"
-                variant={section === key ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setSection(key)}
-                className="h-8 w-full justify-start gap-2 rounded-md px-2 text-left"
-              >
-                <Icon size={16} />
-                <span className="min-w-0 flex-1 truncate">{label}</span>
-                {badge && (
-                  <span className="inline-flex h-5 min-w-[22px] items-center justify-center rounded-full border border-border bg-card px-1.5 font-mono text-[10px] text-muted-foreground">
-                    {badge}
-                  </span>
-                )}
-              </Button>
-            ))}
-          </div>
-          <div className="border-t border-border pt-2.5">
-            <Button
-              type="button"
-              variant={section === "settings" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setSection("settings")}
-              className="h-8 w-full justify-start gap-2 rounded-md px-2 text-left"
-            >
-              <Settings size={16} />
-              <span className="min-w-0 flex-1 truncate">{t("nav.settings")}</span>
-            </Button>
-          </div>
-        </nav>
-
-        {/* Main content */}
-        <main data-ai-page={section} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <div className="h-6 shrink-0" />
-          <div className="min-h-0 flex-1 overflow-hidden">
+      <SidebarProvider
+        className="!min-h-0 h-full"
+        style={{
+          "--sidebar-width": "184px",
+          "--sidebar-width-icon": "48px",
+          "--header-height": "32px",
+        } as React.CSSProperties}
+      >
+        <AppSidebar section={section} onSectionChange={setSection} totalSessions={status?.total_sessions} />
+        <SidebarInset>
+          <SiteHeader section={section} agentFilter={agentFilter} onAgentFilterChange={setAgentFilter} />
+          <main data-ai-page={section} className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <Suspense fallback={<PanelFallback />}>
               {section === "dashboard" && <DashboardPage />}
               {section === "sessions" && (
-                <SessionsPage selectedId={selectedId} onSelect={setSelectedId} />
+                <SessionsPage selectedId={selectedId} onSelect={setSelectedId} agentFilter={agentFilter} />
               )}
               {section === "marketplace" && <MarketplacePage />}
               {section === "settings" && <SettingsPage />}
               {section === "proxy" && <ProxyPage />}
             </Suspense>
-          </div>
-        </main>
+          </main>
+        </SidebarInset>
+      </SidebarProvider>
+    </div>
+  );
+}
+
+function DeletePlanTable({
+  sessionIds,
+  sessions,
+}: {
+  sessionIds: Set<string>;
+  sessions: SessionRecord[];
+}) {
+  const { t } = useTranslation();
+  const [plans, setPlans] = useState<Map<string, SourceDeletePlan[]>>(new Map());
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const ids = Array.from(sessionIds);
+    setLoading(true);
+    Promise.all(ids.map((id) => getDeletePlan(id)))
+      .then((results) => {
+        if (cancelled) return;
+        const map = new Map<string, SourceDeletePlan[]>();
+        results.forEach((plan) => {
+          if (plan.sources.length > 0) {
+            map.set(plan.session_id, plan.sources);
+          }
+        });
+        setPlans(map);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPlans(new Map());
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [sessionIds]);
+
+  const allFiles = useMemo(() => {
+    const files: { path: string; sessionId: string; sessionTitle: string }[] = [];
+    const titleMap = new Map(sessions.map((s) => [s.id, s.title || s.id.slice(0, 12)]));
+    plans.forEach((sources, sessionId) => {
+      for (const s of sources) {
+        files.push({ path: s.target_path, sessionId, sessionTitle: titleMap.get(sessionId) || sessionId.slice(0, 8) });
+      }
+    });
+    return files;
+  }, [plans, sessions]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center rounded-md border border-border bg-secondary/40 px-3 py-6">
+        <span className="text-[13px] text-muted-foreground">{t("manage.loadingPlan")}</span>
       </div>
+    );
+  }
+
+  if (allFiles.length === 0) return null;
+
+  return (
+    <div className="max-h-64 overflow-y-auto rounded-md border border-border">
+      <table className="w-full text-left text-[12px]">
+        <thead className="sticky top-0 bg-secondary/80 backdrop-blur-sm">
+          <tr>
+            <th className="px-3 py-1.5 font-medium text-muted-foreground">{t("manage.columnFile")}</th>
+            <th className="px-3 py-1.5 font-medium text-muted-foreground">{t("manage.columnSession")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {allFiles.map((f, i) => (
+            <tr key={i} className="border-t border-border">
+              <td className="max-w-[280px] truncate px-3 py-1 font-mono text-foreground">{f.path}</td>
+              <td className="max-w-[120px] truncate px-3 py-1 text-muted-foreground">{f.sessionTitle}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -145,15 +187,16 @@ export function AppShell() {
 function SessionsPage({
   selectedId,
   onSelect,
+  agentFilter,
 }: {
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  agentFilter: string;
 }) {
   const queryClient = useQueryClient();
   const [searchRaw, setSearchRaw] = useState("");
   const search = useDebouncedValue(searchRaw, 250);
   const [sortDesc] = useLocalStorage("sort-desc", true);
-  const [agentFilter, setAgentFilter] = useLocalStorage("agent-filter", "claude_code");
   const [collapsedProjects, setCollapsedProjects] = useLocalStorage<
     Record<string, boolean>
   >("collapsed-projects", {});
@@ -289,31 +332,9 @@ function SessionsPage({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Header — full width */}
-      <PageHeader title={t("sessions.title")} description={t("sessions.description")} region="sessions-header" />
-      {/* Search + Manage — full width */}
+      {/* Search + Manage */}
       <PageToolbar region="sessions-toolbar">
         <div className="flex min-w-0 flex-1 flex-col gap-2 lg:flex-row lg:items-center">
-          <div className="flex items-center gap-0.5">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className={`pill-tab ${agentFilter === "claude_code" ? "pill-tab-active" : "pill-tab-idle"}`}
-              onClick={() => setAgentFilter("claude_code")}
-            >
-              Claude Code
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className={`pill-tab ${agentFilter === "codex" ? "pill-tab-active" : "pill-tab-idle"}`}
-              onClick={() => setAgentFilter("codex")}
-            >
-              Codex
-            </Button>
-          </div>
           <label className="block flex-1 lg:max-w-xl">
             <span className="sr-only">{t("sessions.searchSrLabel")}</span>
             <input
@@ -324,16 +345,52 @@ function SessionsPage({
               className="zed-input"
             />
           </label>
-          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            <span className="rounded-full border border-border bg-secondary/50 px-2 py-1 font-mono">
-              {sessions.length}
-            </span>
-            <span>{isSearching ? t("sessions.searchResults") : t("sessions.total", { count: sessions.length })}</span>
+          <div className="flex items-center gap-1.5">
+            {!manageMode ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 rounded-md px-3 text-[12px]"
+                onClick={() => setManageMode(true)}
+              >
+                {t("sessions.manage")}
+              </Button>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 rounded-md px-3 text-[12px]"
+                  onClick={exitManageMode}
+                >
+                  {t("manage.cancel")}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 rounded-md px-3 text-[12px]"
+                  onClick={toggleAll}
+                >
+                  {allSelected ? t("manage.cancel") : t("sessions.selectAll")}
+                </Button>
+                {selectedIds.size > 0 && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="h-8 rounded-md px-3 text-[12px]"
+                    onClick={() => setDeleteDialogOpen(true)}
+                  >
+                    <Trash2 size={14} />
+                    {t("manage.deleteSelected")}
+                  </Button>
+                )}
+              </>
+            )}
           </div>
         </div>
       </PageToolbar>
 
-      <div className="grid min-h-0 flex-1 xl:grid-cols-[360px_minmax(0,1fr)]">
+      <div className="grid min-h-0 flex-1 xl:grid-cols-[360px_minmax(0,1fr)] [grid-template-rows:1fr]">
       <section data-ai-region="sessions-list" className="flex min-h-0 flex-1 flex-col overflow-hidden border-r border-border">
         <ScrollArea className="min-h-0 flex-1">
           {error ? (
@@ -367,58 +424,6 @@ function SessionsPage({
             </div>
           ) : (
             <div className="space-y-2.5 p-2.5">
-              <div className="rounded-lg border border-border bg-secondary/30 px-3 py-2">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="zed-kicker">{isSearching ? t("sessions.searchResults") : t("sessions.searchGroup")}</p>
-                    <p className="mt-0.5 truncate text-[12px] text-muted-foreground">
-                      {isSearching ? t("sessions.emptySearchHint") : t("sessions.emptyBrowseHint")}
-                    </p>
-                  </div>
-                  <span className="rounded-full border border-border bg-card px-2 py-1 font-mono text-[11px] text-muted-foreground">
-                    {sessions.length}
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 rounded-md px-3 text-[12px]"
-                  onClick={() => setManageMode(!manageMode)}
-                >
-                  {manageMode ? t("sessions.done") : t("sessions.manage")}
-                </Button>
-              </div>
-              {manageMode && sessions.length > 0 && (
-                <div
-                  className="flex cursor-pointer items-center gap-2 rounded-md border border-border bg-secondary px-2.5 py-2 hover:bg-accent transition-colors"
-                  onClick={toggleAll}
-                >
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    className={`flex size-5 shrink-0 items-center justify-center rounded-sm border-2 transition ${
-                      allSelected
-                        ? "border-primary bg-primary"
-                        : someSelected
-                          ? "border-primary bg-primary/20"
-                          : "border-muted-foreground/40"
-                    }`}
-                  >
-                    {allSelected && (
-                      <Check size={16} color="white" />
-                    )}
-                    {someSelected && !allSelected && (
-                      <Minus size={16} className="text-primary" />
-                    )}
-                  </Button>
-                  <span className="text-[13px] text-muted-foreground">
-                    {t("sessions.selectAllPrefix")}<span className="font-medium text-foreground">{sessions.length}</span>{t("sessions.selectAllSuffix")}
-                  </span>
-                </div>
-              )}
               {grouped.map((g) => {
                 const collapsed = collapsedProjects[g.key];
                 return (
@@ -498,87 +503,6 @@ function SessionsPage({
             </div>
           )}
         </ScrollArea>
-
-        {manageMode && (
-          <div className="max-h-[50vh] shrink-0 overflow-y-auto border-t border-border bg-card px-3 py-3">
-            {deleteError && (
-              <div className="mb-2 flex items-center justify-between rounded-md border border-destructive/30 bg-destructive/10 px-2.5 py-1.5">
-                <span className="text-[12px] text-destructive">{deleteError}</span>
-                <Button variant="ghost" size="sm" className="h-5 px-1 text-[11px] text-destructive" onClick={() => setDeleteError(null)}>{t("update.dismiss")}</Button>
-              </div>
-            )}
-            {deleteProgress ? (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-[13px] font-medium text-foreground">
-                      {deleteProgress.processed}/{deleteProgress.total} {t("manage.deleting")}
-                    </p>
-                    <p className="mt-1 text-[12px] text-muted-foreground">
-                      {deleteMode === "destructive" ? t("manage.destructiveDeleteDesc") : t("manage.softDeleteDesc")}
-                    </p>
-                  </div>
-                  <span className="text-[12px] text-muted-foreground">
-                    {Math.round((deleteProgress.processed / deleteProgress.total) * 100)}%
-                  </span>
-                </div>
-                <progress
-                  className="session-progress h-1.5 w-full overflow-hidden rounded-full bg-secondary"
-                  value={deleteProgress.processed}
-                  max={deleteProgress.total}
-                />
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="text-[13px] font-medium text-foreground">
-                      {t("manage.selectedPrefix")}<span>{selectedIds.size}</span>{t("manage.selectedSuffix")}
-                    </p>
-                    <p className="mt-1 text-[12px] text-muted-foreground">
-                      {deleteMode === "destructive" ? t("manage.destructiveDeleteDesc") : t("manage.softDeleteDesc")}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <Button variant="outline" size="sm" className="h-8 rounded-md px-3 text-[13px]" onClick={exitManageMode}>
-                      {t("manage.cancel")}
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      className="h-8 rounded-md px-3 text-[13px]"
-                      onClick={() => setDeleteDialogOpen(true)}
-                      disabled={selectedIds.size === 0}
-                    >
-                      <Trash2 size={16} />
-                      {t("manage.delete")}
-                    </Button>
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-border bg-secondary/40 p-1">
-                  <Button
-                    type="button"
-                    variant={deleteMode === "soft" ? "default" : "ghost"}
-                    size="sm"
-                    className="h-8 rounded-md px-3"
-                    onClick={() => setDeleteMode("soft")}
-                  >
-                    {t("manage.softDelete")}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={deleteMode === "destructive" ? "destructive" : "ghost"}
-                    size="sm"
-                    className="h-8 rounded-md px-3"
-                    onClick={() => setDeleteMode("destructive")}
-                  >
-                    {t("manage.destructiveDelete")}
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
       </section>
 
       <section data-ai-region="sessions-detail" className="min-h-0 flex-1 overflow-hidden">
@@ -622,21 +546,14 @@ function SessionsPage({
       )}
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent size="sm">
+        <AlertDialogContent className="sm:max-w-[90vw]">
           <AlertDialogHeader>
             <AlertDialogTitle>{t("manage.deleteConfirm", { count: selectedIds.size })}</AlertDialogTitle>
             <AlertDialogDescription>
-              {deleteMode === "destructive" ? t("manage.destructiveDeleteDesc") : t("manage.softDeleteDesc")}
+              {t("manage.deleteWarning")}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className={`rounded-md border px-3 py-2.5 ${deleteMode === "destructive" ? "border-destructive/30 bg-destructive/5" : "border-border bg-secondary/50"}`}>
-            <p className={`text-[13px] font-medium ${deleteMode === "destructive" ? "text-destructive" : "text-foreground"}`}>
-              {deleteMode === "destructive" ? t("manage.destructiveDelete") : t("manage.softDelete")}
-            </p>
-            <p className="mt-1 text-[12px] leading-[1.5] text-muted-foreground">
-              {deleteMode === "destructive" ? t("manage.destructiveDeleteDesc") : t("manage.deleteHint")}
-            </p>
-          </div>
+          <DeletePlanTable sessionIds={selectedIds} sessions={sessions} />
           <AlertDialogFooter>
             <AlertDialogCancel>{t("manage.cancel")}</AlertDialogCancel>
             <AlertDialogAction

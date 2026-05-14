@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { getSessionDetail } from "@/lib/api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { FileText, ShieldCheck } from "lucide-react";
 
 export default function SourcesTab({ sessionId }: { sessionId: string }) {
   const { t } = useTranslation();
@@ -13,18 +14,7 @@ export default function SourcesTab({ sessionId }: { sessionId: string }) {
   });
 
   return (
-    <section data-ai-region="sessions-sources">
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <div className="min-w-0">
-          <p className="zed-kicker">{t("sources.title")}</p>
-          <p className="mt-0.5 truncate text-[12px] text-muted-foreground">{t("sources.help")}</p>
-        </div>
-        {detail && (
-          <Badge variant="outline" className="bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground">
-            {t("sources.count", { count: detail.sources.length })}
-          </Badge>
-        )}
-      </div>
+    <section data-ai-region="sessions-sources" className="w-full">
       {!detail ? (
         error ? (
           <p className="text-[13px] text-destructive">
@@ -42,25 +32,23 @@ export default function SourcesTab({ sessionId }: { sessionId: string }) {
           {t("sources.empty")}
         </p>
       ) : (
-        <div className="space-y-2">
-          <div className="space-y-1.5">
-            {detail.sources.map((src) => (
-              <div
-                key={src.source_id}
-                className="rounded-lg border border-border bg-secondary px-3 py-2"
-              >
-                <div className="mb-0.5 flex items-center justify-between gap-2">
-                  <span className="zed-kicker">{src.source_type}</span>
-                  <Badge variant="outline" className="bg-card px-1.5 py-0.5 text-[11px] text-muted-foreground">
-                    {src.delete_policy}
-                  </Badge>
-                </div>
-                <span className="break-all font-mono text-[12px] text-muted-foreground">
-                  {src.path}
-                </span>
-              </div>
-            ))}
-          </div>
+        <div className="w-full space-y-1.5">
+          {detail.sources.map((src) => (
+            <div
+              key={src.source_id}
+              className="flex w-full items-center gap-2 rounded-lg border border-border bg-secondary px-3 py-2"
+            >
+              <FileText size={14} className="shrink-0 text-muted-foreground" />
+              <span className="shrink-0 text-[12px] font-medium text-foreground">{src.source_type}</span>
+              <Badge variant="outline" className="shrink-0 gap-1 bg-card px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                <ShieldCheck size={10} />
+                {src.delete_policy}
+              </Badge>
+              <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">
+                {src.path}
+              </span>
+            </div>
+          ))}
         </div>
       )}
     </section>

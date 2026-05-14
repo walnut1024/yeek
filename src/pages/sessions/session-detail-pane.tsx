@@ -6,8 +6,9 @@ import { useLocalStorage } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Copy, CircleCheck, Play, FolderTree } from "lucide-react";
+import { Copy, CircleCheck, Play, FolderTree, Rows3, GitBranch } from "lucide-react";
 import { formatTime, formatRelativeTime } from "@/lib/formatters";
+import { getSessionTranscript } from "@/lib/api";
 import SourcesTab from "./sources-tab";
 
 const TranscriptView = lazy(() => import("./transcript-view"));
@@ -30,6 +31,14 @@ export default function SessionDetailPane({
     queryFn: () => getSessionPreview(sessionId),
   });
 
+  const { data: transcript } = useQuery({
+    queryKey: ["session-transcript", sessionId],
+    queryFn: () => getSessionTranscript(sessionId),
+  });
+
+  const mainCount = transcript?.main_path.length ?? 0;
+  const branchCount = transcript?.branches.length ?? 0;
+
   if (previewLoading || !preview) {
     return (
       <div className="space-y-2 p-3">
@@ -50,43 +59,28 @@ export default function SessionDetailPane({
         <section data-ai-region="sessions-summary" className="surface-card sticky top-0 z-20 bg-card/95 p-3 backdrop-blur-sm">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
             <div className="min-w-0 flex-1">
-              <p className="zed-kicker">{t("detail.sessionLabel")}</p>
-              <h3 className="mt-1.5 truncate text-[20px] font-semibold leading-[1.1] tracking-[-0.02em] text-foreground">
-                {sessionTitle}
-              </h3>
-              <div className="mt-2.5 grid gap-2 md:grid-cols-2">
-                <DetailValue label={t("detail.projectLabel")} value={projectPath} icon={<FolderTree size={14} />} />
-                <DetailValue label={t("detail.sessionIdLabel")} value={record.id} />
+              <div className="mt-1.5 flex items-baseline gap-2">
+                <p className="shrink-0 text-[16px] font-medium uppercase tracking-[0.04em] text-muted-foreground">{t("detail.sessionLabelWithColon")}</p>
+                <h3 className="min-w-0 truncate text-[14px] font-semibold leading-[1.3] text-foreground">
+                  {sessionTitle}
+                </h3>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="ml-auto h-7 shrink-0 rounded-md px-2.5 text-[12px]"
+                  onClick={async () => {
+                    try {
+                      await resumeSession(record.id, record.agent, record.project_path, defaultTerminal || null);
+                    } catch (e) {
+                      console.error("Failed to resume session:", e);
+                    }
+                  }}
+                >
+                  <Play size={14} />
+                  {t("detail.resume")}
+                </Button>
               </div>
-              <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                <CopyableAction label={t("detail.copySessionId")} value={record.id} />
-                {record.project_path && (
-                  <CopyableAction label={t("detail.copyProjectPath")} value={record.project_path} />
-                )}
-              </div>
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <Button
-                variant="primary"
-                size="sm"
-                className="h-8 rounded-md px-3 text-[13px]"
-                onClick={async () => {
-                  try {
-                    await resumeSession(record.id, record.agent, record.project_path, defaultTerminal || null);
-                  } catch (e) {
-                    console.error("Failed to resume session:", e);
-                  }
-                }}
-              >
-                <Play size={16} />
-                {t("detail.resume")}
-              </Button>
-            </div>
-          </div>
-
-          <div className="mt-3 border-t border-border pt-3">
-            <p className="zed-kicker">{t("detail.summaryTitle")}</p>
-            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
                 <MetaPill
                   label={t("detail.model")}
                   value={record.model || t("format.notAvailable")}
@@ -112,41 +106,59 @@ export default function SessionDetailPane({
                   label={t("detail.updated")}
                   value={formatRelativeTime(record.updated_at)}
                 />
+              </div>
+              <div className="mt-2 grid gap-2 md:grid-cols-2">
+                <CopyableDetailValue label={t("detail.projectLabel")} value={projectPath} icon={<FolderTree size={14} />} />
+                <CopyableDetailValue label={t("detail.sessionIdLabel")} value={record.id} />
+              </div>
+              <div className="mt-2">
+                <SourcesTab sessionId={sessionId} />
+              </div>
             </div>
           </div>
-          <div className="mt-3 border-t border-border pt-3">
-            <SourcesTab sessionId={sessionId} />
+          <div className="mt-3 border-t border-border pt-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <p className="zed-kicker">{t("detail.tabHistory")}</p>
+                {mainCount > 0 && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                    <Rows3 size={12} />
+                    {t("transcript.messageCount", { count: mainCount })}
+                  </span>
+                )}
+                {branchCount > 0 && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                    <GitBranch size={12} />
+                    {t("transcript.branchCount", { count: branchCount })}
+                  </span>
+                )}
+              </div>
+              <div className="segmented-control">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className={`segmented-control-item ${viewMode === "feed" ? "segmented-control-item-active" : ""}`}
+                  onClick={() => setViewMode("feed")}
+                >
+                  {t("graph.viewFeed")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className={`segmented-control-item ${viewMode === "graph" ? "segmented-control-item-active" : ""}`}
+                  onClick={() => setViewMode("graph")}
+                >
+                  {t("graph.viewGraph")}
+                </Button>
+              </div>
+            </div>
           </div>
+
         </section>
 
-        <section data-ai-region="sessions-transcript" className="surface-card overflow-hidden">
-          {/* Graph/Feed toggle */}
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2.5">
-            <div className="min-w-0">
-              <p className="zed-kicker">{t("detail.tabHistory")}</p>
-              <p className="mt-0.5 truncate text-[12px] text-muted-foreground">{t("detail.historyDescription")}</p>
-            </div>
-            <div className="segmented-control">
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                className={`segmented-control-item ${viewMode === "feed" ? "segmented-control-item-active" : ""}`}
-                onClick={() => setViewMode("feed")}
-              >
-                {t("graph.viewFeed")}
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                className={`segmented-control-item ${viewMode === "graph" ? "segmented-control-item-active" : ""}`}
-                onClick={() => setViewMode("graph")}
-              >
-                {t("graph.viewGraph")}
-              </Button>
-            </div>
-          </div>
+        <section data-ai-region="sessions-transcript" className="surface-card">
           {/* Conditional content */}
           <div className={viewMode === "graph" ? "h-[70vh]" : ""}>
             <Suspense fallback={<DetailContentFallback graph={viewMode === "graph"} />}>
@@ -211,6 +223,38 @@ function DetailValue({ label, value, icon }: { label: string; value: string; ico
         {value}
       </p>
     </div>
+  );
+}
+
+function CopyableDetailValue({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(value).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }, [value]);
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="flex w-full flex-col items-start gap-0 rounded-lg border border-border bg-secondary px-2.5 py-2 text-left transition-colors hover:border-primary/30 hover:bg-element-hover"
+    >
+      <p className="zed-kicker flex items-center gap-1.5">
+        {icon}
+        <span>{label}</span>
+        {copied ? (
+          <CircleCheck size={12} className="text-primary" />
+        ) : (
+          <Copy size={12} className="text-muted-foreground" />
+        )}
+      </p>
+      <p className="mt-0.5 break-all font-mono text-[11px] leading-[1.45] text-foreground">
+        {value}
+      </p>
+    </button>
   );
 }
 

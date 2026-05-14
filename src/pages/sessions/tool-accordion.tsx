@@ -163,7 +163,7 @@ function ToolItem({
         variant="ghost"
         size="sm"
         onClick={() => setExpandedTool(isOpen ? null : index)}
-        className="flex h-auto w-full items-center gap-1.5 rounded-lg border border-transparent bg-secondary px-2 py-1.5 text-left transition-colors hover:border-border hover:bg-element-hover"
+        className="flex h-auto w-full items-center justify-start gap-1.5 rounded-lg border border-transparent bg-secondary px-2 py-1.5 text-left transition-colors hover:border-border hover:bg-element-hover"
       >
         <ChevronRight size={16} className={`text-muted-foreground/30 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} />
         <span className="font-mono text-[13px] font-medium text-primary/90">

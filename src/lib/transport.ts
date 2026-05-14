@@ -22,6 +22,8 @@ interface RouteMapping {
   buildBody?: (args: Record<string, unknown>) => Record<string, unknown>;
 }
 
+type TransportArgs = Record<string, unknown> | undefined;
+
 const ROUTES: Record<string, RouteMapping> = {
   get_system_status:           { method: "GET",  path: "/api/system/status" },
   browse_sessions:             { method: "GET",  path: "/api/sessions" },
@@ -119,6 +121,359 @@ function camelToSnake(s: string): string {
   return s.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
 }
 
+const PREVIEW_NOW = "2026-05-13T10:30:00.000Z";
+
+const PREVIEW_SESSIONS = [
+  {
+    id: "preview-session-1",
+    agent: "claude_code",
+    project_path: "/Users/demo/Projects/yeek",
+    title: "Refine dashboard density and review proxy preview fallback",
+    model: "claude-sonnet-4",
+    git_branch: "main",
+    started_at: "2026-05-13T08:30:00.000Z",
+    ended_at: null,
+    status: "active",
+    visibility: "visible",
+    pinned: false,
+    archived_at: null,
+    deleted_at: null,
+    delete_mode: "none",
+    message_count: 42,
+    updated_at: "2026-05-13T10:24:00.000Z",
+  },
+  {
+    id: "preview-session-2",
+    agent: "claude_code",
+    project_path: "/Users/demo/Projects/vendor_proxy",
+    title: "Audit plugin marketplace layout for compact high-density view",
+    model: "claude-haiku-4",
+    git_branch: "feat/compact-ui",
+    started_at: "2026-05-12T09:00:00.000Z",
+    ended_at: "2026-05-12T10:10:00.000Z",
+    status: "complete",
+    visibility: "visible",
+    pinned: false,
+    archived_at: null,
+    deleted_at: null,
+    delete_mode: "none",
+    message_count: 18,
+    updated_at: "2026-05-12T10:10:00.000Z",
+  },
+  {
+    id: "preview-session-3",
+    agent: "codex",
+    project_path: "/Users/demo/Projects/design-lab",
+    title: "Compare graph node spacing against updated design system",
+    model: "gpt-5.4",
+    git_branch: "design/review",
+    started_at: "2026-05-11T16:00:00.000Z",
+    ended_at: "2026-05-11T16:45:00.000Z",
+    status: "partial",
+    visibility: "visible",
+    pinned: false,
+    archived_at: null,
+    deleted_at: null,
+    delete_mode: "none",
+    message_count: 27,
+    updated_at: "2026-05-11T16:45:00.000Z",
+  },
+];
+
+const PREVIEW_MESSAGES = [
+  {
+    id: "m1",
+    session_id: "preview-session-1",
+    parent_id: null,
+    role: "human",
+    kind: "message",
+    content_preview: "Please tighten the app layout and remove wasted vertical whitespace.",
+    timestamp: "2026-05-13T09:40:00.000Z",
+    is_sidechain: false,
+    entry_type: "message",
+    subtype: null,
+    tool_name: null,
+    subagent_id: null,
+    model: null,
+    metadata: null,
+  },
+  {
+    id: "m2",
+    session_id: "preview-session-1",
+    parent_id: "m1",
+    role: "assistant",
+    kind: "message",
+    content_preview: "I tightened the sidebar, headers, pills, and session cards. Next I am checking Proxy and Marketplace for dense layouts.",
+    timestamp: "2026-05-13T09:41:00.000Z",
+    is_sidechain: false,
+    entry_type: "message",
+    subtype: null,
+    tool_name: null,
+    subagent_id: null,
+    model: "claude-sonnet-4",
+    metadata: null,
+  },
+  {
+    id: "m3",
+    session_id: "preview-session-1",
+    parent_id: "m2",
+    role: "assistant",
+    kind: "tool_use",
+    content_preview: "Read src/pages/proxy/proxy-page.tsx",
+    timestamp: "2026-05-13T09:42:00.000Z",
+    is_sidechain: false,
+    entry_type: "message",
+    subtype: null,
+    tool_name: "Read",
+    subagent_id: null,
+    model: "claude-sonnet-4",
+    metadata: null,
+  },
+  {
+    id: "m4",
+    session_id: "preview-session-1",
+    parent_id: "m3",
+    role: "user",
+    kind: "tool_result",
+    content_preview: "Loaded proxy-page.tsx (520 lines).",
+    timestamp: "2026-05-13T09:42:01.000Z",
+    is_sidechain: false,
+    entry_type: "message",
+    subtype: null,
+    tool_name: "Read",
+    subagent_id: null,
+    model: null,
+    metadata: null,
+  },
+  {
+    id: "m5",
+    session_id: "preview-session-1",
+    parent_id: "m4",
+    role: "assistant",
+    kind: "message",
+    content_preview: "Proxy labels can move into a fixed-width left column so inputs stay on one line more often.",
+    timestamp: "2026-05-13T09:43:00.000Z",
+    is_sidechain: false,
+    entry_type: "summary",
+    subtype: null,
+    tool_name: null,
+    subagent_id: null,
+    model: "claude-sonnet-4",
+    metadata: null,
+  },
+];
+
+const PREVIEW_SOURCES = [
+  {
+    source_id: "src-1",
+    source_type: "workspace",
+    path: "/Users/demo/Projects/yeek/src/pages/proxy/proxy-page.tsx",
+    delete_policy: "hide_only",
+  },
+  {
+    source_id: "src-2",
+    source_type: "workspace",
+    path: "/Users/demo/Projects/yeek/src/index.css",
+    delete_policy: "hide_only",
+  },
+];
+
+function buildPreviewResponse(name: string, args?: TransportArgs): unknown {
+  switch (name) {
+    case "get_system_status":
+      return {
+        db_path: "/Users/demo/Library/Application Support/yeek/yeek.db",
+        total_sessions: PREVIEW_SESSIONS.length,
+        total_sources: 94,
+        total_projects: 7,
+        total_messages: 223,
+        active_sessions: 1,
+        complete_sessions: 1,
+        partial_sessions: 1,
+        last_sync_at: PREVIEW_NOW,
+        status: "ok",
+      };
+    case "browse_sessions": {
+      const agent = typeof args?.agent === "string" ? args.agent : undefined;
+      const sessions = agent
+        ? PREVIEW_SESSIONS.filter((session) => session.agent === agent)
+        : PREVIEW_SESSIONS;
+      return { sessions, total: sessions.length, has_more: false };
+    }
+    case "search_sessions": {
+      const query = String(args?.query ?? "").toLowerCase();
+      const sessions = PREVIEW_SESSIONS.filter((session) =>
+        !query
+          || session.title?.toLowerCase().includes(query)
+          || session.project_path?.toLowerCase().includes(query),
+      );
+      return { sessions, total: sessions.length, has_more: false };
+    }
+    case "get_session_preview": {
+      const sessionId = String(args?.sessionId ?? PREVIEW_SESSIONS[0].id);
+      const record = PREVIEW_SESSIONS.find((session) => session.id === sessionId) ?? PREVIEW_SESSIONS[0];
+      return {
+        record,
+        preview_messages: PREVIEW_MESSAGES.slice(0, 2).map((msg) => ({
+          role: msg.role,
+          content_preview: msg.content_preview,
+        })),
+        source_count: PREVIEW_SOURCES.length,
+      };
+    }
+    case "get_session_detail": {
+      const sessionId = String(args?.sessionId ?? PREVIEW_SESSIONS[0].id);
+      const record = PREVIEW_SESSIONS.find((session) => session.id === sessionId) ?? PREVIEW_SESSIONS[0];
+      return { record, messages: PREVIEW_MESSAGES, sources: PREVIEW_SOURCES };
+    }
+    case "get_session_transcript":
+      return {
+        messages: PREVIEW_MESSAGES,
+        main_path: PREVIEW_MESSAGES.map((msg) => msg.id),
+        branches: [],
+      };
+    case "get_action_log":
+      return {
+        actions: [
+          {
+            id: 3,
+            session_id: "preview-session-1",
+            action: "ui.review",
+            detail: "Compressed sidebar, graph header, and proxy form rows.",
+            created_at: "2026-05-13T09:58:00.000Z",
+          },
+          {
+            id: 2,
+            session_id: "preview-session-2",
+            action: "marketplace.sync",
+            detail: "Updated compact plugin rows and cleaned badge density.",
+            created_at: "2026-05-13T09:44:00.000Z",
+          },
+          {
+            id: 1,
+            session_id: "preview-session-3",
+            action: "proxy.preview",
+            detail: "Loaded fallback preview data because Tauri backend is unavailable.",
+            created_at: "2026-05-13T09:32:00.000Z",
+          },
+        ],
+      };
+    case "list_plugins":
+      return {
+        plugins: [
+          {
+            key: "compact-audit@official",
+            name: "compact-audit",
+            version: "1.4.0",
+            scope: "global",
+            marketplace: { name: "official", repo: "https://example.com/official" },
+            install_path: "/Users/demo/.yeek/plugins/compact-audit",
+            enabled: true,
+            health: "ok",
+            health_issues: [],
+            skills: [
+              {
+                name: "layout-density",
+                description: "Checks long rows and wasted whitespace.",
+                skill_type: "skill",
+                tools: "Read, Grep",
+                file_path: "/preview/layout-density",
+                health: "ok",
+              },
+            ],
+            agents: [],
+            installed_at: "2026-05-11T09:00:00.000Z",
+            last_updated: "2026-05-13T09:20:00.000Z",
+          },
+        ],
+        total_plugins: 1,
+        total_skills: 1,
+        total_agents: 0,
+        health_summary: { ok: 1, partial: 0, hook: 0, broken: 0 },
+      };
+    case "list_marketplaces":
+      return {
+        marketplaces: [
+          {
+            name: "official",
+            repo: "https://example.com/official",
+            install_location: "/Users/demo/.yeek/marketplaces/official",
+            last_updated: "2026-05-13T09:20:00.000Z",
+            plugin_count: 6,
+          },
+        ],
+      };
+    case "list_marketplace_plugins":
+      return [
+        {
+          name: "compact-audit",
+          description: "Review long labels, whitespace, and dense panel layouts.",
+          skill_count: 1,
+          agent_count: 0,
+          has_hooks: false,
+          installed: true,
+        },
+        {
+          name: "session-lens",
+          description: "Inspect transcripts and graph readability.",
+          skill_count: 2,
+          agent_count: 1,
+          has_hooks: true,
+          installed: false,
+        },
+      ];
+    case "get_proxy_status":
+      return {
+        running: false,
+        listen_addr: "127.0.0.1:8787",
+        uptime_secs: null,
+        version: "preview",
+      };
+    case "get_proxy_config":
+      return {
+        server: { listen_addr: "127.0.0.1:8787" },
+        providers: {
+          deepseek_preview: {
+            base_url: "https://api.deepseek.com/anthropic",
+            api_format: "anthropic_messages",
+            api_key_env: "DEEPSEEK_API_KEY",
+          },
+        },
+        bridges: {
+          claude_preview: {
+            agent: { base_url: "/deepseek_anthropic", api_format: "anthropic_messages" },
+            provider: { name: "deepseek_preview" },
+            models: { "claude-sonnet": "deepseek-v4-pro" },
+          },
+        },
+      };
+    case "get_proxy_metrics":
+      return {
+        version: "preview",
+        uptime_secs: 5420,
+        request_count: 182,
+        error_count: 3,
+        active_connections: 2,
+        rps: 1.4,
+        avg_latency_ms: 482,
+      };
+    case "get_proxy_error_events":
+      return [
+        {
+          timestamp: 1747130820000,
+          provider: "deepseek_preview",
+          model: "deepseek-v4-pro",
+          status: 429,
+          message: "Rate limited during preview fallback.",
+        },
+      ];
+    case "get_proxy_logs":
+      return "[preview] Backend unavailable. Using browser preview fixture.\n";
+    default:
+      return undefined;
+  }
+}
+
 class HttpTransport implements Transport {
   private baseUrl: string;
   constructor(baseUrl = "http://localhost:17321") {
@@ -133,7 +488,14 @@ class HttpTransport implements Transport {
       headers: { "Content-Type": "application/json" },
     };
     if (body) options.body = JSON.stringify(body);
-    const res = await fetch(url, options);
+    let res: Response;
+    try {
+      res = await fetch(url, options);
+    } catch (error) {
+      const preview = buildPreviewResponse(name, args);
+      if (preview !== undefined) return preview as T;
+      throw error;
+    }
     if (!res.ok) {
       const err = await res.json().catch(() => ({ message: res.statusText }));
       throw new Error(err.message || `HTTP ${res.status}`);

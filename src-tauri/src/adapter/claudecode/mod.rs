@@ -887,9 +887,9 @@ fn extract_system_content(entry: &Value, subtype: &str) -> String {
 /// Decode a Claude projects directory name back to a path.
 fn decode_project_dir(name: &str) -> String {
     if let Some(stripped) = name.strip_prefix('-') {
-        format!("/{}", &stripped.replace('-', "/"))
+        format!("/{}", &stripped.split('-').filter(|s| !s.is_empty()).collect::<Vec<_>>().join("/"))
     } else {
-        name.replace('-', "/")
+        name.split('-').filter(|s| !s.is_empty()).collect::<Vec<_>>().join("/")
     }
 }
 

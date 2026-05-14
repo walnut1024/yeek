@@ -24,7 +24,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
-import { PageHeader } from "@/components/ui/page-header";
 import { PageToolbar } from "@/components/ui/page-toolbar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -181,9 +180,6 @@ export default function MarketplacePage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Header */}
-      <PageHeader title={t("marketplace.title")} description={t("marketplace.description")} region="marketplace-header" />
-
       {/* Toolbar: agent tabs */}
       <PageToolbar region="marketplace-toolbar">
         <div className="segmented-control">

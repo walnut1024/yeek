@@ -13,7 +13,6 @@ import {
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { PageHeader } from "@/components/ui/page-header";
 import { PageToolbar } from "@/components/ui/page-toolbar";
 import { Trash2, SquarePlus } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -122,8 +121,6 @@ export default function ProxyPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <PageHeader title={t("proxy.title")} description={t("proxy.description")} region="proxy-header" />
-
       <PageToolbar region="proxy-toolbar">
         <div className="flex items-center gap-1.5">
           <div className="segmented-control">
