@@ -51,21 +51,15 @@ src/
 
 ## Frontend Guidelines
 
-- **Always reference DESIGN.md for all UI/frontend work** — it defines the Vercel-inspired design system including colors, typography, shadows, spacing, and component patterns.
-- Use shadow-as-border (`box-shadow: 0px 0px 0px 1px rgba(0,0,0,0.08)`) instead of traditional CSS borders where applicable.
-- Three font weights only: 400 (body), 500 (UI), 600 (headings).
-- Geist Sans with negative letter-spacing at display sizes.
-- Keep the palette achromatic — grays from `#171717` to `#ffffff`.
-- **Prioritize shadcn/ui components** — use `Button`, `Separator`, `Skeleton`, `Badge`, `Tooltip`, `AlertDialog`, `ScrollArea`, `Tabs` etc. from `@/components/ui/` before writing raw HTML elements.
-- Never use raw `<button>` — always use `<Button variant="..." size="...">`.
-- Use `<Separator />` instead of `<div className="border-t ...">` for visual dividers.
-- Use `<Skeleton />` instead of custom loading placeholders.
-- Use semantic HTML for stable structure: page titles use `<header>`, content groups use `<section>`, secondary panels use `<aside>`, and independent cards/items use `<article>`.
-- Add `data-ai-page` only to the AppShell content `<main>`; use `data-ai-region` for stable page-level areas and `data-ai-item` for repeated/interactive instances.
-- Keep AI selectors sparse and product-oriented. Prefer `data-ai-*` over class names, and do not mark every layout wrapper as a region.
-- Preserve interaction semantics before changing tags. Do not weaken keyboard behavior, focus handling, or nested button validity for semantic cleanup.
-- Use `<nav>` only for navigation. Mixed action toolbars should stay as normal containers or use `role="toolbar"`.
-- Structural refactors must not change visual styling, copy, state management, business logic, or API calls unless explicitly requested.
+- Always reference DESIGN.md for UI/frontend work. It defines the Lovable-inspired warm cream design system.
+- Use `#f7f4ed` as the app foundation and `#1c1c1c` as the base ink. Derive neutral states from charcoal opacity instead of arbitrary gray hex values.
+- Use the available humanist sans font fallback (`DM Sans` in this repo) unless a licensed Camera Plain Variable asset is added.
+- Use shallow depth: warm borders and button inset shadows, not heavy card shadows.
+- Keep product surfaces dense, calm, and operational. Do not introduce landing-page heroes for app screens.
+- Prioritize shadcn/Base UI primitives from `@/components/ui/`.
+- Never use raw `<button>`; use `<Button>`.
+- Use semantic HTML and preserve `data-ai-page`, `data-ai-region`, and `data-ai-item` selectors.
+- Structural refactors must not change visual copy, state management, business logic, API calls, or keyboard behavior unless explicitly requested.
 
 ## Frontend Demos
 
