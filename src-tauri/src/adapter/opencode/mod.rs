@@ -133,6 +133,93 @@ where
     })
 }
 
+/// Open an OpenCode SQLite database in strict read-only mode.
+fn open_opencode_db_readonly(
+    path: &Path,
+) -> Result<rusqlite::Connection, AppError> {
+    let conn = rusqlite::Connection::open_with_flags(
+        path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+    )
+    .map_err(|e| {
+        AppError::DbError(format!(
+            "Failed to open OpenCode DB at {}: {}",
+            path.display(),
+            e
+        ))
+    })?;
+
+    conn.execute_batch("PRAGMA query_only = ON; PRAGMA busy_timeout = 5000;")
+        .map_err(|e| AppError::DbError(format!("Failed to set pragmas: {}", e)))?;
+
+    Ok(conn)
+}
+
+/// Validate that the OpenCode DB has the minimum required schema.
+fn validate_opencode_schema(conn: &rusqlite::Connection) -> Result<(), AppError> {
+    let required_tables = ["session", "project", "message", "part"];
+    let required_columns: &[(&str, &[&str])] = &[
+        (
+            "session",
+            &[
+                "id",
+                "project_id",
+                "parent_id",
+                "directory",
+                "title",
+                "agent",
+                "model",
+                "time_created",
+                "time_updated",
+                "time_archived",
+            ],
+        ),
+        ("project", &["id", "worktree"]),
+        ("message", &["id", "session_id", "time_created", "data"]),
+        ("part", &["id", "message_id", "session_id", "time_created", "data"]),
+    ];
+
+    for table in &required_tables {
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?",
+                params![table],
+                |row| row.get(0),
+            )
+            .map_err(|e| AppError::DbError(format!("Schema validation query failed: {}", e)))?;
+
+        if count == 0 {
+            return Err(AppError::Validation(format!(
+                "OpenCode DB missing required table: {}",
+                table
+            )));
+        }
+    }
+
+    for (table, cols) in required_columns {
+        for col in *cols {
+            let count: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM pragma_table_info(?) WHERE name=?",
+                    params![table, col],
+                    |row| row.get(0),
+                )
+                .map_err(|e| {
+                    AppError::DbError(format!("Column validation query failed: {}", e))
+                })?;
+
+            if count == 0 {
+                return Err(AppError::Validation(format!(
+                    "OpenCode DB table '{}' missing required column: {}",
+                    table, col
+                )));
+            }
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -185,5 +272,39 @@ mod tests {
         std::fs::write(&path, b"hello world").unwrap();
         let fp = compute_fingerprint(&path);
         assert!(fp.starts_with("11:"));
+    }
+
+    #[test]
+    fn validate_schema_accepts_valid_db() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("opencode.db");
+        let conn = rusqlite::Connection::open(&db_path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE session (
+                id TEXT PRIMARY KEY, project_id TEXT NOT NULL, parent_id TEXT,
+                directory TEXT NOT NULL, title TEXT NOT NULL, agent TEXT, model TEXT,
+                time_created INTEGER NOT NULL, time_updated INTEGER NOT NULL, time_archived INTEGER
+            );
+            CREATE TABLE project (id TEXT PRIMARY KEY, worktree TEXT);
+            CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, time_created INTEGER NOT NULL, data TEXT NOT NULL);
+            CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT NOT NULL, session_id TEXT NOT NULL, time_created INTEGER NOT NULL, data TEXT NOT NULL);"
+        ).unwrap();
+        drop(conn);
+
+        let oc_conn = open_opencode_db_readonly(&db_path).unwrap();
+        assert!(validate_opencode_schema(&oc_conn).is_ok());
+    }
+
+    #[test]
+    fn validate_schema_rejects_missing_table() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("opencode.db");
+        let conn = rusqlite::Connection::open(&db_path).unwrap();
+        conn.execute_batch("CREATE TABLE session (id TEXT PRIMARY KEY);")
+            .unwrap();
+        drop(conn);
+
+        let oc_conn = open_opencode_db_readonly(&db_path).unwrap();
+        assert!(validate_opencode_schema(&oc_conn).is_err());
     }
 }
