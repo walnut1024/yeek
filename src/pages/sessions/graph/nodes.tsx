@@ -29,8 +29,8 @@ function toolTone(toolName?: string) {
       };
     case "WebSearch":
       return {
-        card: "border-sky-400/30 bg-sky-500/10",
-        badge: "border-sky-400/20 bg-sky-500/10 text-sky-300",
+        card: "border-sky-400/30 bg-sky-400/10",
+        badge: "border-sky-400/20 bg-sky-400/10 text-sky-300",
       };
     default:
       return {
@@ -45,74 +45,71 @@ function UserNode({ data }: NodeProps) {
   const { t } = useTranslation();
   return (
     <div className="graph-node rounded-xl border border-primary/30 bg-primary/10 px-[10px] py-[8px] shadow-sm">
-      <Handle type="target" position={Position.Top} />
-      <div className="graph-node-tag mb-1 text-primary">
-        {t("graph.nodeUser")}
-      </div>
-      <div className="graph-node-label">
-        {d.label}
-      </div>
-      <Handle type="source" position={Position.Bottom} />
+      <Handle type="target" position={Position.Top} id="top" style={{ visibility: "hidden" }} />
+      <Handle type="target" position={Position.Left} id="left" style={{ visibility: "hidden" }} />
+      <div className="graph-node-tag mb-1 text-primary">{t("graph.nodeUser")}</div>
+      <div className="graph-node-label">{d.label}</div>
+      <Handle type="source" position={Position.Bottom} id="bottom" style={{ visibility: "hidden" }} />
+      <Handle type="source" position={Position.Right} id="right" style={{ visibility: "hidden" }} />
     </div>
   );
 }
 
 function AssistantNode({ data }: NodeProps) {
-  const d = data as { label: string; model?: string };
+  const d = data as { label: string; model?: string; isBranch?: boolean };
   const { t } = useTranslation();
+  const branchClass = d.isBranch ? "border-dashed opacity-70" : "";
   return (
-    <div className="graph-node rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-[10px] py-[8px] shadow-sm">
-      <Handle type="target" position={Position.Top} />
+    <div className={`graph-node rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-[10px] py-[8px] shadow-sm ${branchClass}`}>
+      <Handle type="target" position={Position.Top} id="top" style={{ visibility: "hidden" }} />
+      <Handle type="target" position={Position.Left} id="left" style={{ visibility: "hidden" }} />
       <div className="mb-1 flex items-center justify-between">
-        <span className="graph-node-tag text-emerald-300">
-          {t("graph.nodeAssistant")}
-        </span>
+        <span className="graph-node-tag text-emerald-300">{t("graph.nodeAssistant")}</span>
         {d.model && (
           <span className="rounded-full border border-border/60 bg-card/70 px-1.5 py-0.5 text-[8px] text-muted-foreground">
             {d.model}
           </span>
         )}
       </div>
-      <div className="graph-node-label">
-        {d.label}
-      </div>
-      <Handle type="source" position={Position.Bottom} />
+      <div className="graph-node-label">{d.label}</div>
+      <Handle type="source" position={Position.Bottom} id="bottom" style={{ visibility: "hidden" }} />
+      <Handle type="source" position={Position.Right} id="right" style={{ visibility: "hidden" }} />
     </div>
   );
 }
 
 function ToolUseNode({ data }: NodeProps) {
-  const d = data as { label: string; toolName?: string };
+  const d = data as { label: string; toolName?: string; isBranch?: boolean };
   const tone = toolTone(d.toolName);
+  const branchClass = d.isBranch ? "border-dashed opacity-70" : "";
   return (
-    <div className={`graph-node rounded-xl border px-[9px] py-[7px] shadow-sm ${tone.card}`}>
-      <Handle type="target" position={Position.Top} />
+    <div className={`graph-node rounded-xl border px-[9px] py-[7px] shadow-sm ${tone.card} ${branchClass}`}>
+      <Handle type="target" position={Position.Top} id="top" style={{ visibility: "hidden" }} />
+      <Handle type="target" position={Position.Left} id="left" style={{ visibility: "hidden" }} />
       <div className="mb-1 flex items-center gap-1.5">
         <span className={`rounded-full border px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-[0.06em] ${tone.badge}`}>
           {d.toolName}
         </span>
       </div>
-      <div className="graph-node-detail mt-px">
-        {d.label}
-      </div>
-      <Handle type="source" position={Position.Bottom} />
+      <div className="graph-node-detail mt-px">{d.label}</div>
+      <Handle type="source" position={Position.Bottom} id="bottom" style={{ visibility: "hidden" }} />
+      <Handle type="source" position={Position.Right} id="right" style={{ visibility: "hidden" }} />
     </div>
   );
 }
 
 function ToolResultNode({ data }: NodeProps) {
-  const d = data as { label: string };
+  const d = data as { label: string; isBranch?: boolean };
   const { t } = useTranslation();
+  const branchClass = d.isBranch ? "border-dashed opacity-70" : "";
   return (
-    <div className="graph-node rounded-xl border border-border/70 bg-secondary/40 px-[9px] py-[7px] shadow-sm">
-      <Handle type="target" position={Position.Top} />
-      <div className="graph-node-hint mb-1">
-        {t("graph.nodeResult")}
-      </div>
-      <div className="graph-node-detail leading-[1.3]">
-        {d.label}
-      </div>
-      <Handle type="source" position={Position.Bottom} />
+    <div className={`graph-node rounded-xl border border-border/70 bg-secondary/40 px-[9px] py-[7px] shadow-sm ${branchClass}`}>
+      <Handle type="target" position={Position.Top} id="top" style={{ visibility: "hidden" }} />
+      <Handle type="target" position={Position.Left} id="left" style={{ visibility: "hidden" }} />
+      <div className="graph-node-hint mb-1">{t("graph.nodeResult")}</div>
+      <div className="graph-node-detail leading-[1.3]">{d.label}</div>
+      <Handle type="source" position={Position.Bottom} id="bottom" style={{ visibility: "hidden" }} />
+      <Handle type="source" position={Position.Right} id="right" style={{ visibility: "hidden" }} />
     </div>
   );
 }
@@ -121,11 +118,11 @@ function MetaNode({ data }: NodeProps) {
   const d = data as { label: string };
   return (
     <div className="graph-node rounded-xl border border-dashed border-border bg-transparent px-[8px] py-[6px] italic">
-      <Handle type="target" position={Position.Top} />
-      <span className="graph-node-detail">
-        {d.label}
-      </span>
-      <Handle type="source" position={Position.Bottom} />
+      <Handle type="target" position={Position.Top} id="top" style={{ visibility: "hidden" }} />
+      <Handle type="target" position={Position.Left} id="left" style={{ visibility: "hidden" }} />
+      <span className="graph-node-detail">{d.label}</span>
+      <Handle type="source" position={Position.Bottom} id="bottom" style={{ visibility: "hidden" }} />
+      <Handle type="source" position={Position.Right} id="right" style={{ visibility: "hidden" }} />
     </div>
   );
 }
