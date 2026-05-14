@@ -50,6 +50,7 @@ export function AppShell() {
   const [section, setSection] = useState<"dashboard" | "sessions" | "marketplace" | "settings" | "proxy">("dashboard");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [agentFilter, setAgentFilter] = useLocalStorage("agent-filter", "claude_code");
+  const [mktAgent, setMktAgent] = useLocalStorage("marketplace-agent", "claude-code");
   const queryClient = useQueryClient();
   useZoom();
 
@@ -87,14 +88,14 @@ export function AppShell() {
       >
         <AppSidebar section={section} onSectionChange={setSection} totalSessions={status?.total_sessions} />
         <SidebarInset>
-          <SiteHeader section={section} agentFilter={agentFilter} onAgentFilterChange={setAgentFilter} />
+          <SiteHeader section={section} agentFilter={agentFilter} onAgentFilterChange={setAgentFilter} mktAgent={mktAgent} onMktAgentChange={setMktAgent} />
           <main data-ai-page={section} className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <Suspense fallback={<PanelFallback />}>
               {section === "dashboard" && <DashboardPage />}
               {section === "sessions" && (
                 <SessionsPage selectedId={selectedId} onSelect={setSelectedId} agentFilter={agentFilter} />
               )}
-              {section === "marketplace" && <MarketplacePage />}
+              {section === "marketplace" && <MarketplacePage agent={mktAgent} />}
               {section === "settings" && <SettingsPage />}
               {section === "proxy" && <ProxyPage />}
             </Suspense>

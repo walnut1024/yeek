@@ -24,7 +24,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
-import { PageToolbar } from "@/components/ui/page-toolbar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -52,14 +51,12 @@ const AGENTS = [
   { key: "claude-code", label: "Claude Code" },
   { key: "codex", label: "Codex" },
 ] as const;
-type AgentKey = (typeof AGENTS)[number]["key"];
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-export default function MarketplacePage() {
-  const [agent, setAgent] = useState<AgentKey>("claude-code");
+export default function MarketplacePage({ agent }: { agent: string }) {
   const [addOpen, setAddOpen] = useState(false);
   const [addName, setAddName] = useState("");
   const [addRepo, setAddRepo] = useState("");
@@ -180,18 +177,6 @@ export default function MarketplacePage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Toolbar: agent tabs */}
-      <PageToolbar region="marketplace-toolbar">
-        <div className="segmented-control">
-          {AGENTS.map((a) => (
-            <Button key={a.key} type="button" variant="secondary" size="sm" onClick={() => setAgent(a.key)}
-              className={`segmented-control-item ${agent === a.key ? "segmented-control-item-active" : ""}`}>
-              {a.label}
-            </Button>
-          ))}
-        </div>
-      </PageToolbar>
-
       {/* Content */}
       {!isClaudeCode ? (
         <div className="flex h-72 items-center justify-center px-6">
