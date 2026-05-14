@@ -39,9 +39,9 @@ export default function TranscriptView({
   });
 
   // Compute groups from transcript (memoized, always available)
-  const { groups, mainCount } = useMemo(() => {
+  const { groups } = useMemo(() => {
     if (!transcript || transcript.main_path.length === 0)
-      return { groups: [], mainCount: 0 };
+      return { groups: [] };
     const msgMap = new Map<string, MessageRecord>();
     for (const m of transcript.messages) {
       msgMap.set(m.id, m);

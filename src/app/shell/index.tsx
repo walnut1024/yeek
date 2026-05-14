@@ -204,10 +204,10 @@ function SessionsPage({
     { x: number; y: number; sessionId: string; projectPath?: string } | null
   >(null);
   const ctxRef = useRef<HTMLDivElement>(null);
-  const [deleteMode, setDeleteMode] = useState<"soft" | "destructive">("soft");
+  const [deleteMode, _setDeleteMode] = useState<"soft" | "destructive">("soft");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [deleteProgress, setDeleteProgress] = useState<{ processed: number; total: number } | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [_deleteProgress, setDeleteProgress] = useState<{ processed: number; total: number } | null>(null);
+  const [_deleteError, setDeleteError] = useState<string | null>(null);
   const { t } = useTranslation();
 
   const isSearching = search.trim().length > 0;
@@ -244,7 +244,7 @@ function SessionsPage({
   const grouped = useGroupedSessions(sessions, isSearching);
   const {
     manageMode, setManageMode, selectedIds,
-    toggleSession, toggleProject, exitManageMode, allSelected, someSelected,
+    toggleSession, toggleProject, exitManageMode, allSelected,
     toggleAll, flatSessionIds,
   } = useSessionSelection(sessions, grouped, collapsedProjects, selectedId, onSelect);
   const { showHelp, setShowHelp, searchRef } = useKeyboardNavigation(flatSessionIds, selectedId, onSelect);

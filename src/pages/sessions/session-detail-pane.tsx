@@ -175,54 +175,12 @@ export default function SessionDetailPane({
   );
 }
 
-function CopyableAction({ label, value }: { label: string; value: string }) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(value).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  }, [value]);
-
-  return (
-    <Button
-      type="button"
-      variant="outline"
-      size="xs"
-      className="text-muted-foreground hover:text-foreground"
-      onClick={handleCopy}
-    >
-      <span className="truncate">{label}</span>
-      {copied ? (
-        <CircleCheck size={16} className="text-primary" />
-      ) : (
-        <Copy size={16} className="shrink-0" />
-      )}
-    </Button>
-  );
-}
-
 function MetaPill({ label, value }: { label: string; value: string }) {
   return (
     <span className="meta-pill">
       <span className="text-muted-foreground">{label}</span>
       <span className="font-medium text-foreground">{value}</span>
     </span>
-  );
-}
-
-function DetailValue({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
-  return (
-    <div className="rounded-lg border border-border bg-secondary px-2.5 py-2">
-      <p className="zed-kicker flex items-center gap-1.5">
-        {icon}
-        <span>{label}</span>
-      </p>
-      <p className="mt-0.5 break-all text-[12px] leading-[1.45] text-foreground">
-        {value}
-      </p>
-    </div>
   );
 }
 
