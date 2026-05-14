@@ -115,6 +115,27 @@ describe("buildTree", () => {
     expect(branchNode!.data.isBranch).toBe(true);
   });
 
+  it("places branch chain children below the branch parent", () => {
+    const user = makeMsg({ id: "m1", role: "human", kind: "message" });
+    const mainAsst = makeMsg({ id: "m2", role: "assistant", kind: "message", parent_id: "m1" });
+    const branchAsst = makeMsg({ id: "m3", role: "assistant", kind: "message", parent_id: "m1", content_preview: "alt" });
+    const branchTool = makeMsg({ id: "m4", role: "assistant", kind: "tool_use", tool_name: "Bash", parent_id: "m3" });
+
+    const { nodes } = buildTree(
+      [user, mainAsst, branchAsst, branchTool],
+      {
+        mainPath: ["m1", "m2"],
+        branches: [{ parent_id: "m1", siblings: [{ message_id: "m3", label: "alt" }], active_index: 0 }],
+      },
+    );
+
+    const branchNode = nodes.find((n) => n.id === "m3")!;
+    const chainNode = nodes.find((n) => n.id === "m4")!;
+    expect(chainNode).toBeDefined();
+    expect(chainNode.position.y).toBeGreaterThan(branchNode.position.y);
+    expect(chainNode.data.isBranch).toBe(true);
+  });
+
   it("uses main_path ordering for y positions", () => {
     const m1 = makeMsg({ id: "m1", role: "human", kind: "message" });
     const m2 = makeMsg({ id: "m2", role: "assistant", kind: "message", parent_id: "m1" });

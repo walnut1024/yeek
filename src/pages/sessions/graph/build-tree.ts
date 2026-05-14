@@ -141,9 +141,6 @@ export function buildTree(
   const edges: Edge[] = [];
   const msgMap = new Map(messages.map((m) => [m.id, m]));
 
-  // Build main_path set if provided
-  const mainPathSet = mainPath ? new Set(mainPath) : null;
-
   // First pass: decide which messages to keep
   const keep = new Set<string>();
   for (const msg of messages) {
