@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { SessionRecord } from "@/lib/api";
 import { formatRelativeTime } from "@/lib/formatters";
-import { Check } from "lucide-react";
+import { Check, MessageSquareText, FolderTree } from "lucide-react";
 import { TITLE_TRUNCATE_LEN } from "@/lib/constants";
 
 function formatAgentLabel(agent: string): string {
@@ -33,6 +33,12 @@ const SessionRow = React.memo(function SessionRow({
 }) {
   const title = session.title || session.id.slice(0, 12);
   const { t } = useTranslation();
+  const projectLabel = session.project_path
+    ? session.project_path.split("/").filter(Boolean).pop()
+    : session.agent === "claude_code_subagent"
+      ? t("sessionRow.subagent")
+      : t("sessionRow.noProject");
+
   return (
     <div
       data-ai-item="session-row"
@@ -50,10 +56,10 @@ const SessionRow = React.memo(function SessionRow({
         }
       }}
       aria-label={t("sessionRow.openAria", { title })}
-      className={`zed-list-row flex w-full items-start gap-2.5 border px-2.5 py-2 text-left transition-colors [animation:fadeSlideIn_300ms_ease-out] ${
+      className={`zed-list-row flex w-full items-start gap-3 rounded-xl border px-3 py-3 text-left transition-all [animation:fadeSlideIn_300ms_ease-out] ${
         isSelected
-          ? "border-border bg-accent"
-          : "border-transparent hover:border-border hover:bg-accent/50"
+          ? "border-border bg-accent shadow-[0_0_0_1px_rgba(28,28,28,0.06)]"
+          : "border-transparent hover:border-border hover:bg-element-hover"
       }`}
     >
       {manageMode && (
@@ -63,7 +69,7 @@ const SessionRow = React.memo(function SessionRow({
           size="icon-xs"
           aria-label={checked ? t("sessionRow.deselectAria") : t("sessionRow.selectAria")}
           onClick={(e) => { e.stopPropagation(); onCheck?.(); }}
-          className={`mt-1 flex size-5 shrink-0 items-center justify-center rounded-sm border-2 transition ${
+          className={`mt-1 flex size-5 shrink-0 items-center justify-center rounded-md border-2 transition ${
             checked
               ? "border-primary bg-primary"
               : "border-muted-foreground/40 hover:border-primary"
@@ -74,7 +80,9 @@ const SessionRow = React.memo(function SessionRow({
           )}
         </Button>
       )}
-      {/* <div className="mt-0.5 size-7 shrink-0 rounded-sm border border-border bg-secondary" /> */}
+      <div className={`mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-full border ${isSelected ? "border-primary/20 bg-primary/10" : "border-border bg-secondary"}`}>
+        <MessageSquareText size={15} className={isSelected ? "text-primary" : "text-muted-foreground"} />
+      </div>
 
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-3">
@@ -82,29 +90,29 @@ const SessionRow = React.memo(function SessionRow({
             <p className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
               {formatAgentLabel(session.agent)}
             </p>
-            <span className="mt-0.5 block truncate text-[14px] leading-[1.3] text-foreground">
+            <span className="mt-1 block truncate text-[14px] font-medium leading-[1.35] text-foreground">
               {title.length > TITLE_TRUNCATE_LEN ? `${title.slice(0, TITLE_TRUNCATE_LEN)}...` : title}
             </span>
           </div>
-          <span className="shrink-0 rounded-sm border border-border bg-secondary px-1.5 py-0.5 font-mono text-[12px] text-muted-foreground">
+          <span className="shrink-0 rounded-full border border-border bg-secondary px-2 py-1 font-mono text-[11px] text-muted-foreground">
             {formatRelativeTime(session.updated_at)}
           </span>
         </div>
 
-        <div className="mt-1.5 flex flex-wrap items-center gap-1 text-[12px] text-muted-foreground">
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[12px] text-muted-foreground">
           <Badge
             variant="outline"
-            className="bg-secondary px-1.5 py-0.5 text-[12px] text-primary"
+            className="bg-secondary px-2 py-0.5 text-[11px] text-primary"
           >
             {session.model || t("sessionRow.noModel")}
           </Badge>
-          <span className="zed-chip">
+          <span className="zed-chip inline-flex items-center gap-1">
+            <MessageSquareText size={12} />
             {t("sessionRow.msgCount", { count: session.message_count })}
           </span>
-          <span className="zed-chip">
-            {session.project_path
-              ? session.project_path.split("/").filter(Boolean).pop()
-              : session.agent === "claude_code_subagent" ? t("sessionRow.subagent") : "—"}
+          <span className="zed-chip inline-flex items-center gap-1">
+            <FolderTree size={12} />
+            {projectLabel}
           </span>
         </div>
       </div>

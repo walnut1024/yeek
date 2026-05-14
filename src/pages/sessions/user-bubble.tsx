@@ -10,14 +10,16 @@ const UserBubble = React.memo(function UserBubble({
 }) {
   const { t } = useTranslation();
   return (
-    <article data-ai-item="user-message" className="-mx-1 rounded-md border border-border/60 bg-[var(--editor)] px-2.5 py-2 transition-colors hover:bg-accent/40">
-      <div className="mb-0.5 flex items-center gap-1.5">
-        <User size={16} className="text-muted-foreground" />
+    <article data-ai-item="user-message" className="rounded-xl border border-border bg-secondary px-3 py-3 transition-colors hover:bg-element-hover">
+      <div className="mb-2 flex items-center gap-1.5">
+        <span className="inline-flex size-6 items-center justify-center rounded-full border border-border bg-card">
+          <User size={14} className="text-foreground" />
+        </span>
         <span className="text-[13px] font-medium text-foreground">
           {t("user.role")}
         </span>
         {msg.timestamp && (
-          <span className="text-[12px] text-muted-foreground">
+          <span className="text-[12px] text-muted-foreground/80">
             {new Date(msg.timestamp).toLocaleTimeString([], {
               hour: "2-digit",
               minute: "2-digit",
@@ -26,7 +28,7 @@ const UserBubble = React.memo(function UserBubble({
           </span>
         )}
       </div>
-      <div className="max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+      <div className="max-h-[320px] overflow-y-auto custom-scrollbar pr-1">
         <p className="whitespace-pre-wrap text-[14px] leading-[1.55] text-foreground">
           {msg.content_preview}
         </p>

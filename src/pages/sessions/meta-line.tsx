@@ -45,7 +45,7 @@ const MetaLine = React.memo(function MetaLine({
             ? t("meta.exitPlan")
             : t("meta.reenterPlan");
       return (
-        <div className="-mx-1 rounded-md border border-border/60 bg-[var(--editor)] px-2.5 py-2">
+        <div className="rounded-xl border border-border bg-[var(--editor)] px-3 py-2.5">
           <div className="flex items-center gap-1.5">
             <TrendingUp size={16} className="text-primary" />
             <span className="text-[14px] font-medium text-primary">
@@ -66,7 +66,7 @@ const MetaLine = React.memo(function MetaLine({
       const filename = msg.content_preview.split(":")[0];
       const label = subtype === "edited_text_file" ? t("meta.edited") : t("meta.file");
       return (
-        <div className="-mx-1 rounded-md border border-border/60 bg-[var(--editor)] px-2.5 py-2">
+        <div className="rounded-xl border border-border bg-[var(--editor)] px-3 py-2.5">
           <div className="flex items-center gap-1.5">
             <File size={16} className="text-muted-foreground" />
             <span className="text-[14px] text-muted-foreground">{label}</span>
@@ -80,7 +80,7 @@ const MetaLine = React.memo(function MetaLine({
 
     if (!msg.content_preview) return null;
     return (
-      <div className="-mx-1 rounded-md border border-border/60 bg-[var(--editor)] px-2.5 py-2">
+      <div className="rounded-xl border border-border bg-[var(--editor)] px-3 py-2.5">
         <div className="flex items-center gap-1.5">
           <File size={16} className="text-muted-foreground" />
           <span className="text-[14px] text-muted-foreground">
@@ -111,7 +111,7 @@ const MetaLine = React.memo(function MetaLine({
     // API error → destructive
     if (subtype === "api_error") {
       return (
-        <div className="-mx-1 rounded-md border border-destructive/40 bg-[var(--editor)] px-2.5 py-2">
+        <div className="rounded-xl border border-destructive/40 bg-[var(--editor)] px-3 py-2.5">
           <div className="flex items-center gap-1.5">
             <AlertTriangle size={16} className="text-destructive" />
             <span className="text-[14px] font-medium text-destructive">
@@ -130,7 +130,7 @@ const MetaLine = React.memo(function MetaLine({
     // Scheduled task
     if (subtype === "scheduled_task_fire") {
       return (
-        <div className="-mx-1 rounded-md border border-border/60 bg-[var(--editor)] px-2.5 py-2">
+        <div className="rounded-xl border border-border bg-[var(--editor)] px-3 py-2.5">
           <div className="flex items-center gap-1.5">
             <Clock size={16} className="text-muted-foreground" />
             <span className="text-[14px] font-medium text-muted-foreground">
@@ -143,7 +143,7 @@ const MetaLine = React.memo(function MetaLine({
 
     if (!msg.content_preview) return null;
     return (
-      <div className="-mx-1 rounded-md border border-border/60 bg-[var(--editor)] px-2.5 py-2">
+      <div className="rounded-xl border border-border bg-[var(--editor)] px-3 py-2.5">
         <div className="flex items-center gap-1.5">
           <Info size={16} className="text-muted-foreground" />
           <span className="text-[14px] text-muted-foreground">

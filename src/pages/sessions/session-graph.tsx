@@ -16,6 +16,7 @@ import { getSessionTranscript } from "@/lib/api";
 import { GRAPH_MAX_NODES } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import { buildTree } from "./graph/build-tree";
 import { nodeTypes } from "./graph/nodes";
 import NodeDetailPanel from "./graph/node-detail-panel";
@@ -79,16 +80,16 @@ function GraphCanvas({
         style={{
           background: "var(--card, #2f343e)",
           border: "1px solid var(--border, #464b57)",
-          borderRadius: 0,
+          borderRadius: 12,
         }}
       />
       <Background color="var(--border, #464b57)" gap={24} size={1} />
-      <Panel position="top-right" style={{ padding: 0 }}>
+      <Panel position="top-right" style={{ padding: 12 }}>
         <Button
           variant="outline"
           size="sm"
           onClick={handleFitView}
-          className="text-[11px]"
+          className="h-8 rounded-md px-3 text-[12px]"
         >
           {t("graph.fitView")}
         </Button>
@@ -123,9 +124,9 @@ export default function SessionGraph({ sessionId }: { sessionId: string }) {
 
   if (isLoading) {
     return (
-      <div className="space-y-2 p-3">
-        <Skeleton className="h-5 w-3/4" />
-        <Skeleton className="h-4 w-1/2" />
+      <div className="space-y-3 p-4">
+        <Skeleton className="h-20 w-full rounded-xl" />
+        <Skeleton className="h-[360px] w-full rounded-xl" />
       </div>
     );
   }
@@ -147,34 +148,36 @@ export default function SessionGraph({ sessionId }: { sessionId: string }) {
   }
 
   return (
-    <div style={{ width: "100%", height: "100%", position: "relative", minHeight: 400 }}>
-      {truncated && (
-        <div className="absolute left-1/2 top-2 z-10 -translate-x-1/2 rounded-md border border-border bg-card/95 px-3 py-1.5 text-[12px] text-muted-foreground backdrop-blur-sm">
-          {t("graph.truncated", { max: GRAPH_MAX_NODES, total: transcript!.main_path.length })}
+    <div className="flex h-full min-h-[400px] flex-col p-3">
+      <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-secondary px-3 py-2">
+        <div className="min-w-0">
+          <p className="zed-kicker">{t("graph.title")}</p>
+          <p className="mt-0.5 truncate text-[12px] text-muted-foreground">{t("graph.description")}</p>
         </div>
-      )}
-      <ReactFlowProvider>
-        <GraphCanvas nodes={nodes} edges={edges} onSelectNode={setSelectedId} />
-      </ReactFlowProvider>
-
-      {/* Stats bar */}
-      <div
-        style={{
-          position: "absolute",
-          bottom: 8,
-          right: 8,
-          display: "flex",
-          gap: 12,
-          fontSize: 10,
-          color: "var(--muted-foreground, #a9afbc)",
-          fontFamily: "var(--font-data, monospace)",
-          zIndex: 5,
-        }}
-      >
-        <span>{t("graph.statsNodes", { count: stats.total })}</span>
-        <span>{t("graph.statsUsers", { count: stats.users })}</span>
-        <span>{t("graph.statsAssistants", { count: stats.assistants })}</span>
-        <span>{t("graph.statsTools", { count: stats.tools })}</span>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Badge variant="outline" className="bg-card px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+            {t("graph.statsNodes", { count: stats.total })}
+          </Badge>
+          <Badge variant="outline" className="bg-card px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+            {t("graph.statsUsers", { count: stats.users })}
+          </Badge>
+          <Badge variant="outline" className="bg-card px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+            {t("graph.statsAssistants", { count: stats.assistants })}
+          </Badge>
+          <Badge variant="outline" className="bg-card px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+            {t("graph.statsTools", { count: stats.tools })}
+          </Badge>
+        </div>
+      </div>
+      <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-card">
+        {truncated && (
+          <div className="absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-full border border-border bg-card/95 px-3 py-1.5 text-[12px] text-muted-foreground backdrop-blur-sm">
+            {t("graph.truncated", { max: GRAPH_MAX_NODES, total: transcript!.main_path.length })}
+          </div>
+        )}
+        <ReactFlowProvider>
+          <GraphCanvas nodes={nodes} edges={edges} onSelectNode={setSelectedId} />
+        </ReactFlowProvider>
       </div>
 
       {selectedId && transcript && (

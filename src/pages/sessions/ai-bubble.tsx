@@ -12,19 +12,21 @@ const AIBubble = React.memo(function AIBubble({
 }) {
   const { t } = useTranslation();
   return (
-    <article data-ai-item="assistant-message" className="-mx-1 rounded-md border border-border/60 bg-[var(--editor)] px-2.5 py-2 transition-colors hover:bg-accent/40">
-      <div className="mb-0.5 flex items-center gap-1.5">
-        <Sparkles size={16} className="text-muted-foreground" />
+    <article data-ai-item="assistant-message" className="rounded-xl border border-border bg-[var(--editor)] px-3 py-3 transition-colors hover:bg-element-hover">
+      <div className="mb-2 flex items-center gap-1.5">
+        <span className="inline-flex size-6 items-center justify-center rounded-full border border-border bg-card">
+          <Sparkles size={14} className="text-muted-foreground" />
+        </span>
         <span className="text-[13px] font-medium text-muted-foreground">
           {t("ai.role")}
         </span>
         {msg.model && (
-          <span className="font-mono text-[12px] text-muted-foreground">
+          <span className="rounded-full border border-border bg-secondary px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
             {msg.model}
           </span>
         )}
         {msg.timestamp && (
-          <span className="text-[12px] text-muted-foreground">
+          <span className="text-[12px] text-muted-foreground/80">
             {new Date(msg.timestamp).toLocaleTimeString([], {
               hour: "2-digit",
               minute: "2-digit",
@@ -33,7 +35,7 @@ const AIBubble = React.memo(function AIBubble({
           </span>
         )}
       </div>
-      <div className="max-h-[500px] overflow-y-auto custom-scrollbar pr-1 text-[14px] leading-[1.55] text-foreground">
+      <div className="max-h-[520px] overflow-y-auto custom-scrollbar pr-1 text-[14px] leading-[1.6] text-foreground">
         <Markdown
           remarkPlugins={[remarkGfm]}
           components={{

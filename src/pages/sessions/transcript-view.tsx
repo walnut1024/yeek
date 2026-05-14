@@ -5,7 +5,7 @@ import { getSessionTranscript } from "@/lib/api";
 import { TRANSCRIPT_INITIAL_COUNT, TRANSCRIPT_LOAD_MORE } from "@/lib/constants";
 import type { MessageRecord } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { ChevronUp, ChevronDown } from "lucide-react";
+import { ChevronUp, ChevronDown, Rows3, GitBranch } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import UserBubble from "./user-bubble";
 import AIBubble from "./ai-bubble";
@@ -83,7 +83,7 @@ export default function TranscriptView({
   // --- Early returns (after all hooks) ---
   if (isLoading) {
     return (
-      <div className="px-4 space-y-3 py-3">
+      <div className="space-y-3 px-4 py-4">
         <Skeleton className="h-5 w-3/4" />
         <Skeleton className="h-4 w-1/2" />
         <Skeleton className="h-20 w-full" />
@@ -123,15 +123,29 @@ export default function TranscriptView({
   };
 
   return (
-    <div data-ai-region="sessions-messages" className="relative px-4">
+    <div data-ai-region="sessions-messages" className="relative px-4 py-4">
       <div ref={topAnchorRef} />
-      <div className="mb-3 text-[14px] text-muted-foreground">
-        {t("transcript.messageCount", { count: mainCount })}
-        {branchCount > 0 &&
-          ` · ${t("transcript.branchCount", { count: branchCount })}`}
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-secondary px-3 py-2">
+        <div className="flex flex-wrap items-center gap-1.5 text-[12px] text-muted-foreground">
+          <span className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-1.5 py-0.5 font-mono text-[10px]">
+            <Rows3 size={12} />
+            {t("transcript.messageCount", { count: mainCount })}
+          </span>
+          {branchCount > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-1.5 py-0.5 font-mono text-[10px]">
+              <GitBranch size={12} />
+              {t("transcript.branchCount", { count: branchCount })}
+            </span>
+          )}
+        </div>
+        {hasMore && (
+          <Button variant="outline" size="xs" onClick={() => setVisibleCount(groups.length)}>
+            {t("transcript.showAll")}
+          </Button>
+        )}
       </div>
 
-      <div className="space-y-1">
+      <div className="space-y-1.5">
         {visibleGroups.map((group, i) => (
           <React.Fragment key={i}>
             {group.type === "user" && <UserBubble msg={group.msg} />}
@@ -150,24 +164,26 @@ export default function TranscriptView({
 
       {hasMore && <div ref={sentinelRef} className="h-1" />}
       <div ref={bottomAnchorRef} />
-      <div className="fixed bottom-6 right-6 z-30 flex flex-col gap-1.5 rounded-md border border-border bg-card/95 p-1.5 backdrop-blur-sm">
+      <div className="sticky bottom-3 ml-auto mt-3 flex w-fit items-center gap-1 rounded-xl border border-border bg-card/95 p-1 backdrop-blur-sm">
         <Button
           variant="outline"
-          size="icon-sm"
+          size="xs"
           onClick={scrollToTop}
-          aria-label="Scroll to top"
-          title="Scroll to top"
+          aria-label={t("transcript.jumpTop")}
+          title={t("transcript.jumpTop")}
         >
           <ChevronUp size={16} />
+          {t("transcript.jumpTop")}
         </Button>
         <Button
           variant="outline"
-          size="icon-sm"
+          size="xs"
           onClick={scrollToBottom}
-          aria-label="Scroll to bottom"
-          title="Scroll to bottom"
+          aria-label={t("transcript.jumpBottom")}
+          title={t("transcript.jumpBottom")}
         >
           <ChevronDown size={16} />
+          {t("transcript.jumpBottom")}
         </Button>
       </div>
     </div>

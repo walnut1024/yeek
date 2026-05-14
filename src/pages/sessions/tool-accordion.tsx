@@ -72,23 +72,25 @@ const ToolAccordion = React.memo(function ToolAccordion({
       : `${uniqueNames.length} tools: ${uniqueNames.join(", ")}`;
 
   return (
-    <article data-ai-item="tool-message" className="-mx-1 rounded-md border border-border/60 bg-[var(--editor)] px-1.5 py-1">
+    <article data-ai-item="tool-message" className="rounded-xl border border-border bg-[var(--editor)] px-2 py-2">
       <Button
         type="button"
         variant="ghost"
         size="sm"
         onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center gap-1.5 px-1.5 py-1 text-left transition-colors hover:bg-accent/40"
+        className="flex h-auto w-full items-center justify-start gap-2 px-2 py-1.5 text-left transition-colors hover:bg-element-hover"
       >
-        <ChevronRight size={16} className={`text-muted-foreground/50 transition-transform duration-200 ${expanded ? "rotate-90" : ""}`} />
-        <Wrench size={16} className="text-muted-foreground" />
+        <ChevronRight size={16} className={`text-muted-foreground transition-transform duration-200 ${expanded ? "rotate-90" : ""}`} />
+        <span className="inline-flex size-6 items-center justify-center rounded-full border border-border bg-card">
+          <Wrench size={14} className="text-muted-foreground" />
+        </span>
         <span className="text-[12px] font-medium text-muted-foreground">
           {t("tools.callCount", { count: flatPairs.length })} · {summary}
         </span>
       </Button>
 
       {expanded && (
-        <div className="relative ml-[7px] mt-0.5 border-l border-border/40 pl-3.5">
+        <div className="relative ml-[7px] mt-0.5 border-l border-border pl-3.5">
           {flatPairs.map((pair, i) => (
             <ToolItem
               key={`${pair.call.id}-${i}`}
@@ -161,7 +163,7 @@ function ToolItem({
         variant="ghost"
         size="sm"
         onClick={() => setExpandedTool(isOpen ? null : index)}
-        className="flex w-full items-center gap-1.5 rounded-md border border-transparent bg-secondary/10 px-1.5 py-0.5 text-left transition-colors hover:border-border/50 hover:bg-accent/30"
+        className="flex h-auto w-full items-center gap-1.5 rounded-lg border border-transparent bg-secondary px-2 py-1.5 text-left transition-colors hover:border-border hover:bg-element-hover"
       >
         <ChevronRight size={16} className={`text-muted-foreground/30 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} />
         <span className="font-mono text-[13px] font-medium text-primary/90">
@@ -203,9 +205,9 @@ function ToolItem({
 
 function PayloadCard({ label, content }: { label: string; content: string }) {
   return (
-    <div className="my-1.5 overflow-hidden rounded-md border border-border/60 bg-secondary/30">
-      <div className="flex items-center border-b border-border/40 bg-secondary/50 px-2 py-0.5">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
+    <div className="my-1.5 overflow-hidden rounded-md border border-border bg-secondary">
+      <div className="flex items-center border-b border-border bg-secondary px-2 py-0.5">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
           {label}
         </span>
       </div>
