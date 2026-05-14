@@ -119,19 +119,120 @@ pub struct IndexResult {
 }
 
 pub(crate) fn index_sources<F>(
-    _conn: &rusqlite::Connection,
+    conn: &rusqlite::Connection,
     sources: &[SourceDescriptor],
-    _on_progress: F,
+    on_progress: F,
 ) -> Result<IndexResult, AppError>
 where
     F: Fn(i64),
 {
-    // Placeholder — implemented in a later task
-    Ok(IndexResult {
-        indexed: 0,
-        updated: 0,
-        errors: sources.len() as i64,
-    })
+    if sources.is_empty() {
+        return Ok(IndexResult { indexed: 0, updated: 0, errors: 0 });
+    }
+
+    // Load existing fingerprints for skip-if-unchanged
+    let mut fp_stmt = conn
+        .prepare("SELECT path, fingerprint FROM sources WHERE status = 'active'")
+        .map_err(|e| AppError::DbError(format!("Failed to load fingerprints: {}", e)))?;
+    let existing_fingerprints: std::collections::HashMap<String, String> = fp_stmt
+        .query_map([], |row| {
+            let path: String = row.get(0)?;
+            let fp: String = row.get(1)?;
+            Ok((path, fp))
+        })
+        .map_err(|e| AppError::DbError(e.to_string()))?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    let mut indexed = 0i64;
+    let mut updated = 0i64;
+    let mut errors = 0i64;
+
+    conn.execute_batch("BEGIN")?;
+
+    for (i, source) in sources.iter().enumerate() {
+        if let Some(stored_fp) = existing_fingerprints.get(&source.path) {
+            if *stored_fp == source.fingerprint {
+                on_progress((i + 1) as i64);
+                continue;
+            }
+        }
+
+        let sp = format!("sp_opencode_{}", i);
+        conn.execute_batch(&format!("SAVEPOINT {}", sp))?;
+
+        match index_single_source(conn, source, &existing_fingerprints) {
+            Ok(is_update) => {
+                conn.execute_batch(&format!("RELEASE {}", sp))?;
+                if is_update { updated += 1; } else { indexed += 1; }
+            }
+            Err(e) => {
+                tracing::error!("Failed to index OpenCode source {}: {}", source.path, e);
+                conn.execute_batch(&format!("ROLLBACK TO {}", sp))?;
+                errors += 1;
+            }
+        }
+
+        on_progress((i + 1) as i64);
+    }
+
+    crate::store::actions::record_action(
+        conn,
+        None,
+        "opencode_sync_completed",
+        Some(&format!("indexed={}, updated={}, errors={}", indexed, updated, errors)),
+    )?;
+
+    conn.execute_batch("COMMIT")?;
+
+    if indexed + updated > 0 {
+        if let Err(e) = conn.execute_batch("INSERT INTO messages_fts(messages_fts) VALUES ('rebuild');") {
+            tracing::warn!("OpenCode FTS rebuild failed: {}", e);
+        }
+    }
+
+    Ok(IndexResult { indexed, updated, errors })
+}
+
+fn index_single_source(
+    conn: &rusqlite::Connection,
+    source: &SourceDescriptor,
+    existing_fingerprints: &std::collections::HashMap<String, String>,
+) -> Result<bool, AppError> {
+    let is_update = existing_fingerprints.contains_key(&source.path);
+
+    let oc_conn = open_opencode_db_readonly(Path::new(&source.path))?;
+    validate_opencode_schema(&oc_conn)?;
+
+    let sessions = query_sessions(&oc_conn)?;
+
+    for session in &sessions {
+        let raw_session_id = session.id.strip_prefix("opencode:").unwrap_or(&session.id);
+        let is_sidechain = session.parent_session_id.is_some();
+
+        // Delete stale messages before reinserting
+        conn.execute("DELETE FROM messages WHERE session_id = ?", params![session.id])?;
+
+        let messages = query_messages(&oc_conn, raw_session_id, is_sidechain)?;
+        sessions::upsert_session(conn, session)?;
+        for msg in &messages {
+            crate::store::messages::upsert_message(conn, msg)?;
+        }
+    }
+
+    crate::store::sources::upsert_source(conn, source)?;
+    for session in &sessions {
+        crate::store::sources::link_session_source(
+            conn,
+            &session.id,
+            &source.fingerprint,
+            &source.source_type,
+            &source.path,
+            "not_allowed",
+        )?;
+    }
+
+    Ok(is_update)
 }
 
 /// Open an OpenCode SQLite database in strict read-only mode.
@@ -829,5 +930,76 @@ mod tests {
         let oc_conn = open_opencode_db_readonly(&db_path).unwrap();
         let messages = query_messages(&oc_conn, "child1", true).unwrap();
         assert!(messages[0].is_sidechain);
+    }
+
+    // ── Indexing tests ──
+
+    #[test]
+    fn index_sources_skips_unchanged_fingerprint() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = create_test_opencode_db(&dir);
+        {
+            let oc_conn = rusqlite::Connection::open(&db_path).unwrap();
+            seed_messages(&oc_conn);
+        }
+
+        let yeek_path = dir.path().join("yeek.db");
+        let yeek_conn = rusqlite::Connection::open(&yeek_path).unwrap();
+        crate::store::schema::init_schema(&yeek_conn).unwrap();
+
+        let source = source_descriptor_from_path(&db_path).unwrap();
+
+        let result = index_sources(&yeek_conn, &[source.clone()], |_| {}).unwrap();
+        assert!(result.indexed + result.updated > 0);
+
+        let result2 = index_sources(&yeek_conn, &[source], |_| {}).unwrap();
+        assert_eq!(result2.indexed + result2.updated, 0);
+    }
+
+    #[test]
+    fn index_sources_clears_stale_messages_on_reindex() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = create_test_opencode_db(&dir);
+        {
+            let oc_conn = rusqlite::Connection::open(&db_path).unwrap();
+            seed_messages(&oc_conn);
+        }
+
+        let yeek_path = dir.path().join("yeek.db");
+        let yeek_conn = rusqlite::Connection::open(&yeek_path).unwrap();
+        crate::store::schema::init_schema(&yeek_conn).unwrap();
+
+        let source = source_descriptor_from_path(&db_path).unwrap();
+        let _ = index_sources(&yeek_conn, &[source], |_| {}).unwrap();
+
+        let count: i64 = yeek_conn.query_row(
+            "SELECT COUNT(*) FROM messages WHERE session_id LIKE 'opencode:sess1%'",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert!(count > 0);
+
+        // Remove a message from OpenCode DB
+        {
+            let conn = rusqlite::Connection::open(&db_path).unwrap();
+            conn.execute("DELETE FROM part WHERE id = 'part1'", []).unwrap();
+            conn.execute("DELETE FROM message WHERE id = 'msg1'", []).unwrap();
+        }
+
+        // Force reindex by changing fingerprint
+        let new_source = {
+            let mut s = source_descriptor_from_path(&db_path).unwrap();
+            s.fingerprint = "forced:change".to_string();
+            s
+        };
+
+        let _ = index_sources(&yeek_conn, &[new_source], |_| {}).unwrap();
+
+        let remaining: i64 = yeek_conn.query_row(
+            "SELECT COUNT(*) FROM messages WHERE session_id = 'opencode:sess1' AND id = 'opencode:msg1'",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert_eq!(remaining, 0);
     }
 }
