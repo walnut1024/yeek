@@ -11,6 +11,7 @@ function formatAgentLabel(agent: string): string {
   if (agent === "claude_code") return "Claude Code";
   if (agent === "claude_code_subagent") return "Claude Code";
   if (agent === "codex") return "Codex";
+  if (agent === "opencode") return "OpenCode";
   return agent;
 }
 

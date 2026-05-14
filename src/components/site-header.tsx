@@ -32,6 +32,9 @@ export function SiteHeader({
               <img src={openaiIcon} alt="Codex" className="h-4 w-auto" />
               Codex
             </TabsTrigger>
+            <TabsTrigger value="opencode" className="h-6 rounded-md px-2 text-[12px]">
+              OpenCode
+            </TabsTrigger>
           </TabsList>
         </Tabs>
       )}
@@ -45,6 +48,9 @@ export function SiteHeader({
             <TabsTrigger value="codex" className="h-6 rounded-md px-2 text-[12px]">
               <img src={openaiIcon} alt="Codex" className="h-4 w-auto" />
               Codex
+            </TabsTrigger>
+            <TabsTrigger value="opencode" className="h-6 rounded-md px-2 text-[12px]">
+              OpenCode
             </TabsTrigger>
           </TabsList>
         </Tabs>
