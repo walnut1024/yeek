@@ -8,17 +8,17 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "border-border bg-secondary text-foreground hover:bg-element-hover aria-expanded:bg-element-active",
+        default: "border-border bg-secondary text-foreground hover:bg-element-hover active:opacity-80 aria-expanded:bg-element-active",
         primary:
-          "border-primary bg-primary text-primary-foreground hover:bg-[#6f7be0] aria-expanded:bg-[#6f7be0]",
+          "border-primary bg-primary text-primary-foreground shadow-[var(--button-inset)] hover:opacity-90 active:opacity-80 focus-visible:shadow-[var(--focus-shadow)] aria-expanded:opacity-90",
         outline:
-          "border-border bg-transparent text-muted-foreground hover:bg-element-hover hover:text-foreground aria-expanded:bg-element-active aria-expanded:text-foreground",
+          "border-[rgba(28,28,28,0.4)] bg-transparent text-foreground hover:bg-element-hover active:opacity-80 focus-visible:shadow-[var(--focus-shadow)] aria-expanded:bg-element-active",
         secondary:
-          "border-transparent bg-transparent text-muted-foreground hover:bg-element-hover hover:text-foreground aria-expanded:bg-element-active aria-expanded:text-foreground",
+          "border-transparent bg-transparent text-muted-foreground hover:bg-element-hover hover:text-foreground active:opacity-80 aria-expanded:bg-element-active aria-expanded:text-foreground",
         ghost:
-          "border-transparent bg-transparent text-muted-foreground hover:bg-element-hover hover:text-foreground aria-expanded:bg-element-active aria-expanded:text-foreground",
+          "border-transparent bg-transparent text-muted-foreground hover:bg-element-hover hover:text-foreground active:opacity-80 aria-expanded:bg-element-active aria-expanded:text-foreground",
         destructive:
-          "border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/15 focus-visible:border-destructive/30",
+          "border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/15 active:opacity-80 focus-visible:border-destructive/30",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
