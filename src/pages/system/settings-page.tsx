@@ -7,6 +7,16 @@ import { useLocalStorage } from "@/lib/hooks";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { formatRelativeTime } from "@/lib/formatters";
 
 const TERMINAL_OPTIONS = [
@@ -70,6 +80,10 @@ export default function SettingsPage() {
   }, [queryClient]);
 
   const isScanning = scanProgress !== null;
+  const progressPercent =
+    scanProgress && scanProgress.total > 0
+      ? Math.round((scanProgress.processed / scanProgress.total) * 100)
+      : 0;
 
   // Show only sync errors from the current session (last hour)
   const errorActions =
@@ -80,118 +94,97 @@ export default function SettingsPage() {
 
   return (
     <div className="grid h-full min-h-0 xl:grid-cols-[minmax(0,1.2fr)_320px]">
-      <section data-ai-region="settings-content" className="surface-panel overflow-auto p-3">
+      <section data-ai-region="settings-content" className="overflow-auto p-3">
         <PageHeader kicker={t("settings.operations")} title={t("settings.title")} description={t("settings.description")} region="settings-header" />
 
-        {/* Settings */}
-        <div className="mt-4">
-          <p className="zed-kicker">{t("settings.settings")}</p>
-          <h3 className="mt-1 text-[14px] font-medium leading-none text-foreground">{t("settings.defaultTerminal")}</h3>
-          <div className="mt-2 max-w-xs">
-            <select
-              value={defaultTerminal}
-              onChange={(e) => setDefaultTerminal(e.target.value)}
-              className="zed-input"
-            >
-              <option value="">{t("settings.terminalAuto")}</option>
-              {TERMINAL_OPTIONS.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <h3 className="mt-3 text-[14px] font-medium leading-none text-foreground">{t("settings.language")}</h3>
-          <div className="mt-2 flex items-center gap-2">
-            <Button
-              size="sm"
-              variant={i18n.language === "en" ? "default" : "outline"}
-              className="h-7 rounded-md px-2.5 text-[13px]"
-              onClick={() => i18n.changeLanguage("en")}
-            >
-              English
-            </Button>
-            <Button
-              size="sm"
-              variant={i18n.language === "zh-CN" ? "default" : "outline"}
-              className="h-7 rounded-md px-2.5 text-[13px]"
-              onClick={() => i18n.changeLanguage("zh-CN")}
-            >
-              中文
-            </Button>
-          </div>
-        </div>
-
-        {/* Operations */}
-        <div className="mt-4">
-          <p className="zed-kicker">{t("settings.operations")}</p>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-[14px] font-medium leading-none text-foreground">{t("settings.rebuild")}</h3>
-              <p className="mt-1 text-[13px] text-muted-foreground">{t("settings.hintRebuildBody")}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              {confirmRebuild ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-[13px] text-destructive">{t("settings.confirmRebuild")}</span>
+        <div className="mt-3 space-y-3">
+          <section className="surface-card p-3">
+            <p className="zed-kicker">{t("settings.preferences")}</p>
+            <div className="mt-2.5 grid gap-2.5 xl:grid-cols-2">
+              <SettingsCard title={t("settings.defaultTerminal")} description={t("settings.terminalDescription")}>
+                <label className="block">
+                  <span className="sr-only">{t("settings.defaultTerminal")}</span>
+                  <select
+                    title={t("settings.defaultTerminal")}
+                    value={defaultTerminal}
+                    onChange={(e) => setDefaultTerminal(e.target.value)}
+                    className="zed-input"
+                  >
+                    <option value="">{t("settings.terminalAuto")}</option>
+                    {TERMINAL_OPTIONS.map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </SettingsCard>
+              <SettingsCard title={t("settings.language")} description={t("settings.languageDescription")}>
+                <div className="flex flex-wrap items-center gap-2">
                   <Button
                     size="sm"
-                    className="h-7 rounded-md px-2.5 text-[13px]"
-                    variant="outline"
-                    onClick={() => setConfirmRebuild(false)}
-                    disabled={isScanning}
+                    variant={i18n.language === "en" ? "default" : "outline"}
+                    className="h-8 rounded-md px-3 text-[13px]"
+                    onClick={() => i18n.changeLanguage("en")}
                   >
-                    {t("manage.cancel")}
+                    {t("settings.languageEnglish")}
                   </Button>
                   <Button
                     size="sm"
-                    className="h-7 rounded-md px-2.5 text-[13px] font-medium"
-                    variant="destructive"
-                    onClick={() => rebuild.mutate()}
-                    disabled={isScanning}
+                    variant={i18n.language === "zh-CN" ? "default" : "outline"}
+                    className="h-8 rounded-md px-3 text-[13px]"
+                    onClick={() => i18n.changeLanguage("zh-CN")}
                   >
-                    {t("settings.confirmRebuildBtn")}
+                    {t("settings.languageChinese")}
                   </Button>
                 </div>
-              ) : (
-                <Button
-                  size="sm"
-                  className="h-7 rounded-md px-2.5 text-[13px] font-medium disabled:opacity-60"
-                  variant="outline"
-                  onClick={() => setConfirmRebuild(true)}
-                  disabled={isScanning}
-                >
-                  {isScanning ? (
-                    <span className="flex items-center gap-2">
-                      <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />
-                      {scanProgress!.total > 0
-                        ? `${scanProgress!.processed}/${scanProgress!.total}`
-                        : t("settings.starting")}
-                    </span>
-                  ) : (
-                    t("settings.rebuild")
-                  )}
-                </Button>
-              )}
+              </SettingsCard>
             </div>
-          </div>
+          </section>
 
-          {isScanning && scanProgress!.total > 0 && (
-            <div className="mt-3 h-1 overflow-hidden rounded-full bg-secondary">
-              <div
-                className="h-full rounded-full bg-primary transition-all duration-300 ease-out"
-                style={{ width: `${Math.round((scanProgress!.processed / scanProgress!.total) * 100)}%` }}
-              />
+          <section className="surface-card p-3">
+            <p className="zed-kicker">{t("settings.maintenance")}</p>
+            <div className="mt-2.5 flex flex-wrap items-start justify-between gap-2.5">
+              <div className="max-w-xl">
+                <h3 className="text-[15px] font-medium text-foreground">{t("settings.rebuild")}</h3>
+                <p className="mt-0.5 text-[12px] leading-[1.5] text-muted-foreground">{t("settings.hintRebuildBody")}</p>
+              </div>
+              <Button
+                size="sm"
+                className="h-8 rounded-md px-3 text-[13px] font-medium disabled:opacity-60"
+                variant={isScanning ? "default" : "destructive"}
+                onClick={() => !isScanning && setConfirmRebuild(true)}
+                disabled={isScanning}
+              >
+                {isScanning ? (
+                  <span className="flex items-center gap-2">
+                    <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />
+                    {scanProgress!.total > 0
+                      ? `${scanProgress!.processed}/${scanProgress!.total}`
+                      : t("settings.starting")}
+                  </span>
+                ) : (
+                  t("settings.rebuild")
+                )}
+              </Button>
             </div>
-          )}
-        </div>
 
-        {errorActions.length > 0 && (
-          <div className="mt-4">
-            <p className="zed-kicker text-destructive">{t("settings.attention")}</p>
-            <h3 className="mt-1 text-[14px] font-medium leading-none text-foreground">{t("settings.syncIssues")}</h3>
-            <div className="mt-2 space-y-2">
+            {isScanning && scanProgress!.total > 0 && (
+              <div className="mt-3 rounded-lg border border-border bg-secondary p-2.5">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[13px] font-medium text-foreground">{t("settings.rebuilding")}</span>
+                  <span className="font-mono text-[12px] text-muted-foreground">{progressPercent}%</span>
+                </div>
+                <progress className="session-progress mt-2 h-1.5 w-full overflow-hidden rounded-full bg-secondary" value={progressPercent} max={100} />
+              </div>
+            )}
+          </section>
+
+          {errorActions.length > 0 && (
+            <section className="surface-card p-3">
+              <p className="zed-kicker text-destructive">{t("settings.attention")}</p>
+              <h3 className="mt-1 text-[15px] font-medium text-foreground">{t("settings.syncIssues")}</h3>
+              <div className="mt-2.5 space-y-2">
               {errorActions.map(
                 (a: {
                   id: number;
@@ -201,7 +194,7 @@ export default function SettingsPage() {
                 }) => (
                   <div
                     key={a.id}
-                    className="border border-destructive/30 bg-destructive/10 px-2.5 py-2"
+                    className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2"
                   >
                     <div className="flex items-center justify-between gap-3">
                       <Badge className="border-destructive/30 bg-destructive/10 px-1.5 py-0.5 text-[12px] text-destructive">
@@ -211,42 +204,80 @@ export default function SettingsPage() {
                         {formatRelativeTime(a.created_at)}
                       </span>
                     </div>
-                    <p className="mt-2 text-[14px] leading-[1.5] text-destructive/80">
+                    <p className="mt-1.5 text-[13px] leading-[1.45] text-destructive/80">
                       {a.detail}
                     </p>
                   </div>
                 )
               )}
-            </div>
-          </div>
-        )}
+              </div>
+            </section>
+          )}
+        </div>
       </section>
 
-      <aside data-ai-region="settings-ops-notes" className="surface-panel overflow-hidden border-l border-border p-3">
+      <aside data-ai-region="settings-ops-notes" className="surface-panel overflow-auto p-3">
         <p className="zed-kicker">{t("settings.opsNotes")}</p>
-        <h3 className="mt-2 text-[14px] font-semibold leading-none text-foreground">
+        <h3 className="mt-1.5 text-[14px] font-semibold leading-none text-foreground">
           {t("settings.opsHeading")}
         </h3>
-        <p className="mt-2 text-[14px] leading-[1.5] text-muted-foreground">
+        <p className="mt-1.5 text-[13px] leading-[1.45] text-muted-foreground">
           {t("settings.opsDescription")}
         </p>
-        <div className="mt-3 space-y-2">
+        <div className="mt-2.5 space-y-2">
           <SettingsHint title={t("settings.hintRebuildTitle")} body={t("settings.hintRebuildBody")} />
           <SettingsHint title={t("settings.hintErrorTitle")} body={t("settings.hintErrorBody")} />
           <SettingsHint title={t("settings.hintAuditTitle")} body={t("settings.hintAuditBody")} />
         </div>
       </aside>
+
+      <AlertDialog open={confirmRebuild} onOpenChange={setConfirmRebuild}>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("settings.confirmRebuild")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("settings.rebuildImpact")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2.5">
+            <p className="text-[13px] font-medium text-destructive">{t("settings.rebuild")}</p>
+            <p className="mt-1 text-[12px] leading-[1.5] text-muted-foreground">{t("settings.hintRebuildBody")}</p>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("manage.cancel")}</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={() => rebuild.mutate()} disabled={rebuild.isPending || isScanning}>
+              {rebuild.isPending ? t("settings.starting") : t("settings.confirmRebuildBtn")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
 
 function SettingsHint({ title, body }: { title: string; body: string }) {
   return (
-    <div className="border border-border bg-secondary/50 p-2.5">
-      <p className="text-[14px] font-medium text-foreground">
+    <div className="rounded-lg border border-border bg-secondary p-2.5">
+      <p className="text-[13px] font-medium text-foreground">
         {title}
       </p>
-      <p className="mt-1.5 text-[14px] leading-[1.5] text-muted-foreground">{body}</p>
+      <p className="mt-1 text-[12px] leading-[1.45] text-muted-foreground">{body}</p>
+    </div>
+  );
+}
+
+function SettingsCard({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-lg border border-border bg-secondary p-2.5">
+      <h3 className="text-[13px] font-medium text-foreground">{title}</h3>
+      <p className="mt-0.5 text-[12px] leading-[1.45] text-muted-foreground">{description}</p>
+      <div className="mt-2.5">{children}</div>
     </div>
   );
 }
