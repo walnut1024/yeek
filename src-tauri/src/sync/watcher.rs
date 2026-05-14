@@ -7,6 +7,7 @@ use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
 
 use crate::adapter::claudecode;
 use crate::adapter::codex;
+use crate::adapter::opencode;
 use crate::app::errors::AppError;
 use crate::app::events::{EventEmitter, SyncCompletedPayload};
 use crate::store::schema;
@@ -39,22 +40,22 @@ impl FileWatcher {
                     Err(_) => return,
                 };
 
-                // Collect all .jsonl paths from the event.
+                // Collect all .jsonl and .db paths from the event.
                 // On macOS, FSEvents may report directories (e.g. a parent dir
                 // was touched by an atomic write/rename). Scan directories and
-                // add contained .jsonl files so we never miss an update.
-                let mut jsonl_paths: Vec<PathBuf> = Vec::new();
+                // add contained .jsonl/.db files so we never miss an update.
+                let mut changed_paths: Vec<PathBuf> = Vec::new();
                 for p in &event.paths {
                     let ext = p.extension().and_then(|e| e.to_str());
-                    if ext == Some("jsonl") {
-                        jsonl_paths.push(p.clone());
+                    if ext == Some("jsonl") || ext == Some("db") {
+                        changed_paths.push(p.clone());
                     } else if p.is_dir() {
-                        // Directory changed — scan for .jsonl files inside
                         if let Ok(entries) = std::fs::read_dir(p) {
                             for entry in entries.flatten() {
                                 let ep = entry.path();
-                                if ep.extension().and_then(|e| e.to_str()) == Some("jsonl") {
-                                    jsonl_paths.push(ep);
+                                let ext = ep.extension().and_then(|e| e.to_str());
+                                if ext == Some("jsonl") || ext == Some("db") {
+                                    changed_paths.push(ep);
                                 }
                             }
                         }
@@ -62,19 +63,19 @@ impl FileWatcher {
                 }
 
                 tracing::info!(
-                    "Watcher: {} event paths → {} jsonl files",
+                    "Watcher: {} event paths → {} changed files",
                     event.paths.len(),
-                    jsonl_paths.len()
+                    changed_paths.len()
                 );
 
-                if jsonl_paths.is_empty() {
+                if changed_paths.is_empty() {
                     return;
                 }
 
                 // Accumulate paths
                 {
                     let mut pending = pending_paths.lock().expect("mutex poisoned");
-                    for p in jsonl_paths {
+                    for p in changed_paths {
                         if !pending.contains(&p) {
                             pending.push(p);
                         }
@@ -222,13 +223,16 @@ fn run_incremental_scan(
     const MAX_WATCHER_FILE_SIZE: u64 = 10 * 1024 * 1024;
     let mut claude_sources = Vec::new();
     let mut codex_sources = Vec::new();
+    let mut opencode_sources = Vec::new();
 
     for p in changed_paths {
         let meta = match std::fs::metadata(p) {
             Ok(meta) => meta,
             Err(_) => continue,
         };
-        if meta.len() > MAX_WATCHER_FILE_SIZE {
+        // Skip large JSONL files, but allow large .db files (OpenCode DBs can be big)
+        let ext = p.extension().and_then(|e| e.to_str());
+        if ext != Some("db") && meta.len() > MAX_WATCHER_FILE_SIZE {
             tracing::info!(
                 "Watcher: skipping large file ({}MB): {}",
                 meta.len() / 1024 / 1024,
@@ -237,31 +241,35 @@ fn run_incremental_scan(
             continue;
         }
 
-        if let Some(source) = codex::source_descriptor_from_path(p) {
+        if let Some(source) = opencode::source_descriptor_from_path(p) {
+            opencode_sources.push(source);
+        } else if let Some(source) = codex::source_descriptor_from_path(p) {
             codex_sources.push(source);
         } else if let Some(source) = claudecode::source_descriptor_from_path(p) {
             claude_sources.push(source);
         }
     }
 
-    if claude_sources.is_empty() && codex_sources.is_empty() {
+    if claude_sources.is_empty() && codex_sources.is_empty() && opencode_sources.is_empty() {
         return Ok(());
     }
 
     tracing::info!(
-        "Watcher: indexing {} claude + {} codex sources",
+        "Watcher: indexing {} claude + {} codex + {} opencode sources",
         claude_sources.len(),
-        codex_sources.len()
+        codex_sources.len(),
+        opencode_sources.len()
     );
 
     // Let each adapter's fingerprint logic decide skip/update
     let claude_result = claudecode::index_sources(&conn, &claude_sources, |_| {})?;
     let codex_result = codex::index_sources(&conn, &codex_sources, |_| {})?;
+    let opencode_result = opencode::index_sources(&conn, &opencode_sources, |_| {})?;
 
     emitter.emit_sync_completed(SyncCompletedPayload {
-        sessions_indexed: claude_result.indexed + codex_result.indexed,
-        sessions_updated: claude_result.updated + codex_result.updated,
-        errors: claude_result.errors + codex_result.errors,
+        sessions_indexed: claude_result.indexed + codex_result.indexed + opencode_result.indexed,
+        sessions_updated: claude_result.updated + codex_result.updated + opencode_result.updated,
+        errors: claude_result.errors + codex_result.errors + opencode_result.errors,
     });
 
     Ok(())

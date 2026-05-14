@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use crate::adapter::{claudecode, codex};
+use crate::adapter::{claudecode, codex, opencode};
 use crate::app::errors::AppError;
 use crate::app::events::{
     EventEmitter, SyncCompletedPayload, SyncProgressPayload, SyncStartedPayload,
@@ -92,7 +92,8 @@ fn run_scan(
     // Discover sources from each adapter separately
     let claude_sources = claudecode::discover_sources()?;
     let codex_sources = codex::discover_sources()?;
-    let total = (claude_sources.len() + codex_sources.len()) as i64;
+    let opencode_sources = opencode::discover_sources()?;
+    let total = (claude_sources.len() + codex_sources.len() + opencode_sources.len()) as i64;
 
     emitter.emit_sync_started(SyncStartedPayload { source_count: total });
 
@@ -107,10 +108,17 @@ fn run_scan(
     let codex_result = codex::index_sources(&conn, &codex_sources, |delta| {
         emitter.emit_sync_progress(SyncProgressPayload { processed: processed + delta, total });
     })?;
+    processed += codex_sources.len() as i64;
 
-    let indexed = claude_result.indexed + codex_result.indexed;
-    let updated = claude_result.updated + codex_result.updated;
-    let errors = claude_result.errors + codex_result.errors;
+    // Index OpenCode sources
+    let opencode_result = opencode::index_sources(&conn, &opencode_sources, |delta| {
+        emitter.emit_sync_progress(SyncProgressPayload { processed: processed + delta, total });
+    })?;
+    processed += opencode_sources.len() as i64;
+
+    let indexed = claude_result.indexed + codex_result.indexed + opencode_result.indexed;
+    let updated = claude_result.updated + codex_result.updated + opencode_result.updated;
+    let errors = claude_result.errors + codex_result.errors + opencode_result.errors;
 
     emitter.emit_sync_completed(SyncCompletedPayload {
         sessions_indexed: indexed,

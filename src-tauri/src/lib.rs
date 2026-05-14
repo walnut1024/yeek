@@ -110,6 +110,27 @@ pub fn run() {
                 );
             }
 
+            // OpenCode data directory watcher
+            let opencode_data_dir = dirs::data_local_dir()
+                .unwrap_or_else(|| {
+                    dirs::home_dir()
+                        .expect("No home directory")
+                        .join("Library/Application Support")
+                })
+                .join("opencode");
+
+            if opencode_data_dir.exists() {
+                watchers.push(
+                    sync::watcher::FileWatcher::start(
+                        opencode_data_dir,
+                        db_path.clone(),
+                        emitter.clone(),
+                        scan_guard.clone(),
+                    )
+                    .expect("Failed to start OpenCode file watcher"),
+                );
+            }
+
             // Start plugin config watcher for install/uninstall status updates
             let config_watcher =
                 sync::watcher::FileWatcher::start_plugin_config_watcher(emitter.clone())
