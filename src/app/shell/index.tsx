@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, lazy, Suspense } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { getEventTransport } from "@/lib/events";
@@ -17,21 +17,30 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import SessionRow from "@/pages/sessions/session-row";
-import SessionDetailPane from "@/pages/sessions/session-detail-pane";
-import DashboardPage from "@/pages/dashboard/dashboard-page";
-import SettingsPage from "@/pages/system/settings-page";
-import MarketplacePage from "@/pages/marketplace/marketplace-page";
-import ProxyPage from "@/pages/proxy/proxy-page";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { PageHeader } from "@/components/ui/page-header";
 import { PageToolbar } from "@/components/ui/page-toolbar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { MessageSquare, LayoutGrid, ShoppingBag, Settings, Code, Check, Minus, Trash2, ChevronRight } from "lucide-react";
 import { SESSION_PAGE_SIZE } from "@/lib/constants";
 import { useGroupedSessions } from "./use-grouped-sessions";
 import { useSessionSelection } from "./use-session-selection";
 import { useKeyboardNavigation } from "./use-keyboard-navigation";
+
+const DashboardPage = lazy(() => import("@/pages/dashboard/dashboard-page"));
+const SettingsPage = lazy(() => import("@/pages/system/settings-page"));
+const MarketplacePage = lazy(() => import("@/pages/marketplace/marketplace-page"));
+const ProxyPage = lazy(() => import("@/pages/proxy/proxy-page"));
+const SessionDetailPane = lazy(() => import("@/pages/sessions/session-detail-pane"));
 
 export function AppShell() {
   const [section, setSection] = useState<"dashboard" | "sessions" | "marketplace" | "settings" | "proxy">("dashboard");
@@ -45,6 +54,13 @@ export function AppShell() {
     queryFn: getSystemStatus,
     refetchInterval: 30_000,
   });
+
+  const navItems = [
+    { key: "dashboard" as const, label: t("nav.dashboard"), icon: LayoutGrid },
+    { key: "sessions" as const, label: t("nav.sessions"), icon: MessageSquare, badge: status ? String(status.total_sessions) : undefined },
+    { key: "marketplace" as const, label: t("nav.marketplace"), icon: ShoppingBag },
+    { key: "proxy" as const, label: t("nav.proxy"), icon: Code },
+  ];
 
   useEffect(() => {
     const transport = getEventTransport();
@@ -65,63 +81,60 @@ export function AppShell() {
     <div className="app-shell">
       <div className="app-overlay" />
       <div className="relative z-10 flex h-full min-h-0 overflow-hidden">
-        {/* Sidebar - icon only */}
-        <TooltipProvider delay={200}>
-        <nav data-ai-region="app-sidebar" className="flex w-[48px] shrink-0 flex-col items-center border-r border-border bg-card py-3">
-          <div className="flex-1 space-y-1">
-            {([
-              { key: "dashboard" as const, label: t("nav.dashboard"), icon: LayoutGrid },
-              { key: "sessions" as const, label: t("nav.sessions"), icon: MessageSquare, badge: status ? String(status.total_sessions) : undefined },
-              { key: "marketplace" as const, label: t("nav.marketplace"), icon: ShoppingBag },
-              { key: "proxy" as const, label: t("nav.proxy"), icon: Code },
-            ]).map(({ key, label, icon: Icon, badge }) => (
-              <Tooltip key={key}>
-                <TooltipTrigger
-                  onClick={() => setSection(key)}
-                  className={`relative flex h-8 w-8 items-center justify-center rounded-md transition-colors ${
-                    section === key
-                      ? "border border-border bg-secondary text-foreground"
-                      : "border border-transparent text-muted-foreground hover:bg-element-hover hover:text-foreground"
-                  }`}
-                >
-                  <Icon size={16} />
-                  {badge && (
-                    <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 font-mono text-[9px] font-medium text-primary-foreground">
-                      {badge}
-                    </span>
-                  )}
-                </TooltipTrigger>
-                <TooltipContent side="right" className="text-[12px]">{label}</TooltipContent>
-              </Tooltip>
+        <nav data-ai-region="app-sidebar" className="flex w-[184px] shrink-0 flex-col border-r border-border bg-card px-2.5 py-3">
+          <div className="border-b border-border pb-2.5">
+            <p className="zed-kicker">{t("app.title")}</p>
+            <p className="mt-0.5 truncate text-[11px] leading-[1.4] text-muted-foreground">
+              {t("app.sessionBrowser")}
+            </p>
+          </div>
+          <div className="flex-1 space-y-1 pt-2.5">
+            {navItems.map(({ key, label, icon: Icon, badge }) => (
+              <Button
+                key={key}
+                type="button"
+                variant={section === key ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setSection(key)}
+                className="h-8 w-full justify-start gap-2 rounded-md px-2 text-left"
+              >
+                <Icon size={16} />
+                <span className="min-w-0 flex-1 truncate">{label}</span>
+                {badge && (
+                  <span className="inline-flex h-5 min-w-[22px] items-center justify-center rounded-full border border-border bg-card px-1.5 font-mono text-[10px] text-muted-foreground">
+                    {badge}
+                  </span>
+                )}
+              </Button>
             ))}
           </div>
-          <Tooltip>
-            <TooltipTrigger
+          <div className="border-t border-border pt-2.5">
+            <Button
+              type="button"
+              variant={section === "settings" ? "default" : "ghost"}
+              size="sm"
               onClick={() => setSection("settings")}
-              className={`relative flex h-8 w-8 items-center justify-center rounded-md transition-colors ${
-                section === "settings"
-                  ? "border border-border bg-secondary text-foreground"
-                  : "border border-transparent text-muted-foreground hover:bg-element-hover hover:text-foreground"
-              }`}
+              className="h-8 w-full justify-start gap-2 rounded-md px-2 text-left"
             >
               <Settings size={16} />
-            </TooltipTrigger>
-            <TooltipContent side="right" className="text-[12px]">{t("nav.settings")}</TooltipContent>
-          </Tooltip>
+              <span className="min-w-0 flex-1 truncate">{t("nav.settings")}</span>
+            </Button>
+          </div>
         </nav>
-        </TooltipProvider>
 
         {/* Main content */}
         <main data-ai-page={section} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <div className="h-8 shrink-0" />
+          <div className="h-6 shrink-0" />
           <div className="min-h-0 flex-1 overflow-hidden">
-            {section === "dashboard" && <DashboardPage />}
-            {section === "sessions" && (
-              <SessionsPage selectedId={selectedId} onSelect={setSelectedId} />
-            )}
-            {section === "marketplace" && <MarketplacePage />}
-            {section === "settings" && <SettingsPage />}
-            {section === "proxy" && <ProxyPage />}
+            <Suspense fallback={<PanelFallback />}>
+              {section === "dashboard" && <DashboardPage />}
+              {section === "sessions" && (
+                <SessionsPage selectedId={selectedId} onSelect={setSelectedId} />
+              )}
+              {section === "marketplace" && <MarketplacePage />}
+              {section === "settings" && <SettingsPage />}
+              {section === "proxy" && <ProxyPage />}
+            </Suspense>
           </div>
         </main>
       </div>
@@ -149,6 +162,7 @@ function SessionsPage({
   >(null);
   const ctxRef = useRef<HTMLDivElement>(null);
   const [deleteMode, setDeleteMode] = useState<"soft" | "destructive">("soft");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteProgress, setDeleteProgress] = useState<{ processed: number; total: number } | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const { t } = useTranslation();
@@ -186,7 +200,7 @@ function SessionsPage({
 
   const grouped = useGroupedSessions(sessions, isSearching);
   const {
-    manageMode, setManageMode, selectedIds, confirmDelete, setConfirmDelete,
+    manageMode, setManageMode, selectedIds,
     toggleSession, toggleProject, exitManageMode, allSelected, someSelected,
     toggleAll, flatSessionIds,
   } = useSessionSelection(sessions, grouped, collapsedProjects, selectedId, onSelect);
@@ -195,13 +209,14 @@ function SessionsPage({
   const deleteBatch = useMutation({
     mutationFn: (ids: string[]) => softDeleteSessions(ids),
     onSuccess: () => {
+      setDeleteDialogOpen(false);
       queryClient.invalidateQueries({ queryKey: ["sessions"] });
       exitManageMode();
     },
     onError: (err) => {
       console.error("Soft delete failed:", err);
       setDeleteError(err instanceof Error ? err.message : String(err));
-      setConfirmDelete(false);
+      setDeleteDialogOpen(false);
     },
   });
 
@@ -210,13 +225,14 @@ function SessionsPage({
   const destructiveBatch = useMutation({
     mutationFn: (ids: string[]) => destructiveDeleteSessions(ids),
     onSuccess: (data) => {
+      setDeleteDialogOpen(false);
       setDeleteJobId(data.job_id);
       setDeleteProgress({ processed: 0, total: selectedIds.size });
     },
     onError: (err) => {
       console.error("Destructive delete failed:", err);
       setDeleteError(err instanceof Error ? err.message : String(err));
-      setConfirmDelete(false);
+      setDeleteDialogOpen(false);
     },
   });
 
@@ -277,38 +293,44 @@ function SessionsPage({
       <PageHeader title={t("sessions.title")} description={t("sessions.description")} region="sessions-header" />
       {/* Search + Manage — full width */}
       <PageToolbar region="sessions-toolbar">
-        <div className="flex items-center gap-2">
-            <div className="flex items-center gap-0.5">
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                className={`pill-tab ${agentFilter === "claude_code" ? "pill-tab-active" : "pill-tab-idle"}`}
-                onClick={() => setAgentFilter("claude_code")}
-              >
-                Claude Code
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                className={`pill-tab ${agentFilter === "codex" ? "pill-tab-active" : "pill-tab-idle"}`}
-                onClick={() => setAgentFilter("codex")}
-              >
-                Codex
-              </Button>
-            </div>
-            <label className="block flex-1">
-              <span className="sr-only">{t("sessions.searchSrLabel")}</span>
-              <input
-                ref={searchRef}
-                value={searchRaw}
-                onChange={(e) => setSearchRaw(e.target.value)}
-                placeholder={t("sessions.searchPlaceholder")}
-                className="zed-input"
-              />
-            </label>
+        <div className="flex min-w-0 flex-1 flex-col gap-2 lg:flex-row lg:items-center">
+          <div className="flex items-center gap-0.5">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className={`pill-tab ${agentFilter === "claude_code" ? "pill-tab-active" : "pill-tab-idle"}`}
+              onClick={() => setAgentFilter("claude_code")}
+            >
+              Claude Code
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className={`pill-tab ${agentFilter === "codex" ? "pill-tab-active" : "pill-tab-idle"}`}
+              onClick={() => setAgentFilter("codex")}
+            >
+              Codex
+            </Button>
           </div>
+          <label className="block flex-1 lg:max-w-xl">
+            <span className="sr-only">{t("sessions.searchSrLabel")}</span>
+            <input
+              ref={searchRef}
+              value={searchRaw}
+              onChange={(e) => setSearchRaw(e.target.value)}
+              placeholder={t("sessions.searchPlaceholder")}
+              className="zed-input"
+            />
+          </label>
+          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <span className="rounded-full border border-border bg-secondary/50 px-2 py-1 font-mono">
+              {sessions.length}
+            </span>
+            <span>{isSearching ? t("sessions.searchResults") : t("sessions.total", { count: sessions.length })}</span>
+          </div>
+        </div>
       </PageToolbar>
 
       <div className="grid min-h-0 flex-1 xl:grid-cols-[360px_minmax(0,1fr)]">
@@ -344,12 +366,25 @@ function SessionsPage({
               </div>
             </div>
           ) : (
-            <div className="space-y-2 p-2">
+            <div className="space-y-2.5 p-2.5">
+              <div className="rounded-lg border border-border bg-secondary/30 px-3 py-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="zed-kicker">{isSearching ? t("sessions.searchResults") : t("sessions.searchGroup")}</p>
+                    <p className="mt-0.5 truncate text-[12px] text-muted-foreground">
+                      {isSearching ? t("sessions.emptySearchHint") : t("sessions.emptyBrowseHint")}
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-border bg-card px-2 py-1 font-mono text-[11px] text-muted-foreground">
+                    {sessions.length}
+                  </span>
+                </div>
+              </div>
               <div className="flex items-center gap-1.5">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-7 rounded-md px-2.5 text-[12px]"
+                  className="h-8 rounded-md px-3 text-[12px]"
                   onClick={() => setManageMode(!manageMode)}
                 >
                   {manageMode ? t("sessions.done") : t("sessions.manage")}
@@ -422,7 +457,7 @@ function SessionsPage({
                         );
                       })()}
                       <CollapsibleTrigger
-                        render={<Button type="button" variant="ghost" size="sm" className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-border bg-secondary px-2.5 py-1.5 text-left transition-colors hover:bg-accent" />}
+                        render={<Button type="button" variant="ghost" size="sm" className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-border bg-secondary/40 px-2.5 py-2 text-left transition-colors hover:bg-accent" />}
                         onContextMenu={(e) => {
                           if (isSearching) return;
                           e.preventDefault();
@@ -465,88 +500,79 @@ function SessionsPage({
         </ScrollArea>
 
         {manageMode && (
-          <div className="max-h-[50vh] shrink-0 overflow-y-auto border-t border-border bg-card px-3 py-2">
+          <div className="max-h-[50vh] shrink-0 overflow-y-auto border-t border-border bg-card px-3 py-3">
             {deleteError && (
               <div className="mb-2 flex items-center justify-between rounded-md border border-destructive/30 bg-destructive/10 px-2.5 py-1.5">
                 <span className="text-[12px] text-destructive">{deleteError}</span>
-                <Button variant="ghost" size="sm" className="h-5 px-1 text-[11px] text-destructive" onClick={() => setDeleteError(null)}>Dismiss</Button>
+                <Button variant="ghost" size="sm" className="h-5 px-1 text-[11px] text-destructive" onClick={() => setDeleteError(null)}>{t("update.dismiss")}</Button>
               </div>
             )}
-            {confirmDelete ? (
-              deleteProgress ? (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
+            {deleteProgress ? (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
                     <p className="text-[13px] font-medium text-foreground">
                       {deleteProgress.processed}/{deleteProgress.total} {t("manage.deleting")}
                     </p>
-                    <span className="text-[12px] text-muted-foreground">
-                      {Math.round((deleteProgress.processed / deleteProgress.total) * 100)}%
-                    </span>
+                    <p className="mt-1 text-[12px] text-muted-foreground">
+                      {deleteMode === "destructive" ? t("manage.destructiveDeleteDesc") : t("manage.softDeleteDesc")}
+                    </p>
                   </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
-                    <div
-                      className="h-full rounded-full bg-primary transition-all duration-300 ease-out"
-                      style={{ width: `${Math.round((deleteProgress.processed / deleteProgress.total) * 100)}%` }}
-                    />
-                  </div>
+                  <span className="text-[12px] text-muted-foreground">
+                    {Math.round((deleteProgress.processed / deleteProgress.total) * 100)}%
+                  </span>
                 </div>
-              ) : (
-              <div className="space-y-2">
-                {/* Delete type selection */}
-                <div className="flex items-center justify-between gap-4">
-                  <p className="text-[13px] font-medium text-foreground">
-                    {t("manage.deleteConfirm", { count: selectedIds.size })}
-                  </p>
-                  <Button variant="outline" size="sm" className="h-7 rounded-md px-2.5 text-[13px]" onClick={() => { setConfirmDelete(false); setDeleteMode("soft"); }}>
-                    {t("manage.back")}
-                  </Button>
-                </div>
-                <div className="space-y-1.5">
-                  <label className={`flex cursor-pointer items-start gap-2.5 rounded-md border p-2.5 transition-colors ${deleteMode === "soft" ? "border-primary/30 bg-primary/5" : "border-border hover:border-muted-foreground/30"}`}>
-                    <input type="radio" name="deleteMode" className="mt-0.5 accent-primary" checked={deleteMode === "soft"} onChange={() => setDeleteMode("soft")} />
-                    <div>
-                      <p className="text-[13px] font-medium text-foreground">{t("manage.softDelete")}</p>
-                      <p className="text-[12px] text-muted-foreground">{t("manage.softDeleteDesc")}</p>
-                    </div>
-                  </label>
-                  <label className={`flex cursor-pointer items-start gap-2.5 rounded-md border p-2.5 transition-colors ${deleteMode === "destructive" ? "border-destructive/30 bg-destructive/5" : "border-border hover:border-muted-foreground/30"}`}>
-                    <input type="radio" name="deleteMode" className="mt-0.5 accent-destructive" checked={deleteMode === "destructive"} onChange={() => setDeleteMode("destructive")} />
-                    <div>
-                      <p className="text-[13px] font-medium text-foreground">{t("manage.destructiveDelete")}</p>
-                      <p className="text-[12px] text-muted-foreground">{t("manage.destructiveDeleteDesc")}</p>
-                    </div>
-                  </label>
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button
-                    variant="destructive" size="sm" className="h-8 rounded-md px-3 text-[13px]"
-                    onClick={() => {
-                      if (deleteMode === "destructive") {
-                        destructiveBatch.mutate(Array.from(selectedIds));
-                      } else {
-                        deleteBatch.mutate(Array.from(selectedIds));
-                      }
-                    }}
-                    disabled={deleteBatch.isPending || destructiveBatch.isPending}
-                  >
-                    <Trash2 size={16} />
-                    {deleteBatch.isPending || destructiveBatch.isPending ? t("manage.deleting") : t("manage.confirm")}
-                  </Button>
-                </div>
+                <progress
+                  className="session-progress h-1.5 w-full overflow-hidden rounded-full bg-secondary"
+                  value={deleteProgress.processed}
+                  max={deleteProgress.total}
+                />
               </div>
-              )
             ) : (
-              <div className="flex items-center justify-between gap-4">
-                <span className="text-[13px] text-muted-foreground">
-                  {t("manage.selectedPrefix")}<span className="font-medium text-foreground">{selectedIds.size}</span>{t("manage.selectedSuffix")}
-                </span>
-                <div className="flex shrink-0 items-center gap-2">
-                  <Button variant="outline" size="sm" className="h-8 rounded-md px-3 text-[13px]" onClick={exitManageMode}>
-                    {t("manage.cancel")}
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[13px] font-medium text-foreground">
+                      {t("manage.selectedPrefix")}<span>{selectedIds.size}</span>{t("manage.selectedSuffix")}
+                    </p>
+                    <p className="mt-1 text-[12px] text-muted-foreground">
+                      {deleteMode === "destructive" ? t("manage.destructiveDeleteDesc") : t("manage.softDeleteDesc")}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Button variant="outline" size="sm" className="h-8 rounded-md px-3 text-[13px]" onClick={exitManageMode}>
+                      {t("manage.cancel")}
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="h-8 rounded-md px-3 text-[13px]"
+                      onClick={() => setDeleteDialogOpen(true)}
+                      disabled={selectedIds.size === 0}
+                    >
+                      <Trash2 size={16} />
+                      {t("manage.delete")}
+                    </Button>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-border bg-secondary/40 p-1">
+                  <Button
+                    type="button"
+                    variant={deleteMode === "soft" ? "default" : "ghost"}
+                    size="sm"
+                    className="h-8 rounded-md px-3"
+                    onClick={() => setDeleteMode("soft")}
+                  >
+                    {t("manage.softDelete")}
                   </Button>
-                  <Button variant="destructive" size="sm" className="h-8 rounded-md px-3 text-[13px]" onClick={() => setConfirmDelete(true)} disabled={selectedIds.size === 0}>
-                    <Trash2 size={16} />
-                    {t("manage.delete")}
+                  <Button
+                    type="button"
+                    variant={deleteMode === "destructive" ? "destructive" : "ghost"}
+                    size="sm"
+                    className="h-8 rounded-md px-3"
+                    onClick={() => setDeleteMode("destructive")}
+                  >
+                    {t("manage.destructiveDelete")}
                   </Button>
                 </div>
               </div>
@@ -557,10 +583,12 @@ function SessionsPage({
 
       <section data-ai-region="sessions-detail" className="min-h-0 flex-1 overflow-hidden">
         {selectedId ? (
-          <SessionDetailPane sessionId={selectedId} />
+          <Suspense fallback={<PanelFallback />}>
+            <SessionDetailPane sessionId={selectedId} />
+          </Suspense>
         ) : (
           <div className="flex h-full items-center justify-center p-6">
-            <div className="max-w-xl border border-border bg-card p-5">
+            <div className="max-w-xl rounded-xl border border-border bg-card p-5">
               <p className="zed-kicker">{t("sessions.selectPrompt")}</p>
               <h3 className="mt-2 max-w-md text-[14px] font-semibold leading-none text-foreground">
                 {t("sessions.selectHeading")}
@@ -592,6 +620,42 @@ function SessionsPage({
           </Button>
         </div>
       )}
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("manage.deleteConfirm", { count: selectedIds.size })}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteMode === "destructive" ? t("manage.destructiveDeleteDesc") : t("manage.softDeleteDesc")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className={`rounded-md border px-3 py-2.5 ${deleteMode === "destructive" ? "border-destructive/30 bg-destructive/5" : "border-border bg-secondary/50"}`}>
+            <p className={`text-[13px] font-medium ${deleteMode === "destructive" ? "text-destructive" : "text-foreground"}`}>
+              {deleteMode === "destructive" ? t("manage.destructiveDelete") : t("manage.softDelete")}
+            </p>
+            <p className="mt-1 text-[12px] leading-[1.5] text-muted-foreground">
+              {deleteMode === "destructive" ? t("manage.destructiveDeleteDesc") : t("manage.deleteHint")}
+            </p>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("manage.cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={deleteBatch.isPending || destructiveBatch.isPending}
+              onClick={() => {
+                const ids = Array.from(selectedIds);
+                if (deleteMode === "destructive") {
+                  destructiveBatch.mutate(ids);
+                } else {
+                  deleteBatch.mutate(ids);
+                }
+              }}
+            >
+              {deleteBatch.isPending || destructiveBatch.isPending ? t("manage.deleting") : t("manage.confirm")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {showHelp && (
         <div
@@ -629,5 +693,14 @@ function Shortcut({ keys, desc }: { keys: string[]; desc: string }) {
         {keys.join(" / ")}
       </span>
     </>
+  );
+}
+
+function PanelFallback() {
+  return (
+    <div className="space-y-3 p-4">
+      <Skeleton className="h-36 w-full rounded-xl" />
+      <Skeleton className="h-72 w-full rounded-xl" />
+    </div>
   );
 }

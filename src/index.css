@@ -168,8 +168,8 @@
     z-index: 0;
     pointer-events: none;
     background:
-      radial-gradient(circle at 18% 0%, rgba(28, 28, 28, 0.03), transparent 34%),
-      linear-gradient(180deg, rgba(28, 28, 28, 0.02), transparent 180px);
+      radial-gradient(circle at 18% 0%, rgba(28, 28, 28, 0.025), transparent 32%),
+      linear-gradient(180deg, rgba(28, 28, 28, 0.018), transparent 180px);
     opacity: 1;
   }
 
