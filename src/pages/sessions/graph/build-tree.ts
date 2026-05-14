@@ -1,8 +1,11 @@
 import type { Node as RFNode, Edge } from "@xyflow/react";
-import dagre from "@dagrejs/dagre";
-import type { MessageRecord } from "@/lib/api";
+import type { MessageRecord, BranchPoint } from "@/lib/api";
 
-// ─── Tool color map ─────────────────────────────────────────────────
+// ─── Constants ──────────────────────────────────────────────────────
+
+const COL_WIDTH = 220;
+const ROW_HEIGHT = 70;
+const W = 200; // node width
 
 const TOOL_COLORS: Record<string, string> = {
   Bash: "#e07a5f",
@@ -32,7 +35,7 @@ export function toolColor(name: string): string {
 export function truncate(text: string, len = 48): string {
   if (!text) return "";
   const s = text.replace(/\n/g, " ").trim();
-  return s.length > len ? s.slice(0, len) + "\u2026" : s;
+  return s.length > len ? s.slice(0, len) + "…" : s;
 }
 
 // ─── Node data types ────────────────────────────────────────────────
@@ -43,12 +46,14 @@ export interface TreeNodeData {
   label: string;
   toolName?: string;
   model?: string;
+  isBranch?: boolean;
+  branchIndex?: number;
   [key: string]: unknown;
 }
 
 type GraphNode = RFNode<TreeNodeData>;
 
-// ─── Subtypes to skip (verbose system attachments) ──────────────────
+// ─── Subtypes to skip ───────────────────────────────────────────────
 
 const SKIP_SUBTYPES = new Set([
   "mcp_instructions_delta",
@@ -58,44 +63,86 @@ const SKIP_SUBTYPES = new Set([
   "context",
 ]);
 
-// ─── Dagre layout ───────────────────────────────────────────────────
+// ─── Column assignment ──────────────────────────────────────────────
 
-function computeLayout(
-  nodes: GraphNode[],
-  edges: Edge[]
-): GraphNode[] {
-  const g = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
-  g.setGraph({ rankdir: "TB", nodesep: 50, ranksep: 70 });
-  for (const n of nodes)
-    g.setNode(n.id, { width: n.data.width as number, height: n.data.height as number });
-  for (const e of edges) g.setEdge(e.source, e.target);
-  dagre.layout(g);
-  return nodes.map((n) => {
-    const pos = g.node(n.id);
-    return {
-      ...n,
-      position: {
-        x: pos.x - (n.data.width as number) / 2,
-        y: pos.y - (n.data.height as number) / 2,
-      },
-    };
-  });
+function columnForNode(type: TreeNodeType): number {
+  switch (type) {
+    case "user": return 0;
+    case "assistant": return 1;
+    case "toolUse":
+    case "toolResult": return 2;
+    case "meta": return 1;
+  }
 }
 
-// ─── buildTree ──────────────────────────────────────────────────────
+// ─── Node creation helper ───────────────────────────────────────────
 
-const W = 200;
+function createNodeFromMsg(
+  msg: MessageRecord,
+): { type: TreeNodeType; label: string; height: number; toolName?: string } | null {
+  if (msg.kind === "tool_use") {
+    const toolName = msg.tool_name || "Tool";
+    const label = msg.content_preview
+      ? msg.content_preview.replace(/^Tool:\s*/, "").split("\n")[0]
+      : toolName;
+    return { type: "toolUse", label, height: 40, toolName };
+  }
+  if (msg.kind === "tool_result") {
+    const label = truncate(msg.content_preview || "done", 60);
+    return { type: "toolResult", label, height: 34 };
+  }
+  if (
+    msg.entry_type === "attachment" ||
+    msg.entry_type === "system" ||
+    msg.role === "system"
+  ) {
+    const sub = msg.subtype || "";
+    let label: string;
+    if (sub === "plan_mode") label = "Plan mode";
+    else if (sub === "plan_mode_exit") label = "Exit plan";
+    else if (sub === "edited_text_file") label = "Edited: " + (msg.content_preview || "").split(":")[0];
+    else if (sub === "api_error") label = "API Error";
+    else if (sub === "compact_boundary") label = "Compacted";
+    else if (sub === "scheduled_task_fire") label = "Scheduled task";
+    else label = msg.content_preview ? truncate(msg.content_preview, 35) : sub || "system";
+    return { type: "meta", label, height: 28 };
+  }
+  if (msg.role === "human" && msg.kind === "message") {
+    return { type: "user", label: truncate(msg.content_preview, 55), height: 46 };
+  }
+  if (msg.role === "assistant" && msg.kind === "message") {
+    const label = msg.content_preview ? truncate(msg.content_preview, 55) : "(thinking…)";
+    return { type: "assistant", label, height: msg.content_preview ? 48 : 30 };
+  }
+  return null;
+}
+
+// ─── buildTree (swimlane version) ───────────────────────────────────
 
 export interface BuildTreeResult {
   nodes: GraphNode[];
   edges: Edge[];
-  stats: { total: number; users: number; assistants: number; tools: number };
+  stats: { total: number; users: number; assistants: number; tools: number; branches: number };
 }
 
-export function buildTree(messages: MessageRecord[]): BuildTreeResult {
+export interface BuildTreeOptions {
+  mainPath: string[];
+  branches: BranchPoint[];
+}
+
+export function buildTree(
+  messages: MessageRecord[],
+  options?: BuildTreeOptions,
+): BuildTreeResult {
+  const mainPath = options?.mainPath;
+  const branches = options?.branches ?? [];
+
   const nodes: GraphNode[] = [];
   const edges: Edge[] = [];
   const msgMap = new Map(messages.map((m) => [m.id, m]));
+
+  // Build main_path set if provided
+  const mainPathSet = mainPath ? new Set(mainPath) : null;
 
   // First pass: decide which messages to keep
   const keep = new Set<string>();
@@ -108,18 +155,10 @@ export function buildTree(messages: MessageRecord[]): BuildTreeResult {
       msg.entry_type === "system" ||
       msg.role === "system"
     ) {
-      if (SKIP_SUBTYPES.has(msg.subtype || "")) {
-        visible = false;
-      }
-    } else if (
-      msg.role === "human" &&
-      msg.kind === "message"
-    ) {
+      if (SKIP_SUBTYPES.has(msg.subtype || "")) visible = false;
+    } else if (msg.role === "human" && msg.kind === "message") {
       /* keep */
-    } else if (
-      msg.role === "assistant" &&
-      msg.kind === "message"
-    ) {
+    } else if (msg.role === "assistant" && msg.kind === "message") {
       /* keep */
     } else {
       visible = false;
@@ -127,7 +166,7 @@ export function buildTree(messages: MessageRecord[]): BuildTreeResult {
     if (visible) keep.add(msg.id);
   }
 
-  // Build re-parent map: for skipped nodes, find nearest visible ancestor
+  // Build re-parent map
   const parentMap = new Map<string, string | null>();
   for (const msg of messages) {
     if (!keep.has(msg.id)) continue;
@@ -139,91 +178,167 @@ export function buildTree(messages: MessageRecord[]): BuildTreeResult {
     parentMap.set(msg.id, p);
   }
 
-  // Second pass: create nodes and edges
-  let users = 0;
-  let assistants = 0;
-  let tools = 0;
+  // Process main_path nodes first to establish Y positions
+  let currentY = 0;
+  const mainPathY = new Map<string, number>();
+  const processedIds = new Set<string>();
+  let users = 0, assistants = 0, tools = 0;
 
-  for (const msg of messages) {
-    if (!keep.has(msg.id)) continue;
+  const mainPathOrdered = mainPath
+    ? mainPath.filter((id) => keep.has(id))
+    : Array.from(keep);
 
-    let type: TreeNodeType;
-    let label: string;
-    let height: number;
+  for (const id of mainPathOrdered) {
+    if (processedIds.has(id)) continue;
+    const msg = msgMap.get(id);
+    if (!msg) continue;
 
-    if (msg.kind === "tool_use") {
-      const toolName = msg.tool_name || "Tool";
-      label = msg.content_preview
-        ? msg.content_preview.replace(/^Tool:\s*/, "").split("\n")[0]
-        : toolName;
-      type = "toolUse";
-      height = 40;
-      tools++;
-    } else if (msg.kind === "tool_result") {
-      label = truncate(msg.content_preview || "done", 60);
-      type = "toolResult";
-      height = 34;
-    } else if (
-      msg.entry_type === "attachment" ||
-      msg.entry_type === "system" ||
-      msg.role === "system"
-    ) {
-      const sub = msg.subtype || "";
-      if (sub === "plan_mode") label = "Plan mode";
-      else if (sub === "plan_mode_exit") label = "Exit plan";
-      else if (sub === "edited_text_file")
-        label = "Edited: " + (msg.content_preview || "").split(":")[0];
-      else if (sub === "api_error") label = "API Error";
-      else if (sub === "compact_boundary") label = "Compacted";
-      else if (sub === "scheduled_task_fire") label = "Scheduled task";
-      else
-        label = msg.content_preview
-          ? truncate(msg.content_preview, 35)
-          : sub || "system";
-      type = "meta";
-      height = 28;
-    } else if (msg.role === "human" && msg.kind === "message") {
-      label = truncate(msg.content_preview, 55);
-      type = "user";
-      height = 46;
-      users++;
-    } else if (msg.role === "assistant" && msg.kind === "message") {
-      label = msg.content_preview
-        ? truncate(msg.content_preview, 55)
-        : "(thinking\u2026)";
-      type = "assistant";
-      height = msg.content_preview ? 48 : 30;
-      assistants++;
-    } else {
-      continue;
-    }
+    const nodeResult = createNodeFromMsg(msg);
+    if (!nodeResult) continue;
+
+    const { type, label, height, toolName } = nodeResult;
+    const col = columnForNode(type);
 
     nodes.push({
       id: msg.id,
       type,
       data: {
         label,
-        toolName: msg.tool_name || undefined,
+        toolName,
         model: msg.model || undefined,
         width: W,
         height,
+        isBranch: false,
       },
-      position: { x: 0, y: 0 },
+      position: {
+        x: col * COL_WIDTH,
+        y: currentY,
+      },
     });
 
-    const effectiveParent = parentMap.get(msg.id);
-    if (effectiveParent) {
+    mainPathY.set(id, currentY);
+    processedIds.add(id);
+
+    if (type === "user") users++;
+    else if (type === "assistant") assistants++;
+    else if (type === "toolUse" || type === "toolResult") tools++;
+
+    // Edge from effective parent
+    const effectiveParent = parentMap.get(id);
+    if (effectiveParent && mainPathY.has(effectiveParent)) {
       edges.push({
-        id: `e-${effectiveParent}-${msg.id}`,
+        id: `e-${effectiveParent}-${id}`,
         source: effectiveParent,
-        target: msg.id,
+        target: id,
+        type: "smoothstep",
+        style: { strokeWidth: 2 },
       });
     }
+
+    currentY += height + ROW_HEIGHT - 30;
+  }
+
+  // Process branch nodes
+  let branchCol = 3;
+  let branchCount = 0;
+
+  for (let bi = 0; bi < branches.length; bi++) {
+    const bp = branches[bi];
+    const parentY = mainPathY.get(bp.parent_id);
+    if (parentY === undefined) continue;
+
+    for (const sib of bp.siblings) {
+      const msg = msgMap.get(sib.message_id);
+      if (!msg || processedIds.has(sib.message_id)) continue;
+
+      const nodeResult = createNodeFromMsg(msg);
+      if (!nodeResult) continue;
+
+      const { type, label, height, toolName } = nodeResult;
+      const col = Math.max(columnForNode(type), branchCol);
+
+      nodes.push({
+        id: msg.id,
+        type,
+        data: {
+          label,
+          toolName,
+          model: msg.model || undefined,
+          width: W,
+          height,
+          isBranch: true,
+          branchIndex: bi,
+        },
+        position: {
+          x: col * COL_WIDTH,
+          y: parentY,
+        },
+      });
+
+      processedIds.add(msg.id);
+      branchCount++;
+
+      edges.push({
+        id: `e-${bp.parent_id}-${msg.id}`,
+        source: bp.parent_id,
+        target: msg.id,
+        type: "smoothstep",
+        style: { stroke: "#f59e0b", strokeDasharray: "5,3", strokeWidth: 1.5 },
+      });
+
+      // Follow branch chain
+      let childId = msg.id;
+      let childY = parentY;
+
+      for (const otherMsg of messages) {
+        if (processedIds.has(otherMsg.id) || !keep.has(otherMsg.id)) continue;
+        if (otherMsg.parent_id !== childId) continue;
+
+        const chainResult = createNodeFromMsg(otherMsg);
+        if (!chainResult) continue;
+
+        childY += chainResult.height + 40;
+        const nodeCol = Math.max(columnForNode(chainResult.type), branchCol);
+
+        nodes.push({
+          id: otherMsg.id,
+          type: chainResult.type,
+          data: {
+            label: chainResult.label,
+            toolName: chainResult.toolName,
+            model: otherMsg.model || undefined,
+            width: W,
+            height: chainResult.height,
+            isBranch: true,
+            branchIndex: bi,
+          },
+          position: {
+            x: nodeCol * COL_WIDTH,
+            y: childY,
+          },
+        });
+
+        processedIds.add(otherMsg.id);
+        branchCount++;
+
+        edges.push({
+          id: `e-${childId}-${otherMsg.id}`,
+          source: childId,
+          target: otherMsg.id,
+          type: "smoothstep",
+          style: { stroke: "#f59e0b", strokeDasharray: "5,3", strokeWidth: 1.5 },
+        });
+
+        childId = otherMsg.id;
+      }
+    }
+
+    branchCol++;
   }
 
   return {
-    nodes: computeLayout(nodes, edges),
+    nodes,
     edges,
-    stats: { total: nodes.length, users, assistants, tools },
+    stats: { total: nodes.length, users, assistants, tools, branches: branchCount },
   };
 }
