@@ -74,9 +74,9 @@ export default function SessionDetailPane({
           <section data-ai-region="sessions-summary" className="surface-card sticky top-0 z-20 bg-card/95 p-3 backdrop-blur-sm">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
               <div className="min-w-0 flex-1">
-                <div className="mt-1.5 flex items-baseline gap-2">
-                  <p className="shrink-0 text-[16px] font-medium uppercase tracking-[0.04em] text-muted-foreground">{t("detail.sessionLabelWithColon")}</p>
-                  <h3 className="min-w-0 truncate text-[14px] font-semibold leading-[1.3] text-foreground">
+                <div className="mt-1 flex items-baseline gap-2">
+                  <p className="shrink-0 zed-kicker">{t("detail.sessionLabelWithColon")}</p>
+                  <h3 className="min-w-0 truncate text-[15px] font-semibold leading-[1.3] text-foreground">
                     {sessionTitle}
                   </h3>
                   <Button

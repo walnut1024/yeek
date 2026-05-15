@@ -189,6 +189,10 @@
     @apply rounded-xl border border-border bg-card px-3 py-3;
   }
 
+  .metric-tile-compact {
+    @apply rounded-xl border border-border bg-card px-3 py-2;
+  }
+
   .meta-pill {
     @apply inline-flex items-center gap-1 rounded-md border border-border bg-secondary px-1.5 py-0.5 text-[11px];
   }

@@ -44,7 +44,7 @@ export function AppSidebar({ section, onSectionChange, totalSessions }: AppSideb
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map(({ key, label, icon: Icon }) => (
+              {navItems.slice(0, 2).map(({ key, label, icon: Icon }) => (
                 <SidebarMenuItem key={key}>
                   <SidebarMenuButton
                     isActive={section === key}
@@ -56,6 +56,24 @@ export function AppSidebar({ section, onSectionChange, totalSessions }: AppSideb
                     {key === "sessions" && totalSessions != null && (
                       <SidebarMenuBadge>{totalSessions}</SidebarMenuBadge>
                     )}
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {navItems.slice(2).map(({ key, label, icon: Icon }) => (
+                <SidebarMenuItem key={key}>
+                  <SidebarMenuButton
+                    isActive={section === key}
+                    tooltip={label}
+                    onClick={() => onSectionChange(key)}
+                  >
+                    <Icon size={16} />
+                    <span>{label}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}

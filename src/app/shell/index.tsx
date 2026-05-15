@@ -424,7 +424,7 @@ function SessionsPage({
               </div>
             </div>
           ) : (
-            <div className="space-y-2.5 p-2.5">
+            <div className="space-y-2.5 p-3">
               {grouped.map((g) => {
                 const collapsed = collapsedProjects[g.key];
                 return (

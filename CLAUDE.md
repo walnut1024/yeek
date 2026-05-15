@@ -64,13 +64,10 @@ src/
 ## Frontend Guidelines
 
 - Always reference DESIGN.md for UI/frontend work. It defines the Lovable-inspired warm cream design system.
-- Use `#f7f4ed` as the app foundation and `#1c1c1c` as the base ink. Derive neutral states from charcoal opacity instead of arbitrary gray hex values.
-- Use `DM Sans` as the primary UI font.
-- Use shallow depth: warm borders and button inset shadows, not heavy card shadows.
-- Keep product surfaces dense, calm, and operational. Do not introduce landing-page heroes for app screens.
 - Prioritize shadcn/Base UI primitives from `@/components/ui/`.
 - Never use raw `<button>`; use `<Button>`.
 - Use semantic HTML and preserve `data-ai-page`, `data-ai-region`, and `data-ai-item` selectors.
+- Do not introduce landing-page heroes for app screens.
 - Structural refactors must not change visual copy, state management, business logic, API calls, or keyboard behavior unless explicitly requested.
 
 ## Key Patterns

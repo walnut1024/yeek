@@ -79,8 +79,8 @@ export default function DashboardPage() {
         {/* Proxy */}
         {metrics && (
           <section data-ai-region="dashboard-proxy">
-            <p className="zed-kicker mb-1.5 mt-5">{t("dashboard.proxyRuntime")}</p>
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 2xl:grid-cols-6">
+            <p className="zed-kicker mb-1.5 mt-8">{t("dashboard.proxyRuntime")}</p>
+            <div className="grid grid-cols-2 gap-2 lg:grid-cols-3 2xl:grid-cols-6">
               <MetricCard label={t("dashboard.metricUptime")} value={formatDuration(metrics.uptime_secs)} sub={`${metrics.uptime_secs}s`} />
               <MetricCard label={t("dashboard.metricRPS")} value={metrics.rps.toFixed(1)} sub={t("dashboard.metricReqSec")} />
               <MetricCard label={t("dashboard.metricLatency")} value={`${metrics.avg_latency_ms.toFixed(0)}ms`} sub={t("dashboard.metricAvg")} />
@@ -93,28 +93,28 @@ export default function DashboardPage() {
 
         {/* Session */}
         <section data-ai-region="dashboard-session">
-          <p className="zed-kicker mb-1.5 mt-5">{t("dashboard.sectionSession")}</p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-4">
-            <StatCard label={t("dashboard.statSources")} value={String(status?.total_sources ?? "-")} sub={t("dashboard.statSourcesSub")} />
-            <StatCard label={t("dashboard.statProjects")} value={String(status?.total_projects ?? "-")} sub={t("dashboard.statProjectsSub")} />
-            <StatCard label={t("dashboard.statComplete")} value={String(status?.complete_sessions ?? "-")} sub={t("dashboard.statCompleteSub")} />
-            <StatCard label={t("dashboard.statPartial")} value={String(status?.partial_sessions ?? "-")} sub={t("dashboard.statPartialSub")} />
+          <p className="zed-kicker mb-1.5 mt-8">{t("dashboard.sectionSession")}</p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 2xl:grid-cols-4">
+            <StatCard compact label={t("dashboard.statSources")} value={String(status?.total_sources ?? "-")} sub={t("dashboard.statSourcesSub")} />
+            <StatCard compact label={t("dashboard.statProjects")} value={String(status?.total_projects ?? "-")} sub={t("dashboard.statProjectsSub")} />
+            <StatCard compact label={t("dashboard.statComplete")} value={String(status?.complete_sessions ?? "-")} sub={t("dashboard.statCompleteSub")} />
+            <StatCard compact label={t("dashboard.statPartial")} value={String(status?.partial_sessions ?? "-")} sub={t("dashboard.statPartialSub")} />
           </div>
         </section>
 
         {/* Marketplace */}
         <section data-ai-region="dashboard-marketplace">
-          <p className="zed-kicker mb-1.5 mt-5">{t("dashboard.sectionMarketplace")}</p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-4">
-            <StatCard label={t("dashboard.statRegistries")} value={String(marketplaces.length)}
+          <p className="zed-kicker mb-1.5 mt-8">{t("dashboard.sectionMarketplace")}</p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 2xl:grid-cols-4">
+            <StatCard compact label={t("dashboard.statRegistries")} value={String(marketplaces.length)}
               sub={marketplaces.length > 0
                 ? `${marketplaces.filter(m => m.repo?.startsWith("http")).length} remote, ${marketplaces.filter(m => !m.repo?.startsWith("http")).length} local`
                 : "—"} />
-            <StatCard label={t("dashboard.statPlugins")} value={String(plugins?.plugins?.length ?? 0)}
+            <StatCard compact label={t("dashboard.statPlugins")} value={String(plugins?.plugins?.length ?? 0)}
               sub={t("dashboard.statInstalled", { count: plugins?.plugins?.length ?? 0 })} />
-            <StatCard label={t("dashboard.statSkills")} value={String(plugins?.total_skills ?? 0)}
+            <StatCard compact label={t("dashboard.statSkills")} value={String(plugins?.total_skills ?? 0)}
               sub={t("dashboard.statAvailableCommands")} />
-            <StatCard label={t("dashboard.statBroken")} value={String(plugins?.health_summary?.broken ?? 0)}
+            <StatCard compact label={t("dashboard.statBroken")} value={String(plugins?.health_summary?.broken ?? 0)}
               sub={(plugins?.health_summary?.broken ?? 0) > 0 ? t("dashboard.statNeedsCleanup") : t("dashboard.statAllHealthy")}
               danger={(plugins?.health_summary?.broken ?? 0) > 0} />
           </div>
@@ -122,7 +122,7 @@ export default function DashboardPage() {
 
         {/* Activity Timeline (merged with alerts) */}
         <section data-ai-region="dashboard-activity">
-        <p className="zed-kicker mb-1.5 mt-5">{t("dashboard.activity")}</p>
+        <p className="zed-kicker mb-1.5 mt-8">{t("dashboard.activity")}</p>
         {allActions.length === 0 ? (
           <div className="rounded-lg border border-border bg-secondary px-2.5 py-2 text-[12px] text-muted-foreground">
             {t("dashboard.noActions")}
@@ -214,10 +214,10 @@ export default function DashboardPage() {
 
 /* ── Sub-components ── */
 
-function StatCard({ label, value, sub, accent, danger }: { label: string; value: string; sub: string; accent?: boolean; danger?: boolean }) {
+function StatCard({ label, value, sub, accent, danger, compact }: { label: string; value: string; sub: string; accent?: boolean; danger?: boolean; compact?: boolean }) {
   const c = accent ? "accent" : danger ? "danger" : "default";
   return (
-    <article data-ai-item="stat-card" className={`metric-tile flex min-h-[112px] flex-col ${
+    <article data-ai-item="stat-card" className={`${compact ? "metric-tile-compact" : "metric-tile"} flex ${compact ? "min-h-[88px]" : "min-h-[112px]"} flex-col ${
       c === "accent" ? "border-primary/20 bg-[rgba(28,28,28,0.035)]" :
       c === "danger" ? "border-destructive/20 bg-destructive/5" :
       ""
@@ -237,7 +237,7 @@ function MetricCard({ label, value, sub, danger, onClick }: { label: string; val
   return (
     <article
       data-ai-item="metric-card"
-      className={`metric-tile text-center ${onClick ? "cursor-pointer transition-colors hover:bg-element-hover" : ""}`}
+      className={`metric-tile-compact text-center ${onClick ? "cursor-pointer transition-colors hover:bg-element-hover" : ""}`}
       onClick={onClick}
     >
       <p className={`font-mono text-[17px] font-medium leading-none tracking-[-0.02em] ${danger ? "text-chart-3" : "text-foreground"}`}>{value}</p>
