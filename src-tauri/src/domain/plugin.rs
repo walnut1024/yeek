@@ -15,6 +15,7 @@ pub struct PluginInfo {
     pub agents: Vec<SkillInfo>,
     pub installed_at: Option<String>,
     pub last_updated: Option<String>,
+    pub agent: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -80,4 +81,5 @@ pub struct MarketplacePlugin {
     pub agent_count: usize,
     pub has_hooks: bool,
     pub installed: bool,
+    pub agent_targets: Vec<String>,
 }

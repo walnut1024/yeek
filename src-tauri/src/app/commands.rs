@@ -1037,7 +1037,28 @@ fn scan_agents(plugin_path: &std::path::Path) -> Vec<plugin::SkillInfo> {
 
 fn has_hooks(plugin_path: &std::path::Path) -> bool {
     let hooks_file = plugin_path.join("hooks/hooks.json");
-    hooks_file.exists() || plugin_path.join("hooks").join("session-start").exists()
+    let hooks_dir = plugin_path.join("hooks/session-start");
+    hooks_file.exists() || hooks_dir.is_dir()
+}
+
+/// Detect which agents a plugin directory targets based on its manifests and content.
+fn detect_agent_targets(path: &std::path::Path) -> Vec<String> {
+    let mut targets = Vec::new();
+    if path.join(".claude-plugin/plugin.json").exists() || path.join("skills").is_dir() || path.join("agents").is_dir() {
+        targets.push("claude_code".into());
+    }
+    if path.join(".codex-plugin/plugin.json").exists() {
+        targets.push("codex".into());
+    }
+    // SKILL.md is cross-compatible, so if there's a skill, all agents can use it
+    if path.join("SKILL.md").exists() || (path.join("skills").is_dir() && !targets.is_empty()) {
+        if !targets.contains(&"codex".into()) { targets.push("codex".into()); }
+        targets.push("opencode".into());
+    }
+    if targets.is_empty() {
+        targets.push("claude_code".into());
+    }
+    targets
 }
 
 fn parse_frontmatter(path: &std::path::Path, skill_type: &str) -> Option<plugin::SkillInfo> {
@@ -1155,7 +1176,8 @@ fn list_global_plugins() -> Result<plugin::SkillsOverview, AppError> {
             health_issues.push("Install path does not exist".into());
             (Vec::new(), Vec::new(), "broken")
         } else {
-            let has_manifest = path.join(".claude-plugin/plugin.json").exists();
+            let has_manifest = path.join(".claude-plugin/plugin.json").exists()
+                || path.join(".codex-plugin/plugin.json").exists();
             let scanned_skills = scan_skills(path);
             let scanned_agents = scan_agents(path);
 
@@ -1198,7 +1220,121 @@ fn list_global_plugins() -> Result<plugin::SkillsOverview, AppError> {
             agents,
             installed_at,
             last_updated,
+            agent: "claude_code".into(),
         });
+    }
+
+    // Scan Codex plugins from ~/.codex/plugins/cache/
+    let codex_dir = home.join(".codex/plugins/cache");
+    if codex_dir.exists() {
+        if let Ok(mkt_entries) = std::fs::read_dir(&codex_dir) {
+            for mkt_entry in mkt_entries.flatten() {
+                let mkt_path = mkt_entry.path();
+                if !mkt_path.is_dir() { continue; }
+                let mkt_name = mkt_entry.file_name().to_string_lossy().into_owned();
+                if let Ok(plugin_entries) = std::fs::read_dir(&mkt_path) {
+                    for pl_entry in plugin_entries.flatten() {
+                        let pl_path = pl_entry.path();
+                        if !pl_path.is_dir() { continue; }
+                        let pl_name = pl_entry.file_name().to_string_lossy().into_owned();
+                        // Find the version directory (first subdirectory)
+                        if let Ok(ver_entries) = std::fs::read_dir(&pl_path) {
+                            if let Some(ver_entry) = ver_entries.flatten().find(|e| e.path().is_dir()) {
+                                let install_dir = ver_entry.path();
+                                let has_manifest = install_dir.join(".codex-plugin/plugin.json").exists()
+                                    || install_dir.join(".claude-plugin/plugin.json").exists();
+                                let scanned_skills = scan_skills(&install_dir);
+                                let scanned_agents = scan_agents(&install_dir);
+                                let mut issues = Vec::new();
+                                let health = if !has_manifest && scanned_skills.is_empty() && scanned_agents.is_empty() {
+                                    if has_hooks(&install_dir) {
+                                        issues.push("Hook-only plugin".into());
+                                        "hook"
+                                    } else {
+                                        issues.push("Missing plugin.json and no content".into());
+                                        "broken"
+                                    }
+                                } else if !has_manifest {
+                                    issues.push("Missing plugin.json".into());
+                                    "partial"
+                                } else {
+                                    "ok"
+                                };
+                                match health {
+                                    "ok" => health_ok += 1,
+                                    "partial" => health_partial += 1,
+                                    "hook" => health_hook += 1,
+                                    _ => health_broken += 1,
+                                }
+                                total_skills += scanned_skills.len();
+                                total_agents += scanned_agents.len();
+                                plugins.push(plugin::PluginInfo {
+                                    key: format!("{}@{}", pl_name, mkt_name),
+                                    name: pl_name,
+                                    version: ver_entry.file_name().to_string_lossy().into_owned(),
+                                    scope: "global".into(),
+                                    marketplace: None,
+                                    install_path: install_dir.to_string_lossy().into_owned(),
+                                    enabled: true,
+                                    health: health.into(),
+                                    health_issues: issues,
+                                    skills: scanned_skills,
+                                    agents: scanned_agents,
+                                    installed_at: None,
+                                    last_updated: None,
+                                    agent: "codex".into(),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Scan OpenCode skills from ~/.config/opencode/skills/
+    let opencode_skills_dir = dirs::data_local_dir()
+        .unwrap_or_else(|| home.join(".local/share"))
+        .join("opencode/skills");
+    if opencode_skills_dir.exists() {
+        if let Ok(entries) = std::fs::read_dir(&opencode_skills_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if !path.is_dir() { continue; }
+                let name = entry.file_name().to_string_lossy().into_owned();
+                let skill_md = path.join("SKILL.md");
+                if !skill_md.exists() { continue; }
+                let desc = parse_frontmatter(&skill_md, "skill")
+                    .map(|s| s.description)
+                    .unwrap_or_else(|| name.clone());
+                total_skills += 1;
+                health_ok += 1;
+                plugins.push(plugin::PluginInfo {
+                    key: format!("{}@opencode", name),
+                    name: name.clone(),
+                    version: String::new(),
+                    scope: "global".into(),
+                    marketplace: None,
+                    install_path: path.to_string_lossy().into_owned(),
+                    enabled: true,
+                    health: "ok".into(),
+                    health_issues: Vec::new(),
+                    skills: vec![plugin::SkillInfo {
+                        name,
+                        description: desc,
+                        skill_type: "skill".into(),
+                        tools: None,
+                        file_path: skill_md.to_string_lossy().into_owned(),
+                        health: "ok".into(),
+                        health_detail: None,
+                    }],
+                    agents: Vec::new(),
+                    installed_at: None,
+                    last_updated: None,
+                    agent: "opencode".into(),
+                });
+            }
+        }
     }
 
     Ok(plugin::SkillsOverview {
@@ -1263,6 +1399,7 @@ fn list_project_plugins(state: &AppState) -> Result<plugin::SkillsOverview, AppE
             agents,
             installed_at: None,
             last_updated: None,
+            agent: "claude_code".into(),
         });
     }
 
@@ -1356,12 +1493,15 @@ fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> Result<()
         .map_err(|e| AppError::Internal(format!("Failed to read dir {}: {}", src.display(), e)))?
     {
         let entry = entry.map_err(|e| AppError::Internal(format!("Dir entry error: {}", e)))?;
-        // Skip symlinks
-        if entry.path().symlink_metadata().map(|m| m.file_type().is_symlink()).unwrap_or(false) {
-            continue;
-        }
         let src_path = entry.path();
         let dst_path = dst.join(entry.file_name());
+        // Preserve symlinks
+        if src_path.symlink_metadata().map(|m| m.file_type().is_symlink()).unwrap_or(false) {
+            if let Ok(link_target) = std::fs::read_link(&src_path) {
+                let _ = std::os::unix::fs::symlink(&link_target, &dst_path);
+            }
+            continue;
+        }
         if src_path.is_dir() {
             copy_dir_recursive(&src_path, &dst_path)?;
         } else {
@@ -1671,17 +1811,39 @@ pub(crate) fn do_update_marketplace(name: String) -> Result<(), AppError> {
         .ok_or_else(|| AppError::NotFound(format!("Marketplace '{}' not found", name)))?;
     let clone_path = mkt["installLocation"].as_str().unwrap_or("");
 
-    // git pull
-    let out = std::process::Command::new("git")
-        .args(["pull", "--ff-only"])
-        .current_dir(clone_path)
-        .output()
-        .map_err(|e| AppError::Internal(format!("git pull failed: {}", e)))?;
-    if !out.status.success() {
-        return Err(AppError::Internal(format!(
-            "git pull failed: {}",
-            String::from_utf8_lossy(&out.stderr)
-        )));
+    let clone_dir = std::path::Path::new(clone_path);
+
+    // If clone exists but has no .git (broken clone), re-clone
+    if clone_dir.exists() && !clone_dir.join(".git").exists() {
+        let _ = std::fs::remove_dir_all(clone_dir);
+    }
+
+    if !clone_dir.exists() {
+        let repo = mkt["source"]["repo"].as_str().unwrap_or("");
+        let clone_url = format!("https://github.com/{}.git", repo);
+        let out = std::process::Command::new("git")
+            .args(["clone", &clone_url, &clone_dir.to_string_lossy()])
+            .output()
+            .map_err(|e| AppError::Internal(format!("git clone failed: {}", e)))?;
+        if !out.status.success() {
+            return Err(AppError::Internal(format!(
+                "git clone failed: {}",
+                String::from_utf8_lossy(&out.stderr)
+            )));
+        }
+    } else {
+        // git pull
+        let out = std::process::Command::new("git")
+            .args(["pull", "--ff-only"])
+            .current_dir(clone_dir)
+            .output()
+            .map_err(|e| AppError::Internal(format!("git pull failed: {}", e)))?;
+        if !out.status.success() {
+            return Err(AppError::Internal(format!(
+                "git pull failed: {}",
+                String::from_utf8_lossy(&out.stderr)
+            )));
+        }
     }
 
     // Update lastUpdated
@@ -1841,6 +2003,7 @@ pub(crate) fn do_list_marketplace_plugins(
                     skill_count: skills.len(),
                     agent_count: agents.len(),
                     has_hooks: has_hooks(&path),
+                    agent_targets: detect_agent_targets(&path),
                 });
             }
         }
@@ -1868,6 +2031,7 @@ pub(crate) fn do_list_marketplace_plugins(
                     skill_count: 1,
                     agent_count: 0,
                     has_hooks: false,
+                    agent_targets: detect_agent_targets(&path),
                 });
             }
         }
@@ -1899,6 +2063,7 @@ pub(crate) fn do_list_marketplace_plugins(
                 skill_count: 1,
                 agent_count: 0,
                 has_hooks: false,
+                agent_targets: detect_agent_targets(&path),
             });
         }
     }
@@ -1919,8 +2084,15 @@ pub(crate) fn do_install_marketplace_plugin(
     let clone_path = std::path::Path::new(clone_path_str);
 
     let source = clone_path.join(format!("plugins/{}", plugin_name));
-    let source =
-        if source.is_dir() { source } else { clone_path.join(format!("skills/{}", plugin_name)) };
+    let source = if source.is_dir() {
+        source
+    } else if clone_path.join(format!("skills/{}", plugin_name)).is_dir() {
+        clone_path.join(format!("skills/{}", plugin_name))
+    } else if clone_path.join(format!("agents/{}", plugin_name)).is_dir() {
+        clone_path.join(format!("agents/{}", plugin_name))
+    } else {
+        clone_path.join(format!("plugins/{}", plugin_name))
+    };
     if !source.is_dir() {
         return Err(AppError::NotFound(format!(
             "Plugin '{}' not found in '{}'",
