@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Maximize2, Minimize2 } from "lucide-react";
-import { buildTree, COL_USER, COL_ASSISTANT, COL_TOOL } from "./graph/build-tree";
+import { buildTree } from "./graph/build-tree";
 import { nodeTypes } from "./graph/nodes";
 import NodeDetailPanel from "./graph/node-detail-panel";
 
