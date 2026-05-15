@@ -146,7 +146,9 @@ describe("buildTree", () => {
     const n1 = nodes.find((n) => n.id === "m1")!;
     const n2 = nodes.find((n) => n.id === "m2")!;
     const n3 = nodes.find((n) => n.id === "m3")!;
-    expect(n2.position.y).toBeGreaterThan(n1.position.y);
+    // User and first assistant share the same Y (turn-based layout)
+    expect(n2.position.y).toBe(n1.position.y);
+    // Tool is stacked below
     expect(n3.position.y).toBeGreaterThan(n2.position.y);
   });
 });

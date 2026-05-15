@@ -3,6 +3,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import claudeIcon from "@/assets/claude-icon.svg";
 import openaiIcon from "@/assets/openai-icon.svg";
+import opencodeIcon from "@/assets/opencode-icon.svg";
 
 export function SiteHeader({
   section,
@@ -33,6 +34,7 @@ export function SiteHeader({
               Codex
             </TabsTrigger>
             <TabsTrigger value="opencode" className="h-6 rounded-md px-2 text-[12px]">
+              <img src={opencodeIcon} alt="OpenCode" className="h-4 w-auto" />
               OpenCode
             </TabsTrigger>
           </TabsList>
@@ -50,6 +52,7 @@ export function SiteHeader({
               Codex
             </TabsTrigger>
             <TabsTrigger value="opencode" className="h-6 rounded-md px-2 text-[12px]">
+              <img src={opencodeIcon} alt="OpenCode" className="h-4 w-auto" />
               OpenCode
             </TabsTrigger>
           </TabsList>

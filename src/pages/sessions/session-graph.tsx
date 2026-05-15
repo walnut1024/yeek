@@ -17,7 +17,8 @@ import { GRAPH_MAX_NODES } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { buildTree } from "./graph/build-tree";
+import { Maximize2, Minimize2 } from "lucide-react";
+import { buildTree, COL_USER, COL_ASSISTANT, COL_TOOL } from "./graph/build-tree";
 import { nodeTypes } from "./graph/nodes";
 import NodeDetailPanel from "./graph/node-detail-panel";
 
@@ -27,10 +28,14 @@ function GraphCanvas({
   nodes: layoutedNodes,
   edges: layoutedEdges,
   onSelectNode,
+  fullscreen,
+  onFullscreen,
 }: {
   nodes: ReturnType<typeof buildTree>["nodes"];
   edges: ReturnType<typeof buildTree>["edges"];
   onSelectNode: (id: string) => void;
+  fullscreen?: boolean;
+  onFullscreen?: (value: boolean) => void;
 }) {
   const { fitView } = useReactFlow();
   const { t } = useTranslation();
@@ -84,6 +89,26 @@ function GraphCanvas({
         }}
       />
       <Background color="var(--border, #464b57)" gap={24} size={1} />
+      <Panel position="top-left" style={{ padding: 0 }}>
+        <div className="flex gap-[20px] pointer-events-none">
+          <div className="w-[200px] text-center text-[10px] font-semibold uppercase tracking-[0.08em] text-primary/60 py-1.5">{t("graph.colUser")}</div>
+          <div className="w-[200px] text-center text-[10px] font-semibold uppercase tracking-[0.08em] text-emerald-400/60 py-1.5">{t("graph.colAssistant")}</div>
+          <div className="w-[200px] text-center text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/60 py-1.5">{t("graph.colTool")}</div>
+        </div>
+      </Panel>
+      <Panel position="top-right" style={{ padding: 12 }}>
+        {onFullscreen && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onFullscreen(!fullscreen)}
+            className="h-8 rounded-md px-3 text-[12px]"
+          >
+            {fullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+            {fullscreen ? t("graph.exitFullscreen") : t("graph.fullscreen")}
+          </Button>
+        )}
+      </Panel>
       <Panel position="bottom-right" style={{ padding: 12 }}>
         <Button
           variant="outline"
@@ -98,7 +123,7 @@ function GraphCanvas({
   );
 }
 
-export default function SessionGraph({ sessionId }: { sessionId: string }) {
+export default function SessionGraph({ sessionId, fullscreen, onFullscreen }: { sessionId: string; fullscreen?: boolean; onFullscreen?: (value: boolean) => void; }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { t } = useTranslation();
 
@@ -188,7 +213,7 @@ export default function SessionGraph({ sessionId }: { sessionId: string }) {
           </div>
         )}
         <ReactFlowProvider>
-          <GraphCanvas nodes={nodes} edges={edges} onSelectNode={setSelectedId} />
+          <GraphCanvas nodes={nodes} edges={edges} onSelectNode={setSelectedId} fullscreen={fullscreen} onFullscreen={onFullscreen} />
         </ReactFlowProvider>
       </div>
 

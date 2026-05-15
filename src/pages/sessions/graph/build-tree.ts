@@ -4,7 +4,10 @@ import type { MessageRecord, BranchPoint } from "@/lib/api";
 // ─── Constants ──────────────────────────────────────────────────────
 
 const COL_WIDTH = 220;
-const ROW_HEIGHT = 70;
+const GAP_TURN = 18;       // gap between turns (between user messages)
+const GAP_INLINE = 10;     // gap between elements within a turn
+const GAP_STACK = 4;       // gap between tool_use → tool_result
+const GAP_BRANCH_CHAIN = 6;
 const W = 200; // node width
 
 const TOOL_COLORS: Record<string, string> = {
@@ -65,13 +68,17 @@ const SKIP_SUBTYPES = new Set([
 
 // ─── Column assignment ──────────────────────────────────────────────
 
+export const COL_USER = 0;
+export const COL_ASSISTANT = 1;
+export const COL_TOOL = 2;
+
 function columnForNode(type: TreeNodeType): number {
   switch (type) {
-    case "user": return 0;
-    case "assistant": return 1;
+    case "user": return COL_USER;
+    case "assistant": return COL_ASSISTANT;
     case "toolUse":
-    case "toolResult": return 2;
-    case "meta": return 1;
+    case "toolResult": return COL_TOOL;
+    case "meta": return COL_ASSISTANT;
   }
 }
 
@@ -85,11 +92,11 @@ function createNodeFromMsg(
     const label = msg.content_preview
       ? msg.content_preview.replace(/^Tool:\s*/, "").split("\n")[0]
       : toolName;
-    return { type: "toolUse", label, height: 40, toolName };
+    return { type: "toolUse", label, height: 36, toolName };
   }
   if (msg.kind === "tool_result") {
     const label = truncate(msg.content_preview || "done", 60);
-    return { type: "toolResult", label, height: 34 };
+    return { type: "toolResult", label, height: 30 };
   }
   if (
     msg.entry_type === "attachment" ||
@@ -105,14 +112,14 @@ function createNodeFromMsg(
     else if (sub === "compact_boundary") label = "Compacted";
     else if (sub === "scheduled_task_fire") label = "Scheduled task";
     else label = msg.content_preview ? truncate(msg.content_preview, 35) : sub || "system";
-    return { type: "meta", label, height: 28 };
+    return { type: "meta", label, height: 24 };
   }
   if (msg.role === "human" && msg.kind === "message") {
-    return { type: "user", label: truncate(msg.content_preview, 55), height: 46 };
+    return { type: "user", label: truncate(msg.content_preview, 55), height: 40 };
   }
   if (msg.role === "assistant" && msg.kind === "message") {
     const label = msg.content_preview ? truncate(msg.content_preview, 55) : "(thinking…)";
-    return { type: "assistant", label, height: msg.content_preview ? 48 : 30 };
+    return { type: "assistant", label, height: msg.content_preview ? 42 : 26 };
   }
   return null;
 }
@@ -175,8 +182,10 @@ export function buildTree(
     parentMap.set(msg.id, p);
   }
 
-  // Process main_path nodes first to establish Y positions
-  let currentY = 0;
+  // Process main_path nodes with turn-based compact layout
+  let turnY = 0;       // Y of current turn's main row
+  let stackY = 0;      // Y for next node in tool stack
+  let firstInTurn = true; // whether we haven't placed any non-user node yet in this turn
   const mainPathY = new Map<string, number>();
   const processedIds = new Set<string>();
   let users = 0, assistants = 0, tools = 0;
@@ -195,6 +204,32 @@ export function buildTree(
 
     const { type, label, height, toolName } = nodeResult;
     const col = columnForNode(type);
+    let y: number;
+
+    if (type === "user") {
+      // New turn: advance past previous turn's stacked tools
+      if (processedIds.size > 0) {
+        turnY = stackY + GAP_TURN;
+      }
+      y = turnY;
+      stackY = y + height + GAP_INLINE;
+      firstInTurn = true;
+    } else if (type === "assistant") {
+      if (firstInTurn) {
+        // First assistant in this turn — share Y with the user
+        y = turnY;
+      } else {
+        // Continuation after tools — start a new row
+        turnY = stackY;
+        y = turnY;
+      }
+      stackY = y + height + GAP_INLINE;
+      firstInTurn = false;
+    } else {
+      // tool/meta — stack below
+      y = stackY;
+      stackY += height + GAP_STACK;
+    }
 
     nodes.push({
       id: msg.id,
@@ -207,13 +242,10 @@ export function buildTree(
         height,
         isBranch: false,
       },
-      position: {
-        x: col * COL_WIDTH,
-        y: currentY,
-      },
+      position: { x: col * COL_WIDTH, y },
     });
 
-    mainPathY.set(id, currentY);
+    mainPathY.set(id, y);
     processedIds.add(id);
 
     if (type === "user") users++;
@@ -231,8 +263,6 @@ export function buildTree(
         style: { strokeWidth: 2 },
       });
     }
-
-    currentY += height + ROW_HEIGHT - 30;
   }
 
   // Process branch nodes
@@ -266,10 +296,7 @@ export function buildTree(
           isBranch: true,
           branchIndex: bi,
         },
-        position: {
-          x: col * COL_WIDTH,
-          y: parentY,
-        },
+        position: { x: col * COL_WIDTH, y: parentY },
       });
 
       processedIds.add(msg.id);
@@ -294,7 +321,7 @@ export function buildTree(
         const chainResult = createNodeFromMsg(otherMsg);
         if (!chainResult) continue;
 
-        childY += chainResult.height + 40;
+        childY += chainResult.height + GAP_BRANCH_CHAIN;
         const nodeCol = Math.max(columnForNode(chainResult.type), branchCol);
 
         nodes.push({
@@ -309,10 +336,7 @@ export function buildTree(
             isBranch: true,
             branchIndex: bi,
           },
-          position: {
-            x: nodeCol * COL_WIDTH,
-            y: childY,
-          },
+          position: { x: nodeCol * COL_WIDTH, y: childY },
         });
 
         processedIds.add(otherMsg.id);

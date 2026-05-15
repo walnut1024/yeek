@@ -250,6 +250,8 @@
 
   "graph.viewGraph": "Graph",
   "graph.viewFeed": "Feed",
+  "graph.fullscreen": "Fullscreen",
+  "graph.exitFullscreen": "Exit Fullscreen",
   "graph.title": "Conversation Graph",
   "graph.description": "Inspect the main path and open node details.",
   "graph.fitView": "Fit View",
@@ -278,6 +280,9 @@
   "graph.nodeUnknown": "unknown",
   "graph.nodeEmpty": "(empty)",
   "graph.statsBranches": "{{count}} branches",
+  "graph.colUser": "User",
+  "graph.colAssistant": "Assistant",
+  "graph.colTool": "Tool",
 
   "contextMenu.delete": "Delete",
   "contextMenu.deleteProject": "Delete All in Project",

@@ -240,6 +240,8 @@
 
   "graph.viewGraph": "图谱",
   "graph.viewFeed": "对话",
+  "graph.fullscreen": "全屏",
+  "graph.exitFullscreen": "退出全屏",
   "graph.title": "会话图谱",
   "graph.description": "查看主路径并打开节点详情。",
   "graph.fitView": "适配视图",
@@ -268,6 +270,9 @@
   "graph.nodeUnknown": "未知",
   "graph.nodeEmpty": "（空）",
   "graph.statsBranches": "{{count}} 个分支",
+  "graph.colUser": "用户",
+  "graph.colAssistant": "助手",
+  "graph.colTool": "工具",
 
   "contextMenu.delete": "删除",
   "contextMenu.deleteProject": "删除项目下所有会话",

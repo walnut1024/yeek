@@ -25,6 +25,7 @@ export default function SessionDetailPane({
     "feed",
   );
   const [defaultTerminal] = useLocalStorage<string>("default-terminal", "");
+  const [fullscreen, setFullscreen] = useState(false);
 
   const { data: preview, isLoading: previewLoading } = useQuery({
     queryKey: ["session-preview", sessionId],
@@ -53,125 +54,143 @@ export default function SessionDetailPane({
   const projectPath = record.project_path || t("format.noProject");
 
   return (
-    <ScrollArea className="h-full">
-      <div className="space-y-3 p-3">
-        {/* Header */}
-        <section data-ai-region="sessions-summary" className="surface-card sticky top-0 z-20 bg-card/95 p-3 backdrop-blur-sm">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-            <div className="min-w-0 flex-1">
-              <div className="mt-1.5 flex items-baseline gap-2">
-                <p className="shrink-0 text-[16px] font-medium uppercase tracking-[0.04em] text-muted-foreground">{t("detail.sessionLabelWithColon")}</p>
-                <h3 className="min-w-0 truncate text-[14px] font-semibold leading-[1.3] text-foreground">
-                  {sessionTitle}
-                </h3>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  className="ml-auto h-7 shrink-0 rounded-md px-2.5 text-[12px]"
-                  onClick={async () => {
-                    try {
-                      await resumeSession(record.id, record.agent, record.project_path, defaultTerminal || null);
-                    } catch (e) {
-                      console.error("Failed to resume session:", e);
-                    }
-                  }}
-                >
-                  <Play size={14} />
-                  {t("detail.resume")}
-                </Button>
-              </div>
-              <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                <MetaPill
-                  label={t("detail.model")}
-                  value={record.model || t("format.notAvailable")}
-                />
-                <MetaPill
-                  label={t("detail.branch")}
-                  value={record.git_branch || t("format.notAvailable")}
-                />
-                <MetaPill label={t("detail.status")} value={record.status} />
-                <MetaPill
-                  label={t("detail.messages")}
-                  value={String(record.message_count)}
-                />
-                <MetaPill
-                  label={t("detail.sources")}
-                  value={String(preview.source_count)}
-                />
-                <MetaPill
-                  label={t("detail.started")}
-                  value={formatTime(record.started_at)}
-                />
-                <MetaPill
-                  label={t("detail.updated")}
-                  value={formatRelativeTime(record.updated_at)}
-                />
-              </div>
-              <div className="mt-2 grid gap-2 md:grid-cols-2">
-                <CopyableDetailValue label={t("detail.projectLabel")} value={projectPath} icon={<FolderTree size={14} />} />
-                <CopyableDetailValue label={t("detail.sessionIdLabel")} value={record.id} />
-              </div>
-              <div className="mt-2">
-                <SourcesTab sessionId={sessionId} />
-              </div>
-            </div>
+    <>
+      {fullscreen && viewMode === "graph" ? (
+        <div className="fixed inset-0 z-50 flex flex-col bg-card">
+          <div className="flex items-center gap-2 border-b border-border px-3 py-1.5">
+            <p className="text-[13px] font-medium text-foreground">{sessionTitle}</p>
+            <span className="font-mono text-[10px] text-muted-foreground">{record.id.slice(0, 8)}</span>
           </div>
-          <div className="mt-3 border-t border-border pt-2">
-            <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <p className="zed-kicker">{t("detail.tabHistory")}</p>
-                {mainCount > 0 && (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-                    <Rows3 size={12} />
-                    {t("transcript.messageCount", { count: mainCount })}
-                  </span>
-                )}
-                {branchCount > 0 && (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-                    <GitBranch size={12} />
-                    {t("transcript.branchCount", { count: branchCount })}
-                  </span>
-                )}
-              </div>
-              <div className="segmented-control">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className={`segmented-control-item ${viewMode === "feed" ? "segmented-control-item-active" : ""}`}
-                  onClick={() => setViewMode("feed")}
-                >
-                  {t("graph.viewFeed")}
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className={`segmented-control-item ${viewMode === "graph" ? "segmented-control-item-active" : ""}`}
-                  onClick={() => setViewMode("graph")}
-                >
-                  {t("graph.viewGraph")}
-                </Button>
-              </div>
-            </div>
-          </div>
-
-        </section>
-
-        <section data-ai-region="sessions-transcript" className="surface-card">
-          {/* Conditional content */}
-          <div className={viewMode === "graph" ? "h-[70vh]" : ""}>
-            <Suspense fallback={<DetailContentFallback graph={viewMode === "graph"} />}>
-              {viewMode === "graph" ? (
-                <SessionGraph sessionId={sessionId} />
-              ) : (
-                <TranscriptView sessionId={sessionId} />
-              )}
+          <div className="flex-1 min-h-0">
+            <Suspense fallback={<DetailContentFallback graph />}>
+              <SessionGraph sessionId={sessionId} fullscreen={fullscreen} onFullscreen={setFullscreen} />
             </Suspense>
           </div>
-        </section>
-      </div>
-    </ScrollArea>
+        </div>
+      ) : (
+      <ScrollArea className="h-full">
+        <div className="space-y-3 p-3">
+          {/* Header */}
+          <section data-ai-region="sessions-summary" className="surface-card sticky top-0 z-20 bg-card/95 p-3 backdrop-blur-sm">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+              <div className="min-w-0 flex-1">
+                <div className="mt-1.5 flex items-baseline gap-2">
+                  <p className="shrink-0 text-[16px] font-medium uppercase tracking-[0.04em] text-muted-foreground">{t("detail.sessionLabelWithColon")}</p>
+                  <h3 className="min-w-0 truncate text-[14px] font-semibold leading-[1.3] text-foreground">
+                    {sessionTitle}
+                  </h3>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    className="ml-auto h-7 shrink-0 rounded-md px-2.5 text-[12px]"
+                    onClick={async () => {
+                      try {
+                        await resumeSession(record.id, record.agent, record.project_path, defaultTerminal || null);
+                      } catch (e) {
+                        console.error("Failed to resume session:", e);
+                      }
+                    }}
+                  >
+                    <Play size={14} />
+                    {t("detail.resume")}
+                  </Button>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <MetaPill
+                    label={t("detail.model")}
+                    value={record.model || t("format.notAvailable")}
+                  />
+                  <MetaPill
+                    label={t("detail.branch")}
+                    value={record.git_branch || t("format.notAvailable")}
+                  />
+                  <MetaPill label={t("detail.status")} value={record.status} />
+                  <MetaPill
+                    label={t("detail.messages")}
+                    value={String(record.message_count)}
+                  />
+                  <MetaPill
+                    label={t("detail.sources")}
+                    value={String(preview.source_count)}
+                  />
+                  <MetaPill
+                    label={t("detail.started")}
+                    value={formatTime(record.started_at)}
+                  />
+                  <MetaPill
+                    label={t("detail.updated")}
+                    value={formatRelativeTime(record.updated_at)}
+                  />
+                </div>
+                <div className="mt-2 grid gap-2 md:grid-cols-2">
+                  <CopyableDetailValue label={t("detail.projectLabel")} value={projectPath} icon={<FolderTree size={14} />} />
+                  <CopyableDetailValue label={t("detail.sessionIdLabel")} value={record.id} />
+                </div>
+                <div className="mt-2">
+                  <SourcesTab sessionId={sessionId} />
+                </div>
+              </div>
+            </div>
+            <div className="mt-3 border-t border-border pt-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <p className="zed-kicker">{t("detail.tabHistory")}</p>
+                  {mainCount > 0 && (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                      <Rows3 size={12} />
+                      {t("transcript.messageCount", { count: mainCount })}
+                    </span>
+                  )}
+                  {branchCount > 0 && (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                      <GitBranch size={12} />
+                      {t("transcript.branchCount", { count: branchCount })}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="segmented-control">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className={`segmented-control-item ${viewMode === "feed" ? "segmented-control-item-active" : ""}`}
+                      onClick={() => setViewMode("feed")}
+                    >
+                      {t("graph.viewFeed")}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className={`segmented-control-item ${viewMode === "graph" ? "segmented-control-item-active" : ""}`}
+                      onClick={() => setViewMode("graph")}
+                    >
+                      {t("graph.viewGraph")}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </section>
+
+          <section data-ai-region="sessions-transcript" className="surface-card">
+            {/* Conditional content */}
+            <div className={viewMode === "graph" ? "h-[70vh]" : ""}>
+              <Suspense fallback={<DetailContentFallback graph={viewMode === "graph"} />}>
+                {viewMode === "graph" ? (
+                  <SessionGraph sessionId={sessionId} fullscreen={fullscreen} onFullscreen={setFullscreen} />
+                ) : (
+                  <TranscriptView sessionId={sessionId} />
+                )}
+              </Suspense>
+            </div>
+          </section>
+        </div>
+      </ScrollArea>
+      )}
+    </>
   );
 }
 
