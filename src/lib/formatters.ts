@@ -8,10 +8,7 @@ export function formatProjectLabel(path: string | null): string {
   if (!path) return i18n.t("format.noProject");
   const clean = path.replace(/\/+/g, "/");
   const parts = clean.split("/").filter(Boolean);
-  const name = parts[parts.length - 1] ?? i18n.t("format.unknown");
-  if (parts.length <= 2) return name;
-  // "yeek (/Users/…/apps/yeek)"
-  return `${name} (/${parts[0]}/…/${parts[parts.length - 2]}/${parts[parts.length - 1]})`;
+  return parts[parts.length - 1] ?? i18n.t("format.unknown");
 }
 
 export function formatRelativeTime(iso: string | null): string {
