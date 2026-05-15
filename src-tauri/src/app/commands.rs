@@ -964,7 +964,8 @@ pub(crate) fn do_release_and_resync(state: &AppState) -> Result<ActionResult, Ap
              DELETE FROM session_sources;
              DELETE FROM sources;
              DELETE FROM sessions;
-             DELETE FROM sqlite_sequence;",
+             DELETE FROM sqlite_sequence;
+             DELETE FROM delete_queue;",
         )?;
         action_store::record_action(&db, None, "release", Some("Cleared all indexed data"))?;
     }
@@ -1459,34 +1460,19 @@ pub(crate) fn do_reinstall_plugin(key: String) -> Result<plugin::FixPluginResult
         .ok_or_else(|| AppError::NotFound(format!("No installPath for '{}'", key)))?;
     let git_sha = entry["gitCommitSha"].as_str().unwrap_or("");
 
-    // 4. Ensure marketplace clone is available
+    // 4. Ensure marketplace clone is available and up-to-date
     let clone_dir_exists = clone_path.exists();
     let has_git = clone_path.join(".git").exists();
     if clone_dir_exists && has_git {
-        // Fetch latest
+        // Fetch + pull latest so we get the newest version
         let _ = std::process::Command::new("git")
             .args(["fetch", "origin"])
             .current_dir(clone_path)
             .output();
-        if !git_sha.is_empty() {
-            let out = std::process::Command::new("git")
-                .args(["checkout", git_sha])
-                .current_dir(clone_path)
-                .output()
-                .map_err(|e| AppError::Internal(format!("git checkout failed: {}", e)))?;
-            if !out.status.success() {
-                return Err(AppError::Internal(format!(
-                    "git checkout {} failed: {}",
-                    git_sha,
-                    String::from_utf8_lossy(&out.stderr)
-                )));
-            }
-        } else {
-            let _ = std::process::Command::new("git")
-                .args(["pull", "--ff-only"])
-                .current_dir(clone_path)
-                .output();
-        }
+        let _ = std::process::Command::new("git")
+            .args(["pull", "--ff-only"])
+            .current_dir(clone_path)
+            .output();
     } else {
         // Directory exists but no .git (broken clone) — remove it first
         if clone_dir_exists {
@@ -1504,13 +1490,22 @@ pub(crate) fn do_reinstall_plugin(key: String) -> Result<plugin::FixPluginResult
                 String::from_utf8_lossy(&out.stderr)
             )));
         }
-        if !git_sha.is_empty() {
-            let _ = std::process::Command::new("git")
-                .args(["checkout", git_sha])
-                .current_dir(clone_path)
-                .output();
-        }
     }
+
+    // 5. Get latest HEAD SHA
+    let new_sha = std::process::Command::new("git")
+        .args(["rev-parse", "--short", "HEAD"])
+        .current_dir(clone_path)
+        .output()
+        .ok()
+        .and_then(|o| {
+            if o.status.success() {
+                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+            } else {
+                None
+            }
+        })
+        .unwrap_or_else(|| "unknown".to_string());
 
     // 5. Find plugin source directory in marketplace
     let clone_path_buf = clone_path.to_path_buf();
@@ -1540,21 +1535,43 @@ pub(crate) fn do_reinstall_plugin(key: String) -> Result<plugin::FixPluginResult
             ))
         })?;
 
-    // 6. Remove old install dir, copy fresh source
-    let install_path = std::path::Path::new(install_path_str);
-    if install_path.exists() {
-        let _ = std::fs::remove_dir_all(install_path);
+    // 7. Remove old install dir, copy fresh source to new path with new SHA
+    let old_install_path = std::path::Path::new(install_path_str);
+    if old_install_path.exists() {
+        let _ = std::fs::remove_dir_all(old_install_path);
     }
-    if let Some(parent) = install_path.parent() {
+    let new_install_path =
+        claude_dir.join(format!("plugins/cache/{}/{}/{}", market_name, plugin_name, new_sha));
+    if let Some(parent) = new_install_path.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|e| AppError::Internal(format!("Failed to create cache dir: {}", e)))?;
     }
-    copy_dir_recursive(source_dir, install_path)?;
+    copy_dir_recursive(source_dir, &new_install_path)?;
 
-    // 7. Return success
+    // 8. Update registry with new SHA and install path
+    let mut registry: serde_json::Value = read_json(&registry_path)?;
+    let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    if let Some(plugins) = registry.get_mut("plugins").and_then(|v| v.as_object_mut()) {
+        plugins.insert(
+            key.clone(),
+            serde_json::json!([{
+                "scope": "user",
+                "installPath": new_install_path.to_string_lossy(),
+                "version": new_sha,
+                "installedAt": entry["installedAt"].clone(),
+                "lastUpdated": now,
+                "gitCommitSha": new_sha,
+            }]),
+        );
+    }
+    let output = serde_json::to_string_pretty(&registry)
+        .map_err(|e| AppError::Internal(format!("Serialize: {}", e)))?;
+    std::fs::write(&registry_path, output)
+        .map_err(|e| AppError::Internal(format!("Write: {}", e)))?;
+
     Ok(plugin::FixPluginResult {
         action: "reinstall".into(),
-        message: format!("Reinstalled {} from {}", key, repo),
+        message: format!("Reinstalled {} from {} ({} → {})", key, repo, git_sha, new_sha),
     })
 }
 

@@ -118,24 +118,18 @@ export default function SettingsPage() {
                 </label>
               </SettingsCard>
               <SettingsCard title={t("settings.language")} description={t("settings.languageDescription")}>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant={i18n.language === "en" ? "default" : "outline"}
-                    className="h-8 rounded-md px-3 text-[14px]"
-                    onClick={() => i18n.changeLanguage("en")}
+                <label className="block">
+                  <span className="sr-only">{t("settings.language")}</span>
+                  <select
+                    title={t("settings.language")}
+                    value={i18n.language}
+                    onChange={(e) => i18n.changeLanguage(e.target.value)}
+                    className="zed-input"
                   >
-                    {t("settings.languageEnglish")}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={i18n.language === "zh-CN" ? "default" : "outline"}
-                    className="h-8 rounded-md px-3 text-[14px]"
-                    onClick={() => i18n.changeLanguage("zh-CN")}
-                  >
-                    {t("settings.languageChinese")}
-                  </Button>
-                </div>
+                    <option value="en">{t("settings.languageEnglish")}</option>
+                    <option value="zh-CN">{t("settings.languageChinese")}</option>
+                  </select>
+                </label>
               </SettingsCard>
             </div>
           </section>

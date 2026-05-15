@@ -90,6 +90,11 @@ CREATE TABLE IF NOT EXISTS delete_queue (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS deleted_sources (
+    path TEXT PRIMARY KEY,
+    deleted_at TEXT NOT NULL
+);
 "#;
 
 /// Add a column to a table, ignoring "duplicate column" errors (column already exists).

@@ -144,6 +144,8 @@ where
         .filter_map(|r| r.ok())
         .collect();
 
+    let deleted_paths = crate::store::sources::get_deleted_source_paths(conn)?;
+
     let mut indexed = 0i64;
     let mut updated = 0i64;
     let mut errors = 0i64;
@@ -151,6 +153,12 @@ where
     conn.execute_batch("BEGIN")?;
 
     for (i, source) in sources.iter().enumerate() {
+        // Skip tombstoned sources (previously deleted by user)
+        if deleted_paths.contains(&source.path) {
+            on_progress((i + 1) as i64);
+            continue;
+        }
+
         if let Some(stored_fp) = existing_fingerprints.get(&source.path) {
             if *stored_fp == source.fingerprint {
                 on_progress((i + 1) as i64);

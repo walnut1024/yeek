@@ -13,9 +13,7 @@ import {
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { PageToolbar } from "@/components/ui/page-toolbar";
 import { Trash2, SquarePlus } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
 
 const API_FORMATS = ["anthropic_messages", "chat_completions", "responses"] as const;
 
@@ -55,8 +53,6 @@ const DEFAULT_PROXY_CONFIG: ProxyConfig = {
   },
 };
 
-type ProxyMode = "cards" | "toml";
-
 interface ValidationIssue {
   scope: string;
   message: string;
@@ -65,7 +61,6 @@ interface ValidationIssue {
 export default function ProxyPage() {
   const queryClient = useQueryClient();
   const { t } = useTranslation();
-  const [mode, setMode] = useState<ProxyMode>("cards");
   const [draft, setDraft] = useState<ProxyConfig | null>(null);
 
   const { data: status } = useQuery({
@@ -87,8 +82,6 @@ export default function ProxyPage() {
   const dirty = draft !== null;
   const isRunning = status?.running ?? false;
   const issues = useMemo(() => validateConfig(config), [config]);
-  const toml = useMemo(() => serializeProxyConfig(config), [config]);
-  const lineCount = toml.split("\n").length;
 
   const startMut = useMutation({
     mutationFn: startProxy,
@@ -121,38 +114,21 @@ export default function ProxyPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <PageToolbar region="proxy-toolbar">
-        <div className="flex items-center gap-1.5">
-          <div className="segmented-control">
-            <Button type="button" variant="secondary" size="sm" className={`segmented-control-item ${mode === "cards" ? "segmented-control-item-active" : ""}`} onClick={() => setMode("cards")}>{t("proxy.cards")}</Button>
-            <Button type="button" variant="secondary" size="sm" className={`segmented-control-item ${mode === "toml" ? "segmented-control-item-active" : ""}`} onClick={() => setMode("toml")}>{t("proxy.toml")}</Button>
-          </div>
-          <Badge variant={isRunning ? "default" : "secondary"} className="h-5 px-1.5 text-[10px] uppercase tracking-[0.04em]">
-            {isRunning ? t("proxy.running") : t("proxy.stopped")}
-          </Badge>
+      <section data-ai-region="proxy-config" className="proxy-config-workspace min-h-0 flex-1 overflow-auto">
+        <div className="proxy-config-cards">
+          <ConfigCards
+            config={config}
+            issues={issues}
+            updateDraft={updateDraft}
+            isRunning={isRunning}
+            isBusy={isBusy}
+            dirty={dirty}
+            saveDraft={saveDraft}
+            resetDraft={resetDraft}
+            startProxy={() => startMut.mutate()}
+            stopProxy={() => stopMut.mutate()}
+          />
         </div>
-        <div className="flex items-center gap-1.5">
-          <Button variant={isRunning ? "destructive" : "primary"} size="sm" disabled={isBusy}
-            onClick={() => isRunning ? stopMut.mutate() : startMut.mutate()}>
-            {isRunning ? t("proxy.stop") : t("proxy.run")}
-          </Button>
-        </div>
-      </PageToolbar>
-
-      <section data-ai-region="proxy-config" className={`proxy-config-workspace ${mode === "toml" ? "toml-mode" : ""}`}>
-        {mode === "cards" ? (
-          <ScrollArea className="min-h-0">
-            <div className="proxy-config-cards">
-              <ConfigCards
-                config={config}
-                issues={issues}
-                updateDraft={updateDraft}
-              />
-            </div>
-          </ScrollArea>
-        ) : (
-          <TomlPreview toml={toml} lineCount={lineCount} dirty={dirty} issues={issues} saveDraft={saveDraft} resetDraft={resetDraft} isBusy={isBusy} />
-        )}
       </section>
     </div>
   );
@@ -162,10 +138,24 @@ function ConfigCards({
   config,
   issues,
   updateDraft,
+  isRunning,
+  isBusy,
+  dirty,
+  saveDraft,
+  resetDraft,
+  startProxy,
+  stopProxy,
 }: {
   config: ProxyConfig;
   issues: ValidationIssue[];
   updateDraft: (mutator: (next: ProxyConfig) => void) => void;
+  isRunning: boolean;
+  isBusy: boolean;
+  dirty: boolean;
+  saveDraft: () => void;
+  resetDraft: () => void;
+  startProxy: () => void;
+  stopProxy: () => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -181,6 +171,24 @@ function ConfigCards({
         )}
         <section data-ai-region="proxy-server" className="toml-group">
           <article className="toml-card server-card">
+            <div className="toml-card-head">
+              <span className="toml-card-title">{t("proxy.server")}</span>
+              <div className="flex items-center gap-1.5">
+                <Badge variant={isRunning ? "default" : "secondary"} className="h-5 px-1.5 text-[10px] uppercase tracking-[0.04em]">
+                  {isRunning ? t("proxy.running") : t("proxy.stopped")}
+                </Badge>
+                {dirty && (
+                  <>
+                    <Button variant="primary" size="xs" disabled={isBusy || issues.length > 0} onClick={saveDraft}>{t("proxy.save")}</Button>
+                    <Button variant="outline" size="xs" disabled={isBusy} onClick={resetDraft}>{t("proxy.reset")}</Button>
+                  </>
+                )}
+                <Button variant={isRunning ? "destructive" : "primary"} size="xs" disabled={isBusy}
+                  onClick={() => isRunning ? stopProxy() : startProxy()}>
+                  {isRunning ? t("proxy.stop") : t("proxy.run")}
+                </Button>
+              </div>
+            </div>
             <div className="toml-card-body">
               <Field label={t("proxy.listenAddress")}>
                 <input className="zed-input font-mono text-[12px]" title={t("proxy.listenAddress")} value={config.server.listen_addr}
@@ -368,42 +376,6 @@ function BridgeCard({
   );
 }
 
-function TomlPreview({
-  toml,
-  lineCount,
-  dirty,
-  issues,
-  saveDraft,
-  resetDraft,
-  isBusy,
-}: {
-  toml: string;
-  lineCount: number;
-  dirty: boolean;
-  issues: ValidationIssue[];
-  saveDraft: () => void;
-  resetDraft: () => void;
-  isBusy: boolean;
-}) {
-  const { t } = useTranslation();
-  return (
-    <section data-ai-region="proxy-toml-editor" className="proxy-editor-shell">
-      <div className="proxy-panel-head">
-        <span className="zed-kicker">proxy.toml</span>
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-[12px] text-muted-foreground">{t("proxy.lines", { count: lineCount })}</span>
-          {dirty && <Button variant="primary" size="sm" disabled={isBusy || issues.length > 0} onClick={saveDraft}>{t("proxy.save")}</Button>}
-          <Button variant="outline" size="sm" disabled={isBusy} onClick={resetDraft}>{t("proxy.reset")}</Button>
-        </div>
-      </div>
-      <div className="proxy-editor-wrap">
-        <pre className="line-numbers">{Array.from({ length: lineCount }, (_, i) => i + 1).join("\n")}</pre>
-        <pre className="toml-editor-preview">{toml}</pre>
-      </div>
-    </section>
-  );
-}
-
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return <label className="toml-field"><span className="truncate">{label}</span>{children}</label>;
 }
@@ -518,41 +490,4 @@ function validateConfig(config: ProxyConfig): ValidationIssue[] {
     if (!Object.keys(bridge.models).length) issues.push({ scope: name, message: "Missing model mappings" });
   }
   return issues;
-}
-
-function serializeProxyConfig(config: ProxyConfig): string {
-  const lines: string[] = [
-    "[server]",
-    `listen_addr = ${quote(config.server.listen_addr)}`,
-    "",
-  ];
-
-  for (const [name, bridge] of Object.entries(config.bridges)) {
-    lines.push(`[bridges.${name}.agent]`);
-    lines.push(`base_url = ${quote(bridge.agent.base_url)}`);
-    lines.push(`api_format = ${quote(bridge.agent.api_format)}`);
-    lines.push("");
-    lines.push(`[bridges.${name}.provider]`);
-    lines.push(`name = ${quote(bridge.provider.name)}`);
-    lines.push("");
-    lines.push(`[bridges.${name}.models]`);
-    for (const [agentModel, providerModel] of Object.entries(bridge.models)) {
-      lines.push(`${quote(agentModel)} = ${quote(providerModel)}`);
-    }
-    lines.push("");
-  }
-
-  for (const [name, provider] of Object.entries(config.providers)) {
-    lines.push(`[providers.${name}]`);
-    lines.push(`base_url = ${quote(provider.base_url)}`);
-    lines.push(`api_format = ${quote(provider.api_format)}`);
-    if (provider.api_key_env) lines.push(`api_key_env = ${quote(provider.api_key_env)}`);
-    lines.push("");
-  }
-
-  return lines.join("\n").trimEnd();
-}
-
-function quote(value: string): string {
-  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }

@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use rusqlite::params;
 
 use crate::app::errors::AppError;
@@ -97,4 +99,27 @@ pub(crate) fn get_session_sources(
         .collect();
 
     Ok(sources)
+}
+
+pub(crate) fn mark_source_deleted(
+    conn: &rusqlite::Connection,
+    path: &str,
+) -> Result<(), AppError> {
+    let now = chrono::Utc::now().to_rfc3339();
+    conn.execute(
+        "INSERT OR REPLACE INTO deleted_sources (path, deleted_at) VALUES (?, ?)",
+        params![path, now],
+    )?;
+    Ok(())
+}
+
+pub(crate) fn get_deleted_source_paths(
+    conn: &rusqlite::Connection,
+) -> Result<HashSet<String>, AppError> {
+    let mut stmt = conn.prepare("SELECT path FROM deleted_sources")?;
+    let paths: HashSet<String> = stmt
+        .query_map([], |row| row.get(0))?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(paths)
 }

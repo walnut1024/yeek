@@ -4,7 +4,7 @@ use crate::app::errors::AppError;
 use crate::domain::source::{DeletePolicy, SourceRef};
 use crate::store::sources;
 
-/// Validate that a path is safe to delete: must be within ~/.claude/projects/
+/// Validate that a path is safe to delete: must be within an allowed directory
 /// and must not be a symlink.
 fn validate_delete_path(path: &std::path::Path) -> Result<(), String> {
     // Check for symlinks
@@ -23,15 +23,21 @@ fn validate_delete_path(path: &std::path::Path) -> Result<(), String> {
         },
     };
 
-    let allowed_prefix = dirs::home_dir()
-        .ok_or_else(|| "Cannot determine home directory".to_string())?
-        .join(".claude")
-        .join("projects");
+    let home = dirs::home_dir().ok_or_else(|| "Cannot determine home directory".to_string())?;
 
-    let allowed_prefix = std::fs::canonicalize(&allowed_prefix).unwrap_or(allowed_prefix);
+    let allowed_prefixes: Vec<std::path::PathBuf> = vec![
+        home.join(".claude").join("projects"),
+        home.join(".codex").join("sessions"),
+        home.join(".codex").join("archived_sessions"),
+    ];
 
-    if !canonical.starts_with(&allowed_prefix) {
-        return Err(format!("Path is outside allowed directory: {}", canonical.display()));
+    let allowed = allowed_prefixes.iter().any(|prefix| {
+        let canonical_prefix = std::fs::canonicalize(prefix).unwrap_or_else(|_| prefix.clone());
+        canonical.starts_with(&canonical_prefix)
+    });
+
+    if !allowed {
+        return Err(format!("Path is outside allowed directories: {}", canonical.display()));
     }
 
     Ok(())
@@ -150,6 +156,14 @@ pub(crate) fn execute_destructive_delete(
     }
 
     // Record action before deleting the session row
+    // Write tombstones for ALL sources (not just physically deleted ones)
+    // so that rescans won't re-import them.
+    for src_plan in &plan.sources {
+        if let Err(e) = sources::mark_source_deleted(conn, &src_plan.target_path) {
+            errors.push(format!("tombstone {}: {}", src_plan.target_path, e));
+        }
+    }
+
     crate::store::actions::record_action(
         conn,
         Some(session_id),

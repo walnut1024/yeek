@@ -421,10 +421,10 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
-    min-height: 34px;
+    gap: 12px;
+    min-height: 36px;
     border-bottom: 1px solid var(--border);
-    padding: 6px 8px;
+    padding: 6px 12px;
   }
 
   .toml-card-title {
