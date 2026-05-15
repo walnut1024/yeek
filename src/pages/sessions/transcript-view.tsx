@@ -39,9 +39,9 @@ export default function TranscriptView({
   });
 
   // Compute groups from transcript (memoized, always available)
-  const { groups } = useMemo(() => {
+  const { groups, turns } = useMemo(() => {
     if (!transcript || transcript.main_path.length === 0)
-      return { groups: [] };
+      return { groups: [], turns: [] };
     const msgMap = new Map<string, MessageRecord>();
     for (const m of transcript.messages) {
       msgMap.set(m.id, m);
@@ -49,7 +49,8 @@ export default function TranscriptView({
     const mainMessages: MessageRecord[] = transcript.main_path
       .map((id) => msgMap.get(id))
       .filter((m): m is MessageRecord => m != null);
-    return { groups: groupMessages(mainMessages), mainCount: mainMessages.length };
+    const g = groupMessages(mainMessages);
+    return { groups: g, turns: groupIntoTurns(g) };
   }, [transcript]);
 
   // Infinite scroll
@@ -83,7 +84,7 @@ export default function TranscriptView({
   // --- Early returns (after all hooks) ---
   if (isLoading) {
     return (
-      <div className="space-y-3 px-4 py-4">
+      <div className="space-y-3 px-3 py-3">
         <Skeleton className="h-5 w-3/4" />
         <Skeleton className="h-4 w-1/2" />
         <Skeleton className="h-20 w-full" />
@@ -93,7 +94,7 @@ export default function TranscriptView({
 
   if (error) {
     return (
-      <div className="mx-4 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3">
+      <div className="mx-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-3">
         <p className="text-[14px] text-destructive">{t("transcript.error", { message: String(error) })}</p>
       </div>
     );
@@ -101,7 +102,7 @@ export default function TranscriptView({
 
   if (groups.length === 0) {
     return (
-      <p className="px-4 py-3 text-[14px] text-muted-foreground">{t("transcript.empty")}</p>
+      <p className="px-3 py-3 text-[14px] text-muted-foreground">{t("transcript.empty")}</p>
     );
   }
 
@@ -121,25 +122,39 @@ export default function TranscriptView({
     bottomAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   };
 
+  // Build a lookup: group index → turn index
+  const groupToTurn = new Map<number, number>();
+  turns.forEach((turn, ti) => turn.forEach(gi => groupToTurn.set(gi, ti)));
+
   return (
-    <div data-ai-region="sessions-messages" className="relative px-4 py-4">
+    <div data-ai-region="sessions-messages" className="relative px-3 py-3">
       <div ref={topAnchorRef} />
 
-      <div className="space-y-1.5">
-        {visibleGroups.map((group, i) => (
-          <React.Fragment key={i}>
-            {group.type === "user" && <UserBubble msg={group.msg} />}
-            {group.type === "assistant" && <AIBubble msg={group.msg} />}
-            {group.type === "tools" && (
-              <ToolAccordion
-                tools={group.pairs}
-                sessionId={sessionId}
-              />
-            )}
-            {group.type === "meta" && <MetaLine msg={group.msg} />}
-            {group.type === "summary" && <SummarySection msg={group.msg} />}
-          </React.Fragment>
-        ))}
+      <div className="space-y-3">
+        {turns.map((turnGroup, ti) => {
+          const turnGroups = turnGroup
+            .filter(gi => gi < visibleGroups.length)
+            .map(gi => ({ gi, group: visibleGroups[gi] }));
+          if (turnGroups.length === 0) return null;
+          return (
+            <div key={ti} className="space-y-1">
+              {turnGroups.map(({ gi, group }) => (
+                <React.Fragment key={gi}>
+                  {group.type === "user" && <UserBubble msg={group.msg} />}
+                  {group.type === "assistant" && <AIBubble msg={group.msg} />}
+                  {group.type === "tools" && (
+                    <ToolAccordion
+                      tools={group.pairs}
+                      sessionId={sessionId}
+                    />
+                  )}
+                  {group.type === "meta" && <MetaLine msg={group.msg} />}
+                  {group.type === "summary" && <SummarySection msg={group.msg} />}
+                </React.Fragment>
+              ))}
+            </div>
+          );
+        })}
       </div>
 
       {hasMore && <div ref={sentinelRef} className="h-1" />}
@@ -274,4 +289,33 @@ function groupMessages(messages: MessageRecord[]): MessageGroup[] {
   }
 
   return groups;
+}
+
+/**
+ * Group MessageGroups into "turns" — each turn starts with a user message
+ * and includes all subsequent assistant/tools/meta until the next user message.
+ * Summary and leading meta groups form their own turns.
+ */
+function groupIntoTurns(groups: MessageGroup[]): number[][] {
+  const turns: number[][] = [];
+  let current: number[] = [];
+
+  for (let i = 0; i < groups.length; i++) {
+    const g = groups[i];
+
+    if (g.type === "user") {
+      // Start a new turn at each user message
+      if (current.length > 0) turns.push(current);
+      current = [i];
+    } else if (g.type === "summary") {
+      // Summaries break turns
+      if (current.length > 0) turns.push(current);
+      turns.push([i]);
+      current = [];
+    } else {
+      current.push(i);
+    }
+  }
+  if (current.length > 0) turns.push(current);
+  return turns;
 }
