@@ -216,17 +216,25 @@ models = ["glm-5.1"]
 yeek/
 ├── src/                          # React frontend
 │   ├── app/shell/                #   Main layout + sidebar navigation
-│   ├── pages/                    #   Sessions, Dashboard, Skills, Marketplace, Proxy, Settings
+│   ├── pages/                    #   Sessions, Dashboard, Marketplace, Proxy, Memory, System
 │   ├── lib/                      #   API client, transport, SSE events, i18n
 │   └── components/ui/            #   shadcn/ui components
 │
 ├── src-tauri/src/                # Rust backend (Tauri + HTTP server)
-│   ├── adapter/claudecode/       #   Claude Code JSONL parser + source discovery
-│   ├── app/commands.rs           #   Business logic (shared by HTTP + Tauri IPC)
-│   ├── app/proxy/                #   VendorProxy lifecycle: spawn, kill, watchdog
+│   ├── adapter/
+│   │   ├── claudecode/           #   Claude Code JSONL parser + source discovery
+│   │   ├── codex/                #   Codex (OpenAI) session adapter
+│   │   └── opencode/             #   OpenCode session adapter
+│   ├── app/
+│   │   ├── commands.rs           #   Tauri IPC command handlers
+│   │   └── proxy/                #   VendorProxy lifecycle: spawn, kill, watchdog
+│   ├── bin/                      #   Binary entry points (yeek-server)
+│   ├── domain/                   #   Core session/source/delete types
 │   ├── http/                     #   Axum HTTP API (REST + SSE)
+│   ├── service/                  #   Application workflows
 │   ├── store/                    #   SQLite store (sessions, messages, sources, actions)
-│   └── sync/                     #   File watchers, background scanner, startup sync
+│   ├── sync/                     #   File watchers, background scanner, startup sync
+│   └── tauri_bridge/             #   Tauri IPC → service layer adapters
 │
 ├── vendor_proxy/                 # Standalone LLM proxy binary
 │   └── src/
@@ -239,22 +247,19 @@ yeek/
 │       ├── server.rs             #   Axum server (proxy, health, admin, models)
 │       └── main.rs               #   Binary entry point (PID lock, config, startup)
 │
-├── docs/                         # Documentation
 ├── DESIGN.md                     # Visual design system specification
-└── proxy.toml                    # Default proxy configuration
+└── CLAUDE.md                     # Coding conventions and architecture notes
 ```
 
 ---
 
 ## Design
 
-Yeek uses **Hermes Dark** — a black-first, warm cream design system inspired
-by [Nous Research's Hermes Agent](https://github.com/NousResearch/hermes-agent).
+Yeek uses a warm cream design system inspired by [Lovable](https://lovable.dev).
 
-- Black canvas (`#000000`) with warm cream foreground (`#ffe6cb`)
-- Dark teal surfaces (`#041C1C`) with 1px cream borders — no shadows
-- Single accent blue (`#74ade8`) reserved for interactive focus
-- Monospace for technical detail, Inter for body and UI labels
+- Cream canvas (`#f7f4ed`) with charcoal ink (`#1c1c1c`)
+- Warm borders and button inset shadows — no heavy card shadows
+- DM Sans for UI, monospace for technical detail
 
 See [DESIGN.md](DESIGN.md) for the full token specification and component guidelines.
 

@@ -1,13 +1,13 @@
 # Yeek — Agent Session Memory Manager
 
-Local-first Tauri v2 desktop app for managing Claude Code agent sessions.
+Local-first Tauri v2 desktop app for browsing and managing agent coding sessions, with a built-in multi-provider LLM proxy.
 
 ## Tech Stack
 
-- **Backend**: Rust (Tauri v2, rusqlite bundled, SQLite + FTS5)
-- **Frontend**: React + TypeScript + Vite + Tailwind CSS v4 + shadcn/ui (Base UI)
+- **Backend**: Rust (Tauri v2, Axum HTTP + SSE, rusqlite bundled, SQLite + FTS5)
+- **Frontend**: React 19 + TypeScript + Vite + Tailwind CSS v4 + shadcn/ui (Base UI)
 - **Data**: TanStack Query for async state, localStorage for UI preferences
-- **Proxy**: vendor_proxy — OpenAI Responses API → multi-provider LLM proxy (DeepSeek, Zhipu, Ollama)
+- **Proxy**: vendor_proxy — OpenAI Responses API → multi-provider LLM proxy (DeepSeek, Anthropic, OpenAI, Zhipu, Ollama)
 
 ## Commands
 
@@ -36,34 +36,42 @@ Prerequisites:
 
 ```
 src-tauri/src/
-  app/commands.rs       — Tauri command handlers
-  adapter/              — Agent session source adapters
-  domain/               — Core session/source/delete types
-  service/              — Application workflows
-  store/                — SQLite persistence
-  sync/                 — Startup sync pipeline
-vendor_proxy/src/       — LLM proxy workspace member
+  adapter/
+    claudecode/          — Claude Code JSONL parser + source discovery
+    codex/               — Codex (OpenAI) session adapter
+    opencode/            — OpenCode session adapter
+  app/
+    commands.rs          — Tauri IPC command handlers
+    proxy/               — VendorProxy lifecycle: spawn, kill, watchdog
+  bin/                   — Binary entry points (yeek-server)
+  domain/                — Core session/source/delete types
+  http/                  — Axum HTTP API (REST + SSE)
+  service/               — Application workflows
+  store/                 — SQLite persistence
+  sync/                  — File watchers, background scanner, startup sync
+  tauri_bridge/          — Tauri IPC → service layer adapters
+vendor_proxy/src/        — Standalone LLM proxy binary
+  adapters/              — Provider adapters (Chat Completions, Anthropic)
+  bridge/                — Responses ↔ Chat bidirectional conversion
+  stream/                — SSE pipeline: Anthropic SSE → Chat SSE → Responses SSE
 src/
-  app/shell/index.tsx   — Main UI shell and section routing
-  lib/api.ts            — Typed Tauri command wrappers
-  components/ui/        — shadcn/ui primitives
+  app/shell/index.tsx    — Main UI shell and section routing
+  pages/                 — Sessions, Dashboard, Marketplace, Proxy, Memory, System
+  lib/api.ts             — Typed Tauri command wrappers
+  components/ui/         — shadcn/ui primitives
 ```
 
 ## Frontend Guidelines
 
 - Always reference DESIGN.md for UI/frontend work. It defines the Lovable-inspired warm cream design system.
 - Use `#f7f4ed` as the app foundation and `#1c1c1c` as the base ink. Derive neutral states from charcoal opacity instead of arbitrary gray hex values.
-- Use the available humanist sans font fallback (`DM Sans` in this repo) unless a licensed Camera Plain Variable asset is added.
+- Use `DM Sans` as the primary UI font.
 - Use shallow depth: warm borders and button inset shadows, not heavy card shadows.
 - Keep product surfaces dense, calm, and operational. Do not introduce landing-page heroes for app screens.
 - Prioritize shadcn/Base UI primitives from `@/components/ui/`.
 - Never use raw `<button>`; use `<Button>`.
 - Use semantic HTML and preserve `data-ai-page`, `data-ai-region`, and `data-ai-item` selectors.
 - Structural refactors must not change visual copy, state management, business logic, API calls, or keyboard behavior unless explicitly requested.
-
-## Frontend Demos
-
-- Frontend demo/prototype pages should be generated in the `ui_design/` directory (not in `demo/`).
 
 ## Key Patterns
 

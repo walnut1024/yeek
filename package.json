@@ -10,9 +10,6 @@
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc -b --noEmit",
     "preview": "vite preview",
-    "electron:compile": "tsc -p electron-app/tsconfig.json",
-    "electron:dev": "npm run electron:compile && concurrently \"npm run dev\" \"electron-app/node_modules/.bin/electron electron-app/dist/main.js\"",
-    "electron:build": "npm run electron:compile && npm run build && cargo build --release --manifest-path src-tauri/Cargo.toml --bin yeek-server --features http-server && electron-app/node_modules/.bin/electron-builder --config electron-app/electron-builder.yml",
     "tauri:dev": "cargo tauri dev",
     "tauri:build": "cargo tauri build"
   },
@@ -45,8 +42,6 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
-    "better-sqlite3": "^12.9.0",
-    "concurrently": "^9.1.2",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
