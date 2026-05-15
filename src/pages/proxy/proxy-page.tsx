@@ -60,7 +60,6 @@ interface ValidationIssue {
 
 export default function ProxyPage() {
   const queryClient = useQueryClient();
-  const { t } = useTranslation();
   const [draft, setDraft] = useState<ProxyConfig | null>(null);
 
   const { data: status } = useQuery({
