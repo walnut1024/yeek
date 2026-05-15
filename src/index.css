@@ -222,7 +222,7 @@
   }
 
   .zed-kicker {
-    @apply text-[11px] font-medium uppercase tracking-[0.04em] text-muted-foreground;
+    @apply text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground;
   }
 
   .zed-section-title {
@@ -274,8 +274,8 @@
   .key {
     color: var(--muted-foreground);
     font-size: 10px;
-    font-weight: 560;
-    letter-spacing: 0.04em;
+    font-weight: 600;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
     white-space: nowrap;
   }
@@ -314,7 +314,7 @@
     width: 200px;
   }
   .graph-node-tag {
-    @apply text-[9px] font-semibold uppercase tracking-[0.8px];
+    @apply text-[10px] font-semibold uppercase tracking-[0.06em];
   }
   .graph-node-label {
     @apply text-[11px] leading-[1.35] text-foreground;
@@ -463,8 +463,8 @@
   .toml-field > span {
     color: var(--muted-foreground);
     font-size: 10px;
-    font-weight: 560;
-    letter-spacing: 0.04em;
+    font-weight: 600;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
   }
 
@@ -697,8 +697,8 @@
     margin-top: 3px;
     color: var(--muted-foreground);
     font-size: 10px;
-    font-weight: 560;
-    letter-spacing: 0.04em;
+    font-weight: 600;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
   }
 

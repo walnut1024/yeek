@@ -207,7 +207,7 @@ function PayloadCard({ label, content }: { label: string; content: string }) {
   return (
     <div className="my-1.5 overflow-hidden rounded-md border border-border bg-secondary">
       <div className="flex items-center border-b border-border bg-secondary px-2 py-0.5">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+        <span className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
           {label}
         </span>
       </div>

@@ -29,7 +29,7 @@ const UserBubble = React.memo(function UserBubble({
         )}
       </div>
       <div className="max-h-[320px] overflow-y-auto custom-scrollbar pr-1">
-        <p className="whitespace-pre-wrap text-[14px] leading-[1.55] text-foreground">
+        <p className="max-w-[72ch] whitespace-pre-wrap text-[14px] leading-[1.45] text-foreground">
           {msg.content_preview}
         </p>
       </div>

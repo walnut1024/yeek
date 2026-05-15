@@ -91,9 +91,9 @@ function GraphCanvas({
       <Background color="var(--border, #464b57)" gap={24} size={1} />
       <Panel position="top-left" style={{ padding: 0 }}>
         <div className="flex gap-[20px] pointer-events-none">
-          <div className="w-[200px] text-center text-[10px] font-semibold uppercase tracking-[0.08em] text-primary/60 py-1.5">{t("graph.colUser")}</div>
-          <div className="w-[200px] text-center text-[10px] font-semibold uppercase tracking-[0.08em] text-emerald-400/60 py-1.5">{t("graph.colAssistant")}</div>
-          <div className="w-[200px] text-center text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/60 py-1.5">{t("graph.colTool")}</div>
+          <div className="w-[200px] text-center text-[10px] font-semibold uppercase tracking-[0.06em] text-primary/60 py-1.5">{t("graph.colUser")}</div>
+          <div className="w-[200px] text-center text-[10px] font-semibold uppercase tracking-[0.06em] text-emerald-400/60 py-1.5">{t("graph.colAssistant")}</div>
+          <div className="w-[200px] text-center text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/60 py-1.5">{t("graph.colTool")}</div>
         </div>
       </Panel>
       <Panel position="top-right" style={{ padding: 12 }}>

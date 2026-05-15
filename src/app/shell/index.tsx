@@ -416,7 +416,7 @@ function SessionsPage({
                 <p className="text-[16px] font-medium text-foreground">
                   {isSearching ? t("sessions.emptySearch") : t("sessions.emptyBrowse")}
                 </p>
-                <p className="mt-2 text-[14px] leading-[1.5] text-muted-foreground">
+                <p className="mt-2 text-[14px] leading-[1.45] text-muted-foreground">
                   {isSearching
                     ? t("sessions.emptySearchHint")
                     : t("sessions.emptyBrowseHint")}
@@ -518,7 +518,7 @@ function SessionsPage({
               <h3 className="mt-2 max-w-md text-[14px] font-semibold leading-none text-foreground">
                 {t("sessions.selectHeading")}
               </h3>
-              <p className="mt-2 max-w-lg text-[14px] leading-[1.5] text-muted-foreground">
+              <p className="mt-2 max-w-lg text-[14px] leading-[1.45] text-muted-foreground">
                 {t("sessions.selectDescription")}
               </p>
             </div>
