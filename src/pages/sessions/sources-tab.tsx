@@ -17,7 +17,7 @@ export default function SourcesTab({ sessionId }: { sessionId: string }) {
     <section data-ai-region="sessions-sources" className="w-full">
       {!detail ? (
         error ? (
-          <p className="text-[13px] text-destructive">
+          <p className="text-[14px] text-destructive">
             {t("sources.error")}
           </p>
         ) : (
@@ -40,11 +40,11 @@ export default function SourcesTab({ sessionId }: { sessionId: string }) {
             >
               <FileText size={14} className="shrink-0 text-muted-foreground" />
               <span className="shrink-0 text-[12px] font-medium text-foreground">{src.source_type}</span>
-              <Badge variant="outline" className="shrink-0 gap-1 bg-card px-1.5 py-0.5 text-[11px] text-muted-foreground">
+              <Badge variant="outline" className="shrink-0 gap-1 bg-card px-1.5 py-0.5 text-[12px] text-muted-foreground">
                 <ShieldCheck size={10} />
                 {src.delete_policy}
               </Badge>
-              <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">
+              <span className="min-w-0 truncate font-mono text-[12px] text-muted-foreground">
                 {src.path}
               </span>
             </div>

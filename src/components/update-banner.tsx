@@ -71,7 +71,7 @@ export function UpdateBanner() {
       {/* Downloading */}
       {phase.kind === "downloading" && (
         <div className="flex flex-1 items-center gap-3">
-          <span className="text-muted-foreground text-[13px]">
+          <span className="text-muted-foreground text-[14px]">
             {t("update.downloading")}
           </span>
           <div className="flex-1 h-1.5 rounded-full bg-secondary overflow-hidden">
@@ -102,7 +102,7 @@ export function UpdateBanner() {
       {/* Error */}
       {phase.kind === "error" && (
         <>
-          <span className="flex-1 text-destructive text-[13px]">
+          <span className="flex-1 text-destructive text-[14px]">
             {t("update.failed", { message: phase.message })}
           </span>
           <Button

@@ -156,7 +156,7 @@ function DeletePlanTable({
   if (loading) {
     return (
       <div className="flex items-center justify-center rounded-md border border-border bg-secondary/40 px-3 py-6">
-        <span className="text-[13px] text-muted-foreground">{t("manage.loadingPlan")}</span>
+        <span className="text-[14px] text-muted-foreground">{t("manage.loadingPlan")}</span>
       </div>
     );
   }
@@ -397,7 +397,7 @@ function SessionsPage({
           {error ? (
             <div className="flex h-72 items-center justify-center px-6">
               <div className="max-w-sm text-center">
-                <p className="text-xl text-foreground">
+                <p className="text-[18px] text-foreground">
                   {t("sessions.loadError")}
                 </p>
                 <p className="mt-2 text-sm text-muted-foreground">{String(error)}</p>
@@ -413,7 +413,7 @@ function SessionsPage({
             <div className="flex h-72 items-center justify-center px-6">
               <div className="max-w-sm text-center">
                 <div className="mx-auto mb-3 size-10 rounded-sm border border-border bg-secondary" />
-                <p className="text-[16px] font-medium text-foreground">
+                <p className="text-[18px] font-medium text-foreground">
                   {isSearching ? t("sessions.emptySearch") : t("sessions.emptyBrowse")}
                 </p>
                 <p className="mt-2 text-[14px] leading-[1.45] text-muted-foreground">
@@ -471,7 +471,7 @@ function SessionsPage({
                         }}
                       >
                         <ChevronRight size={14} className={`shrink-0 text-muted-foreground transition-transform duration-200 ${collapsed ? "" : "rotate-90"}`} />
-                        <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
+                        <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-foreground">
                           {g.label}
                         </span>
                         <span className="shrink-0 rounded-sm border border-border bg-[var(--editor)] px-1.5 py-0.5 font-mono text-[12px] text-muted-foreground">
@@ -537,7 +537,7 @@ function SessionsPage({
             type="button"
             variant="ghost"
             size="sm"
-            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[13px] text-destructive hover:bg-accent"
+            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[14px] text-destructive hover:bg-accent"
             onClick={() => ctxDelete.mutate()}
           >
             <Trash2 size={16} />

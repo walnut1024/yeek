@@ -58,7 +58,7 @@ export default function SessionDetailPane({
       {fullscreen && viewMode === "graph" ? (
         <div className="fixed inset-0 z-50 flex flex-col bg-card">
           <div className="flex items-center gap-2 border-b border-border px-3 py-1.5">
-            <p className="text-[13px] font-medium text-foreground">{sessionTitle}</p>
+            <p className="text-[14px] font-medium text-foreground">{sessionTitle}</p>
             <span className="font-mono text-[10px] text-muted-foreground">{record.id.slice(0, 8)}</span>
           </div>
           <div className="flex-1 min-h-0">
@@ -76,7 +76,7 @@ export default function SessionDetailPane({
               <div className="min-w-0 flex-1">
                 <div className="mt-1 flex items-baseline gap-2">
                   <p className="shrink-0 zed-kicker">{t("detail.sessionLabelWithColon")}</p>
-                  <h3 className="min-w-0 truncate text-[15px] font-semibold leading-[1.3] text-foreground">
+                  <h3 className="min-w-0 truncate text-[16px] font-semibold leading-[1.3] text-foreground">
                     {sessionTitle}
                   </h3>
                   <Button
@@ -228,7 +228,7 @@ function CopyableDetailValue({ label, value, icon }: { label: string; value: str
           <Copy size={12} className="text-muted-foreground" />
         )}
       </p>
-      <p className="mt-0.5 break-all font-mono text-[11px] leading-[1.45] text-foreground">
+      <p className="mt-0.5 break-all font-mono text-[12px] leading-[1.45] text-foreground">
         {value}
       </p>
     </button>

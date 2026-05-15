@@ -194,7 +194,7 @@
   }
 
   .meta-pill {
-    @apply inline-flex items-center gap-1 rounded-md border border-border bg-secondary px-1.5 py-0.5 text-[11px];
+    @apply inline-flex items-center gap-1 rounded-md border border-border bg-secondary px-1.5 py-0.5 text-[12px];
   }
 
   .segmented-control {
@@ -222,7 +222,7 @@
   }
 
   .zed-kicker {
-    @apply text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground;
+    @apply text-[12px] font-medium uppercase tracking-[0.06em] text-muted-foreground;
   }
 
   .zed-section-title {
@@ -230,11 +230,11 @@
   }
 
   .zed-chip {
-    @apply inline-flex items-center gap-1 rounded-full border border-border bg-muted px-1.5 py-0.5 font-mono text-[11px] font-medium text-muted-foreground;
+    @apply inline-flex items-center gap-1 rounded-full border border-border bg-muted px-1.5 py-0.5 font-mono text-[12px] font-medium text-muted-foreground;
   }
 
   .zed-input {
-    @apply h-8 w-full rounded-md border border-border bg-input px-2 text-[13px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/55 focus:border-ring;
+    @apply h-8 w-full rounded-md border border-border bg-input px-2 text-[14px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/55 focus:border-ring;
   }
 
   .zed-list-row {
@@ -317,13 +317,13 @@
     @apply text-[10px] font-semibold uppercase tracking-[0.06em];
   }
   .graph-node-label {
-    @apply text-[11px] leading-[1.35] text-foreground;
+    @apply text-[12px] leading-[1.35] text-foreground;
   }
   .graph-node-detail {
     @apply font-mono text-[10px] text-muted-foreground;
   }
   .graph-node-hint {
-    @apply font-mono text-[9px] text-muted-foreground;
+    @apply font-mono text-[10px] text-muted-foreground;
   }
 
   /* Custom scrollbar */

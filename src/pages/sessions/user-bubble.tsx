@@ -15,7 +15,7 @@ const UserBubble = React.memo(function UserBubble({
         <span className="inline-flex size-6 items-center justify-center rounded-full border border-border bg-card">
           <User size={14} className="text-foreground" />
         </span>
-        <span className="text-[13px] font-medium text-foreground">
+        <span className="text-[14px] font-medium text-foreground">
           {t("user.role")}
         </span>
         {msg.timestamp && (

@@ -88,14 +88,14 @@ const SessionRow = React.memo(function SessionRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
+            <p className="text-[12px] uppercase tracking-[0.06em] text-muted-foreground">
               {formatAgentLabel(session.agent)}
             </p>
             <span className="mt-1 block truncate text-[14px] font-medium leading-[1.35] text-foreground">
               {title.length > TITLE_TRUNCATE_LEN ? `${title.slice(0, TITLE_TRUNCATE_LEN)}...` : title}
             </span>
           </div>
-          <span className="shrink-0 rounded-full border border-border bg-secondary px-2 py-1 font-mono text-[11px] text-muted-foreground">
+          <span className="shrink-0 rounded-full border border-border bg-secondary px-2 py-1 font-mono text-[12px] text-muted-foreground">
             {formatRelativeTime(session.updated_at)}
           </span>
         </div>
@@ -103,7 +103,7 @@ const SessionRow = React.memo(function SessionRow({
         <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[12px] text-muted-foreground">
           <Badge
             variant="outline"
-            className="bg-secondary px-2 py-0.5 text-[11px] text-primary"
+            className="bg-secondary px-2 py-0.5 text-[12px] text-primary"
           >
             {session.model || t("sessionRow.noModel")}
           </Badge>

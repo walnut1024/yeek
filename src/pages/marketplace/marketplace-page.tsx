@@ -181,7 +181,7 @@ export default function MarketplacePage({ agent }: { agent: string }) {
       {!isClaudeCode ? (
         <div className="flex h-72 items-center justify-center px-6">
           <div className="max-w-sm text-center">
-            <p className="text-[16px] font-medium text-foreground">{AGENTS.find(a => a.key === agent)?.label}</p>
+            <p className="text-[18px] font-medium text-foreground">{AGENTS.find(a => a.key === agent)?.label}</p>
             <p className="mt-2 text-[14px] leading-[1.5] text-muted-foreground">{t("marketplace.pluginSupportSoon")}</p>
           </div>
         </div>
@@ -195,7 +195,7 @@ export default function MarketplacePage({ agent }: { agent: string }) {
             <div className="proxy-panel-head">
               <span className="zed-kicker">{t("marketplace.sectionMarketplaces")}</span>
               <div className="flex flex-wrap items-center gap-1.5">
-                <span className="font-mono text-[11px] text-muted-foreground">{t("marketplace.registries", { count: marketplaces.length })}</span>
+                <span className="font-mono text-[12px] text-muted-foreground">{t("marketplace.registries", { count: marketplaces.length })}</span>
                 {marketplaces.length > 0 && (
                   <Button type="button" variant="outline" size="sm" disabled={isUpdatingAny} onClick={handleUpdateAll}>
                     <RefreshCcw size={16} className={isUpdatingAny ? "animate-spin" : ""} />
@@ -273,7 +273,7 @@ export default function MarketplacePage({ agent }: { agent: string }) {
             <AlertDialogTitle>{t("marketplace.removeTitle", { name: removeTarget?.name })}</AlertDialogTitle>
             <AlertDialogDescription>{t("marketplace.removeDesc")}</AlertDialogDescription>
           </AlertDialogHeader>
-          <label className="flex items-center gap-2 text-[13px] text-foreground">
+          <label className="flex items-center gap-2 text-[14px] text-foreground">
             <input type="checkbox" checked={removePlugins} onChange={(e) => setRemovePlugins(e.target.checked)} className="rounded border-border" />
             {t("marketplace.removePlugins")}
           </label>
@@ -301,7 +301,7 @@ export default function MarketplacePage({ agent }: { agent: string }) {
           <AlertDialogHeader>
             <AlertDialogTitle>{t("skills.uninstallTitle", { name: uninstallTarget?.name })}</AlertDialogTitle>
             <AlertDialogDescription>
-              <span className="mb-2 block rounded-sm border border-border bg-secondary p-2 font-mono text-[11px] text-muted-foreground break-all">
+              <span className="mb-2 block rounded-sm border border-border bg-secondary p-2 font-mono text-[12px] text-muted-foreground break-all">
                 {uninstallTarget?.install_path}
               </span>
               {t("skills.uninstallDesc")}
@@ -370,7 +370,7 @@ export default function MarketplacePage({ agent }: { agent: string }) {
 function HealthBadge({ health }: { health: string }) {
   const hc = HEALTH_COLORS[health] ?? HEALTH_COLORS.hook;
   return (
-    <span className={`flex shrink-0 items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.05em] ${hc.text} ${hc.bg} ${hc.border}`}>
+    <span className={`flex shrink-0 items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.05em] ${hc.text} ${hc.bg} ${hc.border}`}>
       <span className={`size-1 rounded-full ${hc.dot}`} />
       {HEALTH_LABELS[health] ?? health.toUpperCase()}
     </span>
@@ -381,7 +381,7 @@ function SkillRow({ skill }: { skill: SkillInfo }) {
   return (
     <div className="flex items-start gap-2 border-b border-border px-2.5 py-1.5 transition-colors hover:bg-element-hover">
       <Badge variant="outline"
-        className={`mt-0.5 grid size-4 shrink-0 place-items-center px-0 py-0 text-[9px] font-medium ${
+        className={`mt-0.5 grid size-4 shrink-0 place-items-center px-0 py-0 text-[10px] font-medium ${
           skill.skill_type === "agent" ? "text-chart-3 border-chart-3/30" : "text-foreground border-foreground/30"
         }`}>
         {skill.skill_type === "agent" ? "A" : "S"}
@@ -391,7 +391,7 @@ function SkillRow({ skill }: { skill: SkillInfo }) {
           <span className="truncate text-[12px] font-medium text-foreground">{skill.name}</span>
           {skill.tools && <span className="zed-chip shrink-0 font-mono text-[10px]">{skill.tools}</span>}
         </div>
-        {skill.description && <p className="mt-0.5 text-[11px] leading-[1.4] text-muted-foreground line-clamp-2">{skill.description}</p>}
+        {skill.description && <p className="mt-0.5 text-[12px] leading-[1.4] text-muted-foreground line-clamp-2">{skill.description}</p>}
       </div>
       <span className={`mt-1 size-1.5 shrink-0 rounded-full ${skill.health === "ok" ? "bg-chart-2" : "bg-chart-3"}`} />
     </div>
@@ -513,7 +513,7 @@ function MarketplaceCard({
                   );
                 }
                 return (
-                  <div key={mp.name} className="flex flex-wrap items-center gap-1.5 rounded-md border border-border px-2 py-1.5 text-[11px]">
+                  <div key={mp.name} className="flex flex-wrap items-center gap-1.5 rounded-md border border-border px-2 py-1.5 text-[12px]">
                     <span className="truncate text-foreground">{mp.name}</span>
                     <span className="min-w-0 flex-1 truncate text-muted-foreground">{mp.description}</span>
                     <Button variant="outline" size="sm" className="h-5 shrink-0 rounded-md px-1.5 text-[10px]" disabled={installMut.isPending} onClick={() => installMut.mutate(mp.name)}>
@@ -559,7 +559,7 @@ function PluginSubCard({ plugin, onToggle, onUninstall, onClean, onReinstall }: 
         >
           <ChevronRight size={14} className={`transition-transform ${expanded ? "rotate-90" : ""}`} />
         </Button>
-        <span className={`truncate text-[11px] font-medium text-foreground ${!isEnabled ? "opacity-50" : ""}`}>{plugin.name}</span>
+        <span className={`truncate text-[12px] font-medium text-foreground ${!isEnabled ? "opacity-50" : ""}`}>{plugin.name}</span>
         <span className="font-mono text-[10px] text-muted-foreground">v{plugin.version}</span>
         <span className="min-w-0 flex-1" />
         <HealthBadge health={plugin.health} />
@@ -589,7 +589,7 @@ function PluginSubCard({ plugin, onToggle, onUninstall, onClean, onReinstall }: 
           {plugin.health_issues.length > 0 && (
             <div className="border-b border-border px-2.5 py-1.5">
               {plugin.health_issues.map((issue, i) => (
-                <div key={i} className={`flex items-center gap-1 text-[11px] ${plugin.health === "broken" ? "text-destructive" : "text-chart-3"}`}>
+                <div key={i} className={`flex items-center gap-1 text-[12px] ${plugin.health === "broken" ? "text-destructive" : "text-chart-3"}`}>
                   <span className={`size-1 rounded-full ${plugin.health === "broken" ? "bg-destructive" : "bg-chart-3"}`} />
                   {issue}
                 </div>

@@ -391,7 +391,7 @@ function TomlPreview({
       <div className="proxy-panel-head">
         <span className="zed-kicker">proxy.toml</span>
         <div className="flex items-center gap-2">
-          <span className="font-mono text-[11px] text-muted-foreground">{t("proxy.lines", { count: lineCount })}</span>
+          <span className="font-mono text-[12px] text-muted-foreground">{t("proxy.lines", { count: lineCount })}</span>
           {dirty && <Button variant="primary" size="sm" disabled={isBusy || issues.length > 0} onClick={saveDraft}>{t("proxy.save")}</Button>}
           <Button variant="outline" size="sm" disabled={isBusy} onClick={resetDraft}>{t("proxy.reset")}</Button>
         </div>

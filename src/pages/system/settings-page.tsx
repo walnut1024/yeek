@@ -122,7 +122,7 @@ export default function SettingsPage() {
                   <Button
                     size="sm"
                     variant={i18n.language === "en" ? "default" : "outline"}
-                    className="h-8 rounded-md px-3 text-[13px]"
+                    className="h-8 rounded-md px-3 text-[14px]"
                     onClick={() => i18n.changeLanguage("en")}
                   >
                     {t("settings.languageEnglish")}
@@ -130,7 +130,7 @@ export default function SettingsPage() {
                   <Button
                     size="sm"
                     variant={i18n.language === "zh-CN" ? "default" : "outline"}
-                    className="h-8 rounded-md px-3 text-[13px]"
+                    className="h-8 rounded-md px-3 text-[14px]"
                     onClick={() => i18n.changeLanguage("zh-CN")}
                   >
                     {t("settings.languageChinese")}
@@ -144,12 +144,12 @@ export default function SettingsPage() {
             <p className="zed-kicker">{t("settings.maintenance")}</p>
             <div className="mt-2.5 flex flex-wrap items-start justify-between gap-2.5">
               <div className="max-w-xl">
-                <h3 className="text-[15px] font-medium text-foreground">{t("settings.rebuild")}</h3>
+                <h3 className="text-[16px] font-medium text-foreground">{t("settings.rebuild")}</h3>
                 <p className="mt-0.5 text-[12px] leading-[1.5] text-muted-foreground">{t("settings.hintRebuildBody")}</p>
               </div>
               <Button
                 size="sm"
-                className="h-8 rounded-md px-3 text-[13px] font-medium disabled:opacity-60"
+                className="h-8 rounded-md px-3 text-[14px] font-medium disabled:opacity-60"
                 variant={isScanning ? "default" : "destructive"}
                 onClick={() => !isScanning && setConfirmRebuild(true)}
                 disabled={isScanning}
@@ -170,7 +170,7 @@ export default function SettingsPage() {
             {isScanning && scanProgress!.total > 0 && (
               <div className="mt-3 rounded-lg border border-border bg-secondary p-2.5">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-[13px] font-medium text-foreground">{t("settings.rebuilding")}</span>
+                  <span className="text-[14px] font-medium text-foreground">{t("settings.rebuilding")}</span>
                   <span className="font-mono text-[12px] text-muted-foreground">{progressPercent}%</span>
                 </div>
                 <progress className="session-progress mt-2 h-1.5 w-full overflow-hidden rounded-full bg-secondary" value={progressPercent} max={100} />
@@ -181,7 +181,7 @@ export default function SettingsPage() {
           {errorActions.length > 0 && (
             <section className="surface-card p-3">
               <p className="zed-kicker text-destructive">{t("settings.attention")}</p>
-              <h3 className="mt-1 text-[15px] font-medium text-foreground">{t("settings.syncIssues")}</h3>
+              <h3 className="mt-1 text-[16px] font-medium text-foreground">{t("settings.syncIssues")}</h3>
               <div className="mt-2.5 space-y-2">
               {errorActions.map(
                 (a: {
@@ -202,7 +202,7 @@ export default function SettingsPage() {
                         {formatRelativeTime(a.created_at)}
                       </span>
                     </div>
-                    <p className="mt-1.5 text-[13px] leading-[1.45] text-destructive/80">
+                    <p className="mt-1.5 text-[14px] leading-[1.45] text-destructive/80">
                       {a.detail}
                     </p>
                   </div>
@@ -219,7 +219,7 @@ export default function SettingsPage() {
         <h3 className="mt-1.5 text-[14px] font-semibold leading-none text-foreground">
           {t("settings.opsHeading")}
         </h3>
-        <p className="mt-1.5 text-[13px] leading-[1.45] text-muted-foreground">
+        <p className="mt-1.5 text-[14px] leading-[1.45] text-muted-foreground">
           {t("settings.opsDescription")}
         </p>
         <div className="mt-2.5 space-y-2">
@@ -236,7 +236,7 @@ export default function SettingsPage() {
             <AlertDialogDescription>{t("settings.rebuildImpact")}</AlertDialogDescription>
           </AlertDialogHeader>
           <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2.5">
-            <p className="text-[13px] font-medium text-destructive">{t("settings.rebuild")}</p>
+            <p className="text-[14px] font-medium text-destructive">{t("settings.rebuild")}</p>
             <p className="mt-1 text-[12px] leading-[1.5] text-muted-foreground">{t("settings.hintRebuildBody")}</p>
           </div>
           <AlertDialogFooter>
@@ -254,7 +254,7 @@ export default function SettingsPage() {
 function SettingsHint({ title, body }: { title: string; body: string }) {
   return (
     <div className="rounded-lg border border-border bg-secondary p-2.5">
-      <p className="text-[13px] font-medium text-foreground">
+      <p className="text-[14px] font-medium text-foreground">
         {title}
       </p>
       <p className="mt-1 text-[12px] leading-[1.45] text-muted-foreground">{body}</p>
@@ -273,7 +273,7 @@ function SettingsCard({
 }) {
   return (
     <div className="rounded-lg border border-border bg-secondary p-2.5">
-      <h3 className="text-[13px] font-medium text-foreground">{title}</h3>
+      <h3 className="text-[14px] font-medium text-foreground">{title}</h3>
       <p className="mt-0.5 text-[12px] leading-[1.45] text-muted-foreground">{description}</p>
       <div className="mt-2.5">{children}</div>
     </div>

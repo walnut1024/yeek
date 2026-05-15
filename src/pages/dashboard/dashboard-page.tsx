@@ -143,10 +143,10 @@ export default function DashboardPage() {
                   </div>
                   <div className={`flex-1 min-w-0 ${isLast ? "pb-0" : "pb-3"}`}>
                     <div className="flex items-center gap-2">
-                      <span className={`truncate font-mono text-[11px] font-medium ${isError ? "text-destructive" : "text-foreground/50"}`}>
+                      <span className={`truncate font-mono text-[12px] font-medium ${isError ? "text-destructive" : "text-foreground/50"}`}>
                         {a.action}
                       </span>
-                      <span className="ml-auto shrink-0 font-mono text-[11px] text-muted-foreground">
+                      <span className="ml-auto shrink-0 font-mono text-[12px] text-muted-foreground">
                         {a.created_at ? new Date(a.created_at).toLocaleTimeString(getCurrentLocale(), { hour: "2-digit", minute: "2-digit", hour12: false }) : ""}
                       </span>
                     </div>
@@ -187,17 +187,17 @@ export default function DashboardPage() {
           </div>
           <div className="flex-1 overflow-auto px-3 pt-2">
             {!errorEvents || errorEvents.length === 0 ? (
-              <p className="py-8 text-center text-[13px] text-muted-foreground">{t("dashboard.noActions")}</p>
+              <p className="py-8 text-center text-[14px] text-muted-foreground">{t("dashboard.noActions")}</p>
             ) : (
               errorEvents.map((e, i) => (
                 <div key={i} className="border-b border-border py-2.5">
                   <div className="flex items-center gap-2">
-                    <span className={`font-mono text-[11px] font-medium px-1.5 py-0.5 rounded ${e.status >= 500 ? "bg-destructive/10 text-destructive" : "bg-chart-3/10 text-chart-3"}`}>
+                    <span className={`font-mono text-[12px] font-medium px-1.5 py-0.5 rounded ${e.status >= 500 ? "bg-destructive/10 text-destructive" : "bg-chart-3/10 text-chart-3"}`}>
                       {e.status}
                     </span>
-                    <span className="font-mono text-[11px] text-foreground/60">{e.provider}</span>
-                    <span className="font-mono text-[11px] text-muted-foreground truncate">{e.model}</span>
-                    <span className="ml-auto shrink-0 font-mono text-[11px] text-muted-foreground">
+                    <span className="font-mono text-[12px] text-foreground/60">{e.provider}</span>
+                    <span className="font-mono text-[12px] text-muted-foreground truncate">{e.model}</span>
+                    <span className="ml-auto shrink-0 font-mono text-[12px] text-muted-foreground">
                       {new Date(e.timestamp).toLocaleString(getCurrentLocale(), { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).replace(/\//g, "-")}
                     </span>
                   </div>
@@ -228,7 +228,7 @@ function StatCard({ label, value, sub, accent, danger, compact }: { label: strin
       <p className={`mt-2 font-mono text-[24px] font-medium leading-none tracking-[-0.03em] ${
         c === "accent" ? "text-primary" : c === "danger" ? "text-destructive" : "text-foreground"
       }`}>{value}</p>
-      <p className="mt-auto pt-1.5 text-[11px] text-muted-foreground">{sub}</p>
+      <p className="mt-auto pt-1.5 text-[12px] text-muted-foreground">{sub}</p>
     </article>
   );
 }
@@ -240,7 +240,7 @@ function MetricCard({ label, value, sub, danger, onClick }: { label: string; val
       className={`metric-tile-compact text-center ${onClick ? "cursor-pointer transition-colors hover:bg-element-hover" : ""}`}
       onClick={onClick}
     >
-      <p className={`font-mono text-[17px] font-medium leading-none tracking-[-0.02em] ${danger ? "text-chart-3" : "text-foreground"}`}>{value}</p>
+      <p className={`font-mono text-[18px] font-medium leading-none tracking-[-0.02em] ${danger ? "text-chart-3" : "text-foreground"}`}>{value}</p>
       <p className="mt-1 text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground">{label}</p>
       <p className="mt-0.5 font-mono text-[10px] text-muted-foreground/60">{sub}</p>
     </article>

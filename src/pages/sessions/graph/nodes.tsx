@@ -87,7 +87,7 @@ function ToolUseNode({ data }: NodeProps) {
       <Handle type="target" position={Position.Top} id="top" style={{ visibility: "hidden" }} />
       <Handle type="target" position={Position.Left} id="left" style={{ visibility: "hidden" }} />
       <div className="mb-1 flex items-center gap-1.5">
-        <span className={`rounded-full border px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-[0.06em] ${tone.badge}`}>
+        <span className={`rounded-full border px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] ${tone.badge}`}>
           {d.toolName}
         </span>
       </div>

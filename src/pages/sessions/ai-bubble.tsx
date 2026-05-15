@@ -17,11 +17,11 @@ const AIBubble = React.memo(function AIBubble({
         <span className="inline-flex size-6 items-center justify-center rounded-full border border-border bg-card">
           <Sparkles size={14} className="text-muted-foreground" />
         </span>
-        <span className="text-[13px] font-medium text-muted-foreground">
+        <span className="text-[14px] font-medium text-muted-foreground">
           {t("ai.role")}
         </span>
         {msg.model && (
-          <span className="rounded-full border border-border bg-secondary px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
+          <span className="rounded-full border border-border bg-secondary px-2 py-0.5 font-mono text-[12px] text-muted-foreground">
             {msg.model}
           </span>
         )}
@@ -50,13 +50,13 @@ const AIBubble = React.memo(function AIBubble({
               const isInline = !className;
               return isInline ? (
                 <code
-                  className="rounded-sm border border-border bg-secondary px-1 py-0.5 font-mono text-[13px] text-muted-foreground"
+                  className="rounded-sm border border-border bg-secondary px-1 py-0.5 font-mono text-[14px] text-muted-foreground"
                   {...props}
                 >
                   {children}
                 </code>
               ) : (
-                <code className={`${className} font-mono text-[13px]`} {...props}>
+                <code className={`${className} font-mono text-[14px]`} {...props}>
                   {children}
                 </code>
               );

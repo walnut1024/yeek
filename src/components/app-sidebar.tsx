@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { LayoutGrid, MessageSquare, ShoppingBag, Code, Settings } from "lucide-react";
+import yeekLogo from "@/assets/yeek-logo.svg";
 import {
   Sidebar,
   SidebarContent,
@@ -34,17 +35,19 @@ export function AppSidebar({ section, onSectionChange, totalSessions }: AppSideb
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <p className="zed-kicker">{t("app.title")}</p>
-        <p className="mt-0.5 truncate text-[11px] leading-[1.4] text-muted-foreground group-data-[collapsible=icon]:hidden">
-          {t("app.sessionBrowser")}
-        </p>
+        <div className="flex items-center gap-2 px-1 py-1">
+          <img src={yeekLogo} alt="Yeek" className="size-6 shrink-0" />
+          <span className="truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground group-data-[collapsible=icon]:hidden">
+            Yeek
+          </span>
+        </div>
       </SidebarHeader>
 
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.slice(0, 2).map(({ key, label, icon: Icon }) => (
+              {navItems.map(({ key, label, icon: Icon }) => (
                 <SidebarMenuItem key={key}>
                   <SidebarMenuButton
                     isActive={section === key}
@@ -56,24 +59,6 @@ export function AppSidebar({ section, onSectionChange, totalSessions }: AppSideb
                     {key === "sessions" && totalSessions != null && (
                       <SidebarMenuBadge>{totalSessions}</SidebarMenuBadge>
                     )}
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {navItems.slice(2).map(({ key, label, icon: Icon }) => (
-                <SidebarMenuItem key={key}>
-                  <SidebarMenuButton
-                    isActive={section === key}
-                    tooltip={label}
-                    onClick={() => onSectionChange(key)}
-                  >
-                    <Icon size={16} />
-                    <span>{label}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}

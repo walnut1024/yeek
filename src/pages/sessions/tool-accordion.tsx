@@ -166,7 +166,7 @@ function ToolItem({
         className="flex h-auto w-full items-center justify-start gap-1.5 rounded-lg border border-transparent bg-secondary px-2 py-1.5 text-left transition-colors hover:border-border hover:bg-element-hover"
       >
         <ChevronRight size={16} className={`text-muted-foreground/30 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} />
-        <span className="font-mono text-[13px] font-medium text-primary/90">
+        <span className="font-mono text-[14px] font-medium text-primary/90">
           {toolName}
         </span>
         {isAgent && agentType && (
@@ -174,7 +174,7 @@ function ToolItem({
             {agentType}
           </span>
         )}
-        <span className="truncate font-mono text-[13px] text-muted-foreground/80">
+        <span className="truncate font-mono text-[14px] text-muted-foreground/80">
           {target}
         </span>
       </Button>
@@ -212,7 +212,7 @@ function PayloadCard({ label, content }: { label: string; content: string }) {
         </span>
       </div>
       <div className="max-h-[400px] overflow-y-auto custom-scrollbar p-2">
-        <pre className="whitespace-pre-wrap font-mono text-[13px] leading-[1.6] text-muted-foreground">
+        <pre className="whitespace-pre-wrap font-mono text-[14px] leading-[1.6] text-muted-foreground">
           {content}
         </pre>
       </div>
