@@ -14,8 +14,10 @@ jobs:
       matrix:
         include:
           - platform: macos-latest
+            target: aarch64-apple-darwin
             args: --target aarch64-apple-darwin
           - platform: macos-latest
+            target: x86_64-apple-darwin
             args: --target x86_64-apple-darwin
 
     runs-on: ${{ matrix.platform }}
@@ -33,6 +35,9 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm install
+
+      - name: Build yeek-server sidecar
+        run: cargo build --release --manifest-path src-tauri/Cargo.toml --target ${{ matrix.target }} --bin yeek-server --no-default-features --features http-server
 
       - uses: tauri-apps/tauri-action@v0
         env:

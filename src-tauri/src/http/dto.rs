@@ -5,6 +5,7 @@ pub struct BrowseQuery {
     pub sort: Option<String>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
+    pub agent: Option<String>,
 }
 
 #[derive(Deserialize)]

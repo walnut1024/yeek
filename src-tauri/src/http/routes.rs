@@ -135,7 +135,7 @@ async fn browse_sessions(
     let result = tokio::task::spawn_blocking(move || {
         do_browse_sessions(
             &state.app_state,
-            BrowseRequest { sort: query.sort, limit: query.limit, offset: query.offset },
+            BrowseRequest { sort: query.sort, limit: query.limit, offset: query.offset, agent: query.agent },
         )
     })
     .await
