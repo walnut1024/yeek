@@ -1440,47 +1440,98 @@ pub(crate) fn do_uninstall_plugin(key: String) -> Result<(), AppError> {
     let home = dirs::home_dir().ok_or_else(|| AppError::Internal("No home directory".into()))?;
     let claude_dir = home.join(".claude");
 
-    // 1. Read registry, find install path, remove directory
+    // Parse key: "pluginName@marketplace"
+    let parts: Vec<&str> = key.splitn(2, '@').collect();
+    let plugin_name = parts.first().map(|s| *s).unwrap_or("");
+
+    // 1. Uninstall from Claude Code registry
     let registry_path = claude_dir.join("plugins/installed_plugins.json");
-    let mut registry: serde_json::Value = read_json(&registry_path)?;
+    if registry_path.exists() {
+        let mut registry: serde_json::Value = read_json(&registry_path)?;
 
-    let install_path = registry
-        .get("plugins")
-        .and_then(|p| p.get(&key))
-        .and_then(|v| v.as_array())
-        .and_then(|a| a.first())
-        .and_then(|e| e["installPath"].as_str())
-        .ok_or_else(|| AppError::NotFound(format!("Plugin {} not found in registry", key)))?
-        .to_string();
+        if let Some(install_path) = registry
+            .get("plugins")
+            .and_then(|p| p.get(&key))
+            .and_then(|v| v.as_array())
+            .and_then(|a| a.first())
+            .and_then(|e| e["installPath"].as_str())
+        {
+            let path = std::path::Path::new(install_path);
+            if path.exists() {
+                let _ = std::fs::remove_dir_all(path);
+            }
+        }
 
-    let path = std::path::Path::new(&install_path);
-    if path.exists() {
-        std::fs::remove_dir_all(path).map_err(|e| {
-            AppError::DeleteFailed(format!("Failed to remove {}: {}", install_path, e))
-        })?;
+        if let Some(plugins) = registry.get_mut("plugins").and_then(|v| v.as_object_mut()) {
+            plugins.remove(&key);
+        }
+        let output = serde_json::to_string_pretty(&registry)
+            .map_err(|e| AppError::Internal(format!("Failed to serialize registry: {}", e)))?;
+        std::fs::write(&registry_path, output)
+            .map_err(|e| AppError::Internal(format!("Failed to write registry: {}", e)))?;
+
+        let settings_path = claude_dir.join("settings.json");
+        if let Ok(mut settings) = read_json(&settings_path) {
+            if let Some(enabled) = settings.get_mut("enabledPlugins").and_then(|v| v.as_object_mut()) {
+                enabled.remove(&key);
+            }
+            if let Ok(output) = serde_json::to_string_pretty(&settings) {
+                let _ = std::fs::write(&settings_path, output);
+            }
+        }
     }
 
-    // 2. Remove from registry
-    if let Some(plugins) = registry.get_mut("plugins").and_then(|v| v.as_object_mut()) {
-        plugins.remove(&key);
+    // 2. Uninstall from Codex (remove from plugins cache and config.toml)
+    if let Some(market_name) = parts.get(1).map(|s| *s) {
+        let codex_cache = home.join(format!(".codex/plugins/cache/{}/{}", market_name, plugin_name));
+        if codex_cache.exists() {
+            let _ = std::fs::remove_dir_all(&codex_cache);
+        }
+        // Remove from config.toml
+        let config_path = home.join(".codex/config.toml");
+        if config_path.exists() {
+            if let Ok(content) = std::fs::read_to_string(&config_path) {
+                let plugin_header = format!("[plugins.\"{}\"]", key);
+                let updated = remove_toml_section(&content, &plugin_header);
+                if updated.len() != content.len() {
+                    let _ = std::fs::write(&config_path, updated);
+                }
+            }
+        }
     }
-    let output = serde_json::to_string_pretty(&registry)
-        .map_err(|e| AppError::Internal(format!("Failed to serialize registry: {}", e)))?;
-    std::fs::write(&registry_path, output)
-        .map_err(|e| AppError::Internal(format!("Failed to write registry: {}", e)))?;
 
-    // 3. Remove from enabledPlugins in settings.json
-    let settings_path = claude_dir.join("settings.json");
-    if let Ok(mut settings) = read_json(&settings_path) {
-        if let Some(enabled) = settings.get_mut("enabledPlugins").and_then(|v| v.as_object_mut()) {
-            enabled.remove(&key);
-        }
-        if let Ok(output) = serde_json::to_string_pretty(&settings) {
-            let _ = std::fs::write(&settings_path, output);
-        }
+    // 3. Uninstall from OpenCode skills
+    let opencode_skill = dirs::data_local_dir()
+        .unwrap_or_else(|| home.join(".local/share"))
+        .join(format!("opencode/skills/{}", plugin_name));
+    if opencode_skill.exists() {
+        let _ = std::fs::remove_dir_all(&opencode_skill);
     }
 
     Ok(())
+}
+
+/// Remove a TOML section (header line + following key=value lines until next section).
+fn remove_toml_section(content: &str, section_header: &str) -> String {
+    let mut lines: Vec<String> = content.lines().map(String::from).collect();
+    let mut result = Vec::new();
+    let mut skipping = false;
+
+    for line in &lines {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') {
+            skipping = false;
+        }
+        if trimmed == section_header {
+            skipping = true;
+            continue;
+        }
+        if !skipping {
+            result.push(line.clone());
+        }
+    }
+
+    result.join("\n")
 }
 
 // --- Plugin Fix: Clean & Reinstall ---
@@ -1675,43 +1726,61 @@ pub(crate) fn do_reinstall_plugin(key: String) -> Result<plugin::FixPluginResult
             ))
         })?;
 
-    // 7. Remove old install dir, copy fresh source to new path with new SHA
-    let old_install_path = std::path::Path::new(install_path_str);
-    if old_install_path.exists() {
-        let _ = std::fs::remove_dir_all(old_install_path);
-    }
-    let new_install_path =
-        claude_dir.join(format!("plugins/cache/{}/{}/{}", market_name, plugin_name, new_sha));
-    if let Some(parent) = new_install_path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| AppError::Internal(format!("Failed to create cache dir: {}", e)))?;
-    }
-    copy_dir_recursive(source_dir, &new_install_path)?;
+    // 7. Detect agent targets and reinstall to each
+    let targets = detect_agent_targets(source_dir);
 
-    // 8. Update registry with new SHA and install path
-    let mut registry: serde_json::Value = read_json(&registry_path)?;
-    let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
-    if let Some(plugins) = registry.get_mut("plugins").and_then(|v| v.as_object_mut()) {
-        plugins.insert(
-            key.clone(),
-            serde_json::json!([{
-                "scope": "user",
-                "installPath": new_install_path.to_string_lossy(),
-                "version": new_sha,
-                "installedAt": entry["installedAt"].clone(),
-                "lastUpdated": now,
-                "gitCommitSha": new_sha,
-            }]),
-        );
+    // Claude Code: reinstall with updated registry
+    if targets.contains(&"claude_code".to_string()) {
+        let old_install_path = std::path::Path::new(install_path_str);
+        if old_install_path.exists() {
+            let _ = std::fs::remove_dir_all(old_install_path);
+        }
+        let new_install_path =
+            claude_dir.join(format!("plugins/cache/{}/{}/{}", market_name, plugin_name, new_sha));
+        if let Some(parent) = new_install_path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| AppError::Internal(format!("Failed to create cache dir: {}", e)))?;
+        }
+        copy_dir_recursive(source_dir, &new_install_path)?;
+
+        let mut registry: serde_json::Value = read_json(&registry_path)?;
+        let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+        if let Some(plugins) = registry.get_mut("plugins").and_then(|v| v.as_object_mut()) {
+            plugins.insert(
+                key.clone(),
+                serde_json::json!([{
+                    "scope": "user",
+                    "installPath": new_install_path.to_string_lossy(),
+                    "version": new_sha,
+                    "installedAt": entry["installedAt"].clone(),
+                    "lastUpdated": now,
+                    "gitCommitSha": new_sha,
+                }]),
+            );
+        }
+        let output = serde_json::to_string_pretty(&registry)
+            .map_err(|e| AppError::Internal(format!("Serialize: {}", e)))?;
+        std::fs::write(&registry_path, output)
+            .map_err(|e| AppError::Internal(format!("Write: {}", e)))?;
     }
-    let output = serde_json::to_string_pretty(&registry)
-        .map_err(|e| AppError::Internal(format!("Serialize: {}", e)))?;
-    std::fs::write(&registry_path, output)
-        .map_err(|e| AppError::Internal(format!("Write: {}", e)))?;
+
+    // Codex: reinstall to codex cache
+    if targets.contains(&"codex".to_string()) {
+        if let Err(e) = install_to_codex(&home, source_dir, market_name, plugin_name, &new_sha) {
+            tracing::warn!("Codex reinstall failed for {}: {}", key, e);
+        }
+    }
+
+    // OpenCode: reinstall to opencode skills
+    if targets.contains(&"opencode".to_string()) {
+        if let Err(e) = install_to_opencode(&home, source_dir, plugin_name) {
+            tracing::warn!("OpenCode reinstall failed for {}: {}", key, e);
+        }
+    }
 
     Ok(plugin::FixPluginResult {
         action: "reinstall".into(),
-        message: format!("Reinstalled {} from {} ({} → {})", key, repo, git_sha, new_sha),
+        message: format!("Reinstalled {} from {} ({} → {}) [{}]", key, repo, git_sha, new_sha, targets.join(",")),
     })
 }
 
@@ -1809,9 +1878,8 @@ pub(crate) fn do_update_marketplace(name: String) -> Result<(), AppError> {
     let mkt = marketplaces
         .get_mut(&name)
         .ok_or_else(|| AppError::NotFound(format!("Marketplace '{}' not found", name)))?;
-    let clone_path = mkt["installLocation"].as_str().unwrap_or("");
-
-    let clone_dir = std::path::Path::new(clone_path);
+    let clone_path_str = mkt["installLocation"].as_str().unwrap_or("");
+    let clone_dir = std::path::Path::new(clone_path_str);
 
     // If clone exists but has no .git (broken clone), re-clone
     if clone_dir.exists() && !clone_dir.join(".git").exists() {
@@ -1832,7 +1900,10 @@ pub(crate) fn do_update_marketplace(name: String) -> Result<(), AppError> {
             )));
         }
     } else {
-        // git pull
+        let _ = std::process::Command::new("git")
+            .args(["fetch", "origin"])
+            .current_dir(clone_dir)
+            .output();
         let out = std::process::Command::new("git")
             .args(["pull", "--ff-only"])
             .current_dir(clone_dir)
@@ -1843,6 +1914,77 @@ pub(crate) fn do_update_marketplace(name: String) -> Result<(), AppError> {
                 "git pull failed: {}",
                 String::from_utf8_lossy(&out.stderr)
             )));
+        }
+    }
+
+    // Get new HEAD SHA
+    let new_sha = std::process::Command::new("git")
+        .args(["rev-parse", "--short", "HEAD"])
+        .current_dir(clone_dir)
+        .output()
+        .ok()
+        .and_then(|o| {
+            if o.status.success() {
+                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+            } else {
+                None
+            }
+        })
+        .unwrap_or_else(|| "unknown".to_string());
+
+    // Sync installed plugins from this marketplace
+    let registry_path = claude_dir.join("plugins/installed_plugins.json");
+    if registry_path.exists() {
+        let registry: serde_json::Value = read_json(&registry_path)?;
+        if let Some(plugins) = registry.get("plugins").and_then(|v| v.as_object()) {
+            let keys_to_update: Vec<String> = plugins.keys()
+                .filter(|k| k.split('@').next_back() == Some(&name))
+                .cloned()
+                .collect();
+
+            for key in &keys_to_update {
+                if let Some(entry) = plugins.get(key).and_then(|v| v.as_array()).and_then(|a| a.first()) {
+                    let old_sha = entry["gitCommitSha"].as_str().unwrap_or("");
+                    let plugin_name = key.split('@').next().unwrap_or("");
+
+                    if old_sha != new_sha && !new_sha.is_empty() {
+                        // Find source in clone
+                        let candidates = [
+                            clone_dir.join(format!("plugins/{}", plugin_name)),
+                            clone_dir.join(format!("skills/{}", plugin_name)),
+                            clone_dir.join(format!("agents/{}", plugin_name)),
+                        ];
+                        let source_dir = candidates.iter().find(|p| p.exists() && p.is_dir());
+
+                        if let Some(source) = source_dir {
+                            let targets = detect_agent_targets(source);
+
+                            // Update Claude install
+                            if targets.contains(&"claude_code".to_string()) {
+                                if let Ok(install_path_str) = entry["installPath"].as_str().ok_or("") {
+                                    let old_install = std::path::Path::new(install_path_str);
+                                    if old_install.exists() {
+                                        let _ = std::fs::remove_dir_all(old_install);
+                                    }
+                                }
+                                let _ = install_to_claude(&home, source, &name, plugin_name, &new_sha);
+                            }
+
+                            // Update Codex install
+                            if targets.contains(&"codex".to_string()) {
+                                let _ = install_to_codex(&home, source, &name, plugin_name, &new_sha);
+                            }
+
+                            // Update OpenCode install
+                            if targets.contains(&"opencode".to_string()) {
+                                let _ = install_to_opencode(&home, source, plugin_name);
+                            }
+
+                            tracing::info!("Updated plugin {} from {} to {}", key, old_sha, new_sha);
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -2114,12 +2256,66 @@ pub(crate) fn do_install_marketplace_plugin(
         })
         .unwrap_or_else(|| "unknown".to_string());
 
+    let targets = detect_agent_targets(&source);
+    let mut errors = Vec::new();
+
+    // Install to Claude Code
+    if targets.contains(&"claude_code".to_string()) {
+        if let Err(e) = install_to_claude(
+            &home, &source, &marketplace_name, &plugin_name, &git_sha,
+        ) {
+            errors.push(format!("claude_code: {}", e));
+        }
+    }
+
+    // Install to Codex
+    if targets.contains(&"codex".to_string()) {
+        if let Err(e) = install_to_codex(
+            &home, &source, &marketplace_name, &plugin_name, &git_sha,
+        ) {
+            errors.push(format!("codex: {}", e));
+        }
+    }
+
+    // Install to OpenCode
+    if targets.contains(&"opencode".to_string()) {
+        if let Err(e) = install_to_opencode(
+            &home, &source, &plugin_name,
+        ) {
+            errors.push(format!("opencode: {}", e));
+        }
+    }
+
+    if !errors.is_empty() {
+        return Err(AppError::Internal(format!(
+            "Install partially failed: {}",
+            errors.join("; ")
+        )));
+    }
+
+    Ok(())
+}
+
+fn install_to_claude(
+    home: &std::path::Path,
+    source: &std::path::Path,
+    marketplace_name: &str,
+    plugin_name: &str,
+    git_sha: &str,
+) -> Result<(), AppError> {
+    let claude_dir = home.join(".claude");
     let install_path =
         claude_dir.join(format!("plugins/cache/{}/{}/{}", marketplace_name, plugin_name, git_sha));
+
+    // Remove old install if exists
+    if install_path.exists() {
+        let _ = std::fs::remove_dir_all(&install_path);
+    }
     std::fs::create_dir_all(&install_path)
         .map_err(|e| AppError::Internal(format!("Failed to create dir: {}", e)))?;
-    copy_dir_recursive(&source, &install_path)?;
+    copy_dir_recursive(source, &install_path)?;
 
+    // Update registry
     let registry_path = claude_dir.join("plugins/installed_plugins.json");
     let mut registry: serde_json::Value = read_json(&registry_path)?;
     let key = format!("{}@{}", plugin_name, marketplace_name);
@@ -2146,6 +2342,7 @@ pub(crate) fn do_install_marketplace_plugin(
     std::fs::write(&registry_path, output)
         .map_err(|e| AppError::Internal(format!("Write: {}", e)))?;
 
+    // Enable in settings.json
     let settings_path = claude_dir.join("settings.json");
     if let Ok(mut settings) = read_json(&settings_path) {
         if let Some(enabled) = settings.get_mut("enabledPlugins").and_then(|v| v.as_object_mut()) {
@@ -2155,6 +2352,68 @@ pub(crate) fn do_install_marketplace_plugin(
             let _ = std::fs::write(&settings_path, output);
         }
     }
+
+    Ok(())
+}
+
+fn install_to_codex(
+    home: &std::path::Path,
+    source: &std::path::Path,
+    marketplace_name: &str,
+    plugin_name: &str,
+    git_sha: &str,
+) -> Result<(), AppError> {
+    let codex_dir = home.join(".codex");
+    let install_path =
+        codex_dir.join(format!("plugins/cache/{}/{}/{}", marketplace_name, plugin_name, git_sha));
+
+    // Remove old install if exists
+    if install_path.exists() {
+        let _ = std::fs::remove_dir_all(&install_path);
+    }
+    std::fs::create_dir_all(&install_path)
+        .map_err(|e| AppError::Internal(format!("Failed to create dir: {}", e)))?;
+    copy_dir_recursive(source, &install_path)?;
+
+    // Register in config.toml: [plugins."plugin@marketplace"] enabled = true
+    let config_path = codex_dir.join("config.toml");
+    if config_path.exists() {
+        let content = std::fs::read_to_string(&config_path)
+            .map_err(|e| AppError::Internal(format!("Read config.toml: {}", e)))?;
+        let key = format!("{}@{}", plugin_name, marketplace_name);
+        let plugin_header = format!("[plugins.\"{}\"]", key);
+
+        if !content.contains(&plugin_header) {
+            let mut updated = content;
+            if !updated.ends_with('\n') {
+                updated.push('\n');
+            }
+            updated.push_str(&format!("{}\nenabled = true\n", plugin_header));
+            std::fs::write(&config_path, updated)
+                .map_err(|e| AppError::Internal(format!("Write config.toml: {}", e)))?;
+        }
+    }
+
+    Ok(())
+}
+
+fn install_to_opencode(
+    home: &std::path::Path,
+    source: &std::path::Path,
+    plugin_name: &str,
+) -> Result<(), AppError> {
+    let opencode_skills_dir = dirs::data_local_dir()
+        .unwrap_or_else(|| home.join(".local/share"))
+        .join("opencode/skills");
+    let install_path = opencode_skills_dir.join(plugin_name);
+
+    // Remove old install if exists
+    if install_path.exists() {
+        let _ = std::fs::remove_dir_all(&install_path);
+    }
+    std::fs::create_dir_all(&install_path)
+        .map_err(|e| AppError::Internal(format!("Failed to create dir: {}", e)))?;
+    copy_dir_recursive(source, &install_path)?;
 
     Ok(())
 }

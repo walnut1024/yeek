@@ -366,6 +366,7 @@ export interface MarketplacePlugin {
   agent_count: number;
   has_hooks: boolean;
   installed: boolean;
+  agent_targets: string[];
 }
 
 export async function listMarketplacePlugins(marketplaceName: string): Promise<MarketplacePlugin[]> {

@@ -47,16 +47,11 @@ const HEALTH_COLORS: Record<string, { dot: string; text: string; bg: string; bor
 
 const HEALTH_LABELS: Record<string, string> = { ok: "OK", partial: "PARTIAL", hook: "HOOK", broken: "BROKEN" };
 
-const AGENTS = [
-  { key: "claude-code", label: "Claude Code" },
-  { key: "codex", label: "Codex" },
-] as const;
-
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-export default function MarketplacePage({ agent }: { agent: string }) {
+export default function MarketplacePage() {
   const [addOpen, setAddOpen] = useState(false);
   const [addName, setAddName] = useState("");
   const [addRepo, setAddRepo] = useState("");
@@ -74,20 +69,16 @@ export default function MarketplacePage({ agent }: { agent: string }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
 
-  const isClaudeCode = agent === "claude-code";
-
   // Fetch marketplaces
   const { data: mktData, isLoading: mktLoading } = useQuery({
     queryKey: ["marketplaces"],
     queryFn: listMarketplaces,
-    enabled: isClaudeCode,
   });
 
   // Fetch installed plugins for cross-reference
   const { data: pluginsData } = useQuery({
     queryKey: ["plugins", "global"],
     queryFn: () => listPlugins("global"),
-    enabled: isClaudeCode,
   });
 
   // Build lookup: pluginName@marketplaceName -> PluginInfo
@@ -178,14 +169,7 @@ export default function MarketplacePage({ agent }: { agent: string }) {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Content */}
-      {!isClaudeCode ? (
-        <div className="flex h-72 items-center justify-center px-6">
-          <div className="max-w-sm text-center">
-            <p className="text-[18px] font-medium text-foreground">{AGENTS.find(a => a.key === agent)?.label}</p>
-            <p className="mt-2 text-[14px] leading-[1.5] text-muted-foreground">{t("marketplace.pluginSupportSoon")}</p>
-          </div>
-        </div>
-      ) : mktLoading ? (
+      {mktLoading ? (
         <div className="space-y-1 p-2">
           {Array.from({ length: 4 }).map((_, i) => (<Skeleton key={i} className="h-16 w-full rounded-md" />))}
         </div>
@@ -377,6 +361,25 @@ function HealthBadge({ health }: { health: string }) {
   );
 }
 
+const AGENT_TARGET_LABELS: Record<string, string> = {
+  claude_code: "Claude",
+  codex: "Codex",
+  opencode: "OpenCode",
+};
+
+function AgentTargetsBadge({ targets }: { targets: string[] }) {
+  if (!targets.length) return null;
+  return (
+    <span className="flex shrink-0 items-center gap-0.5">
+      {targets.map((t) => (
+        <span key={t} className="rounded-sm bg-secondary px-1 py-0.5 text-[10px] font-medium text-muted-foreground">
+          {AGENT_TARGET_LABELS[t] ?? t}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function SkillRow({ skill }: { skill: SkillInfo }) {
   return (
     <div className="flex items-start gap-2 border-b border-border px-2.5 py-1.5 transition-colors hover:bg-element-hover">
@@ -515,6 +518,7 @@ function MarketplaceCard({
                 return (
                   <div key={mp.name} className="flex flex-wrap items-center gap-1.5 rounded-md border border-border px-2 py-1.5 text-[12px]">
                     <span className="truncate text-foreground">{mp.name}</span>
+                    <AgentTargetsBadge targets={mp.agent_targets} />
                     <span className="min-w-0 flex-1 truncate text-muted-foreground">{mp.description}</span>
                     <Button variant="outline" size="sm" className="h-5 shrink-0 rounded-md px-1.5 text-[10px]" disabled={installMut.isPending} onClick={() => installMut.mutate(mp.name)}>
                       {installMut.isPending ? t("marketplace.installing") : t("marketplace.install")}
