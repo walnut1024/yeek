@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { truncate } from "../../pages/sessions/graph/build-tree";
+import { truncate } from "../../pages/sessions/session-relationship-graph/build-session-tree";
 
 describe("constants", () => {
   it("GRAPH_MAX_NODES is 300", async () => {

@@ -308,24 +308,6 @@
     line-height: 1.4;
   }
 
-  /* Graph node styles */
-  .graph-node {
-    @apply rounded-md border bg-card text-foreground;
-    width: 200px;
-  }
-  .graph-node-tag {
-    @apply text-[10px] font-semibold uppercase tracking-[0.06em];
-  }
-  .graph-node-label {
-    @apply text-[12px] leading-[1.35] text-foreground;
-  }
-  .graph-node-detail {
-    @apply font-mono text-[10px] text-muted-foreground;
-  }
-  .graph-node-hint {
-    @apply font-mono text-[10px] text-muted-foreground;
-  }
-
   /* Custom scrollbar */
   .custom-scrollbar::-webkit-scrollbar {
     width: 5px;

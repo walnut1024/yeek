@@ -248,7 +248,6 @@
   "format.notAvailable": "N/A",
   "format.unknown": "unknown",
 
-  "graph.viewGraph": "Graph",
   "graph.viewFeed": "Feed",
   "graph.fullscreen": "Fullscreen",
   "graph.exitFullscreen": "Exit Fullscreen",
@@ -283,6 +282,14 @@
   "graph.colUser": "User",
   "graph.colAssistant": "Assistant",
   "graph.colTool": "Tool",
+  "graph.viewMap": "Map",
+  "graph.relationshipsTitle": "Session Map",
+  "graph.relationshipsDescription": "Related sessions from the same project and recent activity.",
+  "graph.statsSameProject": "{{count}} same project",
+  "graph.statsRecent": "{{count}} recent",
+  "graph.mapDescription": "Conversation hierarchy with tool calls and sub-agents.",
+  "graph.statsSubagents": "{{count}} sub-agents",
+  "graph.loading": "Loading map…",
 
   "contextMenu.delete": "Delete",
   "contextMenu.deleteProject": "Delete All in Project",

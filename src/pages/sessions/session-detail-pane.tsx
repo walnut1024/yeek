@@ -6,13 +6,13 @@ import { useLocalStorage } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Copy, CircleCheck, Play, FolderTree, Rows3, GitBranch } from "lucide-react";
+import { Copy, CircleCheck, Play, FolderTree, Rows3, GitBranch, Network } from "lucide-react";
 import { formatTime, formatRelativeTime } from "@/lib/formatters";
 import { getSessionTranscript } from "@/lib/api";
 import SourcesTab from "./sources-tab";
 
 const TranscriptView = lazy(() => import("./transcript-view"));
-const SessionGraph = lazy(() => import("./session-graph"));
+const SessionRelationshipGraph = lazy(() => import("./session-relationship-graph/session-relationship-graph"));
 
 export default function SessionDetailPane({
   sessionId,
@@ -20,7 +20,7 @@ export default function SessionDetailPane({
   sessionId: string;
 }) {
   const { t } = useTranslation();
-  const [viewMode, setViewMode] = useLocalStorage<"feed" | "graph">(
+  const [viewMode, setViewMode] = useLocalStorage<"feed" | "map">(
     "graph-view",
     "feed",
   );
@@ -55,7 +55,7 @@ export default function SessionDetailPane({
 
   return (
     <>
-      {fullscreen && viewMode === "graph" ? (
+      {fullscreen && viewMode === "map" ? (
         <div className="fixed inset-0 z-50 flex flex-col bg-card">
           <div className="flex items-center gap-2 border-b border-border px-3 py-1.5">
             <p className="text-[14px] font-medium text-foreground">{sessionTitle}</p>
@@ -63,7 +63,7 @@ export default function SessionDetailPane({
           </div>
           <div className="flex-1 min-h-0">
             <Suspense fallback={<DetailContentFallback graph />}>
-              <SessionGraph sessionId={sessionId} fullscreen={fullscreen} onFullscreen={setFullscreen} />
+              <SessionRelationshipGraph sessionId={sessionId} fullscreen={fullscreen} onFullscreen={setFullscreen} />
             </Suspense>
           </div>
         </div>
@@ -163,10 +163,11 @@ export default function SessionDetailPane({
                       type="button"
                       variant="secondary"
                       size="sm"
-                      className={`segmented-control-item ${viewMode === "graph" ? "segmented-control-item-active" : ""}`}
-                      onClick={() => setViewMode("graph")}
+                      className={`segmented-control-item ${viewMode === "map" ? "segmented-control-item-active" : ""}`}
+                      onClick={() => setViewMode("map")}
                     >
-                      {t("graph.viewGraph")}
+                      <Network size={12} />
+                      {t("graph.viewMap")}
                     </Button>
                   </div>
                 </div>
@@ -177,10 +178,10 @@ export default function SessionDetailPane({
 
           <section data-ai-region="sessions-transcript" className="surface-card">
             {/* Conditional content */}
-            <div className={viewMode === "graph" ? "h-[70vh]" : ""}>
-              <Suspense fallback={<DetailContentFallback graph={viewMode === "graph"} />}>
-                {viewMode === "graph" ? (
-                  <SessionGraph sessionId={sessionId} fullscreen={fullscreen} onFullscreen={setFullscreen} />
+            <div className={viewMode === "map" ? "h-[70vh]" : ""}>
+              <Suspense fallback={<DetailContentFallback graph={viewMode === "map"} />}>
+                {viewMode === "map" ? (
+                  <SessionRelationshipGraph sessionId={sessionId} fullscreen={fullscreen} onFullscreen={setFullscreen} />
                 ) : (
                   <TranscriptView sessionId={sessionId} />
                 )}

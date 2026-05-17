@@ -4,19 +4,20 @@ import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { X, Clock3, Boxes } from "lucide-react";
 
 interface NodeDetailPanelProps {
   nodeId: string;
   messages: MessageRecord[];
   onClose: () => void;
+  className?: string;
 }
 
 export default function NodeDetailPanel({
   nodeId,
   messages,
   onClose,
+  className = "",
 }: NodeDetailPanelProps) {
   const { t } = useTranslation();
   const msg = messages.find((m) => m.id === nodeId);
@@ -41,11 +42,11 @@ export default function NodeDetailPanel({
   const toolTone = getToolTone(msg.tool_name ?? undefined);
 
   return (
-    <aside className="absolute inset-y-0 right-0 z-10 flex w-[330px] max-w-[90vw] flex-col border-l border-border bg-card backdrop-blur-sm">
-      <div className="flex items-start justify-between gap-2 border-b border-border px-3 py-3">
-        <div className="min-w-0">
+    <aside className={`min-h-0 rounded-lg border border-border bg-card ${className}`}>
+      <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2">
           <p className="zed-kicker">{t("graph.panelTitle")}</p>
-          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             <Badge variant="outline" className={`px-1.5 py-0.5 text-[10px] ${tone}`}>
               {roleLabel}
             </Badge>
@@ -69,47 +70,50 @@ export default function NodeDetailPanel({
         </Button>
       </div>
 
-      <ScrollArea className="min-h-0 flex-1">
-        <div className="space-y-3 p-3">
-          <section className="rounded-xl border border-border bg-secondary p-2.5">
+      <div className="space-y-2 p-2">
+        <section className="rounded-md border border-border bg-secondary/80 px-2 py-1.5">
+          <div className="flex items-center justify-between gap-2">
             <p className="zed-kicker">{t("graph.messageMeta")}</p>
-            <div className="mt-1.5 space-y-1.5 text-[12px] text-muted-foreground">
-              <MetaRow label={t("graph.messageId")} value={msg.id} mono />
-              {msg.model && <MetaRow label={t("graph.model")} value={msg.model} mono />}
-              {msg.timestamp && (
-                <MetaRow
-                  label={t("graph.timestamp")}
-                  value={new Date(msg.timestamp).toLocaleString()}
-                  icon={<Clock3 size={13} />}
-                />
-              )}
-              {msg.parent_id && <MetaRow label={t("graph.parentId")} value={msg.parent_id} mono />}
+            <span className="rounded border border-border bg-card px-1.5 py-0.5 font-mono text-[10px] leading-none text-muted-foreground">
+              {msg.role}
+            </span>
+          </div>
+          <dl className="mt-1 divide-y divide-border/70 text-[11px]">
+            <CompactMetaRow label={t("graph.messageId")} value={msg.id} mono />
+            {msg.model && <CompactMetaRow label={t("graph.model")} value={msg.model} mono />}
+            {msg.timestamp && (
+              <CompactMetaRow
+                label={t("graph.timestamp")}
+                value={new Date(msg.timestamp).toLocaleString()}
+                icon={<Clock3 size={13} />}
+              />
+            )}
+            {msg.parent_id && <CompactMetaRow label={t("graph.parentId")} value={msg.parent_id} mono />}
+          </dl>
+        </section>
+
+        <section className="rounded-md border border-border bg-card p-2">
+          <p className="zed-kicker">{t("graph.previewTitle")}</p>
+          <p className="mt-1.5 whitespace-pre-wrap break-words text-[12px] leading-[1.5] text-foreground">
+            {msg.content_preview || t("graph.nodeEmpty")}
+          </p>
+        </section>
+
+        {msg.tool_name && (
+          <section className="rounded-md border border-border bg-secondary p-2">
+            <div className="flex items-center gap-2">
+              <Boxes size={14} className="text-muted-foreground" />
+              <p className="zed-kicker">{t("graph.toolMetadata")}</p>
+            </div>
+            <Separator className="my-2.5" />
+            <div className="space-y-1.5 text-[12px] text-muted-foreground">
+              <MetaRow label={t("graph.toolName")} value={msg.tool_name} mono accentClass={toolTone.text} />
+              {msg.kind && <MetaRow label={t("graph.kind")} value={msg.kind} mono />}
+              {msg.entry_type && <MetaRow label={t("graph.entryType")} value={msg.entry_type} mono />}
             </div>
           </section>
-
-          <section className="rounded-xl border border-border bg-card p-2.5">
-            <p className="zed-kicker">{t("graph.previewTitle")}</p>
-            <p className="mt-1.5 whitespace-pre-wrap break-words text-[12px] leading-[1.55] text-foreground">
-              {msg.content_preview || t("graph.nodeEmpty")}
-            </p>
-          </section>
-
-          {msg.tool_name && (
-            <section className="rounded-xl border border-border bg-secondary p-2.5">
-              <div className="flex items-center gap-2">
-                <Boxes size={14} className="text-muted-foreground" />
-                <p className="zed-kicker">{t("graph.toolMetadata")}</p>
-              </div>
-              <Separator className="my-2.5" />
-              <div className="space-y-1.5 text-[12px] text-muted-foreground">
-                <MetaRow label={t("graph.toolName")} value={msg.tool_name} mono accentClass={toolTone.text} />
-                {msg.kind && <MetaRow label={t("graph.kind")} value={msg.kind} mono />}
-                {msg.entry_type && <MetaRow label={t("graph.entryType")} value={msg.entry_type} mono />}
-              </div>
-            </section>
-          )}
-        </div>
-      </ScrollArea>
+        )}
+      </div>
     </aside>
   );
 }
@@ -138,6 +142,33 @@ function MetaRow({
       >
         {value}
       </p>
+    </div>
+  );
+}
+
+function CompactMetaRow({
+  label,
+  value,
+  mono,
+  icon,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  icon?: ReactNode;
+}) {
+  return (
+    <div className="grid grid-cols-[76px_minmax(0,1fr)] items-start gap-2 py-1 first:pt-0 last:pb-0">
+      <dt className="flex min-w-0 items-center gap-1 text-[10px] font-medium uppercase tracking-normal text-muted-foreground">
+        {icon}
+        <span className="truncate">{label}</span>
+      </dt>
+      <dd
+        title={value}
+        className={`min-w-0 truncate text-right leading-[1.35] text-foreground ${mono ? "font-mono" : ""}`}
+      >
+        {value}
+      </dd>
     </div>
   );
 }
