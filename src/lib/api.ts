@@ -285,6 +285,7 @@ export interface PluginInfo {
   health_issues: string[];
   skills: SkillInfo[];
   agents: SkillInfo[];
+  agent: string;
   installed_at?: string;
   last_updated?: string;
 }
