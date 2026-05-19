@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { getEventTransport } from "@/lib/events";
-import { Trash2, RefreshCcw, SquarePlus, ChevronRight } from "lucide-react";
+import { Trash2, RefreshCcw, SquarePlus, ChevronRight, CircleCheck, CircleAlert, CircleDot, AlertTriangle } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import {
   listMarketplaces,
@@ -15,7 +15,6 @@ import {
   togglePlugin,
   uninstallPlugin,
   cleanPlugin,
-  reinstallPlugin,
   type MarketplaceEntry,
   type MarketplacePlugin,
   type PluginInfo,
@@ -38,20 +37,19 @@ import {
 } from "@/components/ui/alert-dialog";
 
 // Health color mapping
-const HEALTH_COLORS: Record<string, { dot: string; text: string; bg: string; border: string }> = {
-  ok: { dot: "bg-chart-2", text: "text-chart-2", bg: "bg-chart-2/15", border: "border-chart-2/30" },
-  partial: { dot: "bg-chart-3", text: "text-chart-3", bg: "bg-chart-3/15", border: "border-chart-3/30" },
-  hook: { dot: "bg-chart-5", text: "text-chart-5", bg: "bg-chart-5/15", border: "border-chart-5/30" },
-  broken: { dot: "bg-destructive", text: "text-destructive", bg: "bg-destructive/15", border: "border-destructive/30" },
+const HEALTH_ICONS: Record<string, { Icon: typeof CircleCheck; className: string }> = {
+  ok: { Icon: CircleCheck, className: "text-chart-2" },
+  partial: { Icon: CircleAlert, className: "text-chart-3" },
+  hook: { Icon: CircleDot, className: "text-chart-5" },
+  broken: { Icon: AlertTriangle, className: "text-destructive" },
 };
 
-const HEALTH_LABELS: Record<string, string> = { ok: "OK", partial: "PARTIAL", hook: "HOOK", broken: "BROKEN" };
-
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+function HealthBadge({ health }: { health: string }) {
+  const { Icon, className } = HEALTH_ICONS[health] ?? HEALTH_ICONS.hook;
+  return <Icon size={14} className={`shrink-0 ${className}`} />;
 }
 
-export default function MarketplacePage() {
+export default function MarketplacePage({ agentFilter }: { agentFilter: string }) {
   const [addOpen, setAddOpen] = useState(false);
   const [addName, setAddName] = useState("");
   const [addRepo, setAddRepo] = useState("");
@@ -63,8 +61,6 @@ export default function MarketplacePage() {
   // Plugin management state
   const [uninstallTarget, setUninstallTarget] = useState<PluginInfo | null>(null);
   const [cleanTarget, setCleanTarget] = useState<PluginInfo | null>(null);
-  const [reinstallTarget, setReinstallTarget] = useState<PluginInfo | null>(null);
-  const [reinstallError, setReinstallError] = useState<string | null>(null);
 
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -81,25 +77,36 @@ export default function MarketplacePage() {
     queryFn: () => listPlugins("global"),
   });
 
+  // Map tab value to plugin.agent field
+  const agentMatch = useMemo(() => {
+    const map: Record<string, string> = { "claude-code": "claude_code", codex: "codex", opencode: "opencode" };
+    return map[agentFilter] ?? agentFilter;
+  }, [agentFilter]);
+
+  const filteredPlugins = useMemo(
+    () => (pluginsData?.plugins ?? []).filter((p) => p.agent === agentMatch),
+    [pluginsData, agentMatch],
+  );
+
   // Build lookup: pluginName@marketplaceName -> PluginInfo
   const pluginByKey = useMemo(() => {
     const map = new Map<string, PluginInfo>();
-    for (const p of pluginsData?.plugins ?? []) {
+    for (const p of filteredPlugins) {
       map.set(p.key, p);
     }
     return map;
-  }, [pluginsData]);
+  }, [filteredPlugins]);
 
   // Count installed plugins per marketplace
   const installedPerMarketplace = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const p of pluginsData?.plugins ?? []) {
+    for (const p of filteredPlugins) {
       if (p.marketplace?.name) {
         counts.set(p.marketplace.name, (counts.get(p.marketplace.name) ?? 0) + 1);
       }
     }
     return counts;
-  }, [pluginsData]);
+  }, [filteredPlugins]);
 
   // SSE listener
   useEffect(() => {
@@ -137,17 +144,6 @@ export default function MarketplacePage() {
       queryClient.invalidateQueries({ queryKey: ["marketplace-plugins"] });
       setCleanTarget(null);
     },
-  });
-
-  const reinstallMut = useMutation({
-    mutationFn: (key: string) => reinstallPlugin(key),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["plugins"] });
-      queryClient.invalidateQueries({ queryKey: ["marketplace-plugins"] });
-      setReinstallTarget(null);
-      setReinstallError(null);
-    },
-    onError: (err: unknown) => setReinstallError(errorMessage(err)),
   });
 
   const handleUpdateOne = useCallback(async (name: string) => {
@@ -208,11 +204,11 @@ export default function MarketplacePage() {
                       onToggleExpand={() => setExpandedName(expandedName === m.name ? null : m.name)}
                       onUpdate={() => handleUpdateOne(m.name)}
                       onRemove={() => { setRemovePlugins(false); setRemoveTarget(m); }}
+                      agentFilter={agentMatch}
                       pluginByKey={pluginByKey}
                       onToggle={toggleMut.mutate}
                       onUninstall={setUninstallTarget}
                       onClean={setCleanTarget}
-                      onReinstall={(p) => { setReinstallTarget(p); setReinstallError(null); }}
                     />
                   ))
                 )}
@@ -320,29 +316,6 @@ export default function MarketplacePage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Reinstall dialog */}
-      <AlertDialog open={!!reinstallTarget}
-        onOpenChange={(open) => { if (!open) { setReinstallTarget(null); setReinstallError(null); } }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("skills.reinstallTitle", { name: reinstallTarget?.name })}</AlertDialogTitle>
-            <AlertDialogDescription>{t("skills.reinstallDesc")}</AlertDialogDescription>
-          </AlertDialogHeader>
-          {reinstallError && (
-            <div className="rounded-sm border border-destructive/30 bg-destructive/10 p-2 text-[12px] text-destructive">
-              {t("skills.reinstallError", { error: reinstallError })}
-            </div>
-          )}
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t("detail.deleteCancel")}</AlertDialogCancel>
-            <AlertDialogAction disabled={reinstallMut.isPending}
-              onClick={() => reinstallTarget && reinstallMut.mutate(reinstallTarget.key)}
-              className="border-chart-3/30 bg-chart-3/10 text-chart-3 hover:bg-chart-3/20">
-              {reinstallMut.isPending ? "..." : t("skills.reinstall")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
@@ -351,21 +324,35 @@ export default function MarketplacePage() {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function HealthBadge({ health }: { health: string }) {
-  const hc = HEALTH_COLORS[health] ?? HEALTH_COLORS.hook;
-  return (
-    <span className={`flex shrink-0 items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.05em] ${hc.text} ${hc.bg} ${hc.border}`}>
-      <span className={`size-1 rounded-full ${hc.dot}`} />
-      {HEALTH_LABELS[health] ?? health.toUpperCase()}
-    </span>
-  );
-}
-
 const AGENT_TARGET_LABELS: Record<string, string> = {
   claude_code: "Claude",
   codex: "Codex",
   opencode: "OpenCode",
 };
+
+const MARKETPLACE_STATUS_CLASSES: Record<string, string> = {
+  current: "border-chart-2/30 bg-chart-2/10 text-chart-2",
+  update_available: "border-chart-3/30 bg-chart-3/10 text-chart-3",
+  stale: "border-chart-5/30 bg-chart-5/10 text-chart-5",
+  check_failed: "border-destructive/30 bg-destructive/10 text-destructive",
+  clone_failed: "border-destructive/30 bg-destructive/10 text-destructive",
+  clone_missing: "border-chart-5/30 bg-chart-5/10 text-chart-5",
+  fetch_failed: "border-destructive/30 bg-destructive/10 text-destructive",
+  never_checked: "border-border bg-secondary text-muted-foreground",
+  unknown: "border-border bg-secondary text-muted-foreground",
+};
+
+function MarketplaceStatusBadge({ marketplace }: { marketplace: MarketplaceEntry }) {
+  const status = marketplace.sync_status || "unknown";
+  const className = MARKETPLACE_STATUS_CLASSES[status] ?? MARKETPLACE_STATUS_CLASSES.unknown;
+  const showUpdateCount = status === "update_available" && marketplace.updates_available > 0;
+  return (
+    <span className={`rounded-sm border px-1.5 py-0.5 text-[10px] font-medium ${className}`} title={marketplace.check_error}>
+      {status.replaceAll("_", " ")}
+      {showUpdateCount ? ` · ${marketplace.updates_available}` : ""}
+    </span>
+  );
+}
 
 function AgentTargetsBadge({ targets }: { targets: string[] }) {
   if (!targets.length) return null;
@@ -410,11 +397,11 @@ function MarketplaceCard({
   onToggleExpand,
   onUpdate,
   onRemove,
+  agentFilter,
   pluginByKey,
   onToggle,
   onUninstall,
   onClean,
-  onReinstall,
 }: {
   marketplace: MarketplaceEntry;
   installedCount: number;
@@ -423,11 +410,11 @@ function MarketplaceCard({
   onToggleExpand: () => void;
   onUpdate: () => void;
   onRemove: () => void;
+  agentFilter: string;
   pluginByKey: Map<string, PluginInfo>;
   onToggle: (key: string) => void;
   onUninstall: (p: PluginInfo) => void;
   onClean: (p: PluginInfo) => void;
-  onReinstall: (p: PluginInfo) => void;
 }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -448,11 +435,13 @@ function MarketplaceCard({
 
   const resolved = useMemo(() => {
     if (!plugins) return [];
-    return plugins.map((mp): { mp: MarketplacePlugin; info: PluginInfo | null } => {
-      const key = `${mp.name}@${marketplace.name}`;
-      return { mp, info: pluginByKey.get(key) ?? null };
-    });
-  }, [plugins, marketplace.name, pluginByKey]);
+    return plugins
+      .filter((mp) => mp.agent_targets.includes(agentFilter))
+      .map((mp): { mp: MarketplacePlugin; info: PluginInfo | null } => {
+        const key = `${mp.name}@${marketplace.name}`;
+        return { mp, info: pluginByKey.get(key) ?? null };
+      });
+  }, [plugins, marketplace.name, pluginByKey, agentFilter]);
 
   const sorted = useMemo(() =>
     [...resolved].sort((a, b) => {
@@ -466,8 +455,10 @@ function MarketplaceCard({
     <article className={`toml-card ${expanded ? "is-active" : ""}`}>
       <div className="toml-card-head cursor-pointer" onClick={onToggleExpand}>
         <div className="flex min-w-0 items-center gap-2">
+          <MarketplaceStatusBadge marketplace={marketplace} />
           <span className="toml-card-title">{marketplace.name}</span>
           <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-muted-foreground">{marketplace.repo}</span>
+          {marketplace.remote_head && <span className="shrink-0 font-mono text-[10px] text-muted-foreground">remote {marketplace.remote_head}</span>}
           {marketplace.last_updated && <span className="shrink-0 text-[10px] text-muted-foreground">{marketplace.last_updated.split("T")[0]}</span>}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
@@ -511,18 +502,20 @@ function MarketplaceCard({
                       onToggle={() => onToggle(info.key)}
                       onUninstall={() => onUninstall(info)}
                       onClean={() => onClean(info)}
-                      onReinstall={() => onReinstall(info)}
                     />
                   );
                 }
                 return (
-                  <div key={mp.name} className="flex flex-wrap items-center gap-1.5 rounded-md border border-border px-2 py-1.5 text-[12px]">
-                    <span className="truncate text-foreground">{mp.name}</span>
-                    <AgentTargetsBadge targets={mp.agent_targets} />
-                    <span className="min-w-0 flex-1 truncate text-muted-foreground">{mp.description}</span>
-                    <Button variant="outline" size="sm" className="h-5 shrink-0 rounded-md px-1.5 text-[10px]" disabled={installMut.isPending} onClick={() => installMut.mutate(mp.name)}>
-                      {installMut.isPending ? t("marketplace.installing") : t("marketplace.install")}
-                    </Button>
+                  <div key={mp.name} className="rounded-md border border-border px-2 py-1.5 text-[12px]">
+                    <div className="flex items-center gap-1.5">
+                      <span className="shrink-0 font-semibold text-foreground">{mp.name}</span>
+                      <AgentTargetsBadge targets={mp.agent_targets} />
+                      <span className="min-w-0 flex-1" />
+                      <Button variant="outline" size="sm" className="h-5 shrink-0 rounded-md px-1.5 text-[10px]" disabled={installMut.isPending} onClick={() => installMut.mutate(mp.name)}>
+                        {installMut.isPending ? t("marketplace.installing") : t("marketplace.install")}
+                      </Button>
+                    </div>
+                    <p className="mt-1 text-muted-foreground leading-snug">{mp.description}</p>
                   </div>
                 );
               })}
@@ -538,14 +531,13 @@ function MarketplaceCard({
 }
 
 /** Plugin sub-card inside marketplace card body */
-function PluginSubCard({ plugin, onToggle, onUninstall, onClean, onReinstall }: {
+function PluginSubCard({ plugin, onToggle, onUninstall, onClean }: {
   plugin: PluginInfo;
   onToggle: () => void;
   onUninstall: () => void;
   onClean: () => void;
-  onReinstall: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const { t } = useTranslation();
   const isEnabled = plugin.enabled;
   const isBroken = plugin.health === "broken";
@@ -563,18 +555,24 @@ function PluginSubCard({ plugin, onToggle, onUninstall, onClean, onReinstall }: 
         >
           <ChevronRight size={14} className={`transition-transform ${expanded ? "rotate-90" : ""}`} />
         </Button>
+        <HealthBadge health={plugin.health} />
         <span className={`truncate text-[12px] font-medium text-foreground ${!isEnabled ? "opacity-50" : ""}`}>{plugin.name}</span>
         <span className="font-mono text-[10px] text-muted-foreground">v{plugin.version}</span>
         <span className="min-w-0 flex-1" />
-        <HealthBadge health={plugin.health} />
         <div onClick={(e) => e.stopPropagation()}>
           <Switch size="sm" checked={isEnabled} onCheckedChange={onToggle} />
         </div>
         {isBroken ? (
-          <>
-            <Button variant="outline" size="sm" className="h-5 rounded-md px-1.5 text-[10px] text-muted-foreground hover:border-destructive hover:text-destructive hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); onClean(); }}>{t("skills.clean")}</Button>
-            <Button variant="outline" size="sm" className="h-5 rounded-md px-1.5 text-[10px] text-muted-foreground hover:border-chart-3 hover:text-chart-3 hover:bg-chart-3/10" onClick={(e) => { e.stopPropagation(); onReinstall(); }}>{t("skills.reinstall")}</Button>
-          </>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+            onClick={(e) => { e.stopPropagation(); onClean(); }}
+            aria-label={t("skills.clean")}
+          >
+            <Trash2 size={16} />
+          </Button>
         ) : (
           <Button
             type="button"

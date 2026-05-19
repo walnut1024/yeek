@@ -2,16 +2,16 @@
 
 # Yeek
 
-### Agent Session Manager
+### Local mission control for AI coding agents
 
-Browse, search, and review your AI coding sessions.
-Keep every conversation at your fingertips.
+Your agents already did the work. Yeek makes the work observable.
 
-Built with a local LLM proxy and plugin marketplace on the side.
+Turn Claude Code, Codex, and OpenCode runs into a searchable command center: inspect every session, map agent activity, resume the right thread, clean up safely, route models through one gateway, and manage plugins from one desktop app.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Tauri](https://img.shields.io/badge/Tauri-v2-FFC131?logo=tauri)](https://v2.tauri.app)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev)
+[![Rust](https://img.shields.io/badge/Rust-native%20core-orange?logo=rust)](https://www.rust-lang.org)
 
 [Download for macOS](https://github.com/walnut1024/yeek/releases/latest)
 
@@ -19,60 +19,184 @@ Built with a local LLM proxy and plugin marketplace on the side.
 
 ---
 
-## What is Yeek?
+## Why Yeek Exists
 
-Yeek is an **agent management tool** — a local-first desktop app that turns the raw session logs your coding agents write to disk into something you can browse, search, and revisit.
+AI coding agents move fast. They spawn subagents, call tools, edit files, branch conversations, stream partial reasoning, and leave a trail of JSONL and SQLite data across your machine.
 
-Every conversation, every subagent call, every tool execution and file edit becomes a structured, inspectable record. You can finally see what your agents have been doing.
+That trail is valuable, but it is hard to use.
 
-Beyond session management, Yeek also ships:
+Yeek turns that raw exhaust into an operating surface:
 
-- A **local LLM proxy** — route any coding tool through a single endpoint to DeepSeek, Anthropic, OpenAI, Zhipu, and Ollama
-- A **plugin marketplace** — discover, install, and manage plugins and skills
+- **Find the session that matters** across projects, models, tools, and agents.
+- **Understand the run** with transcripts, branches, subagent calls, tool records, and a chronological Map view.
+- **Resume with context** instead of hunting through terminal history.
+- **Clean up safely** with source-aware delete plans and tombstones.
+- **Route models consistently** through a local proxy with bridges, metrics, logs, and error events.
+- **Operate plugins and skills** from a marketplace-aware UI.
 
-All local. All private. Nothing leaves your machine.
-
----
-
-## Session Management
-
-This is the core. Yeek indexes session files from multiple agents into a fast, searchable SQLite database and exposes them through a clean desktop UI.
-
-- **Multi-agent support** — Claude Code, Codex (OpenAI), and OpenCode sessions in one place
-- **Project grouping** — sessions organized by project, with full transcript and message graph views
-- **Deep inspection** — drill into subagent calls, tool executions, and source file references per message
-- **Full-text search** — SQLite FTS5 across titles, messages, and model names, with highlighted results
-- **Real-time sync** — OS-native file watchers detect new, modified, and deleted sessions instantly
+Local-first. Desktop-native. Built for people who use agents all day.
 
 ---
 
-## LLM Proxy
+## What You Get
 
-A lightweight Rust sidecar that runs alongside Yeek. It solves a concrete problem: different LLM providers speak different API dialects, but coding tools expect one consistent interface.
+```text
+Agent logs scattered on disk      Yeek
+-----------------------------     --------------------------------
+JSONL files                       Searchable session database
+Subagent sidechains               Inspectable delegated work
+Tool calls hidden in transcripts  Chronological Map and metadata
+Provider config drift             Local model gateway
+Plugin sprawl                     Marketplace and health overview
+Unsafe cleanup                    Source-aware delete plans
+```
 
-- **Unified Responses API endpoint** — `POST /v1/responses`, backed by any provider
-- **Auto format translation** — Responses ↔ Chat Completions ↔ Anthropic Messages
-- **Full SSE streaming** — spec-compliant event lifecycle regardless of backend provider
-- **Live monitoring** — request rate, latency, per-provider errors, error event feed
-- **Bridge system** — remap model names (e.g. `claude-sonnet` → `deepseek-v4-pro`) so existing configs work unchanged
-- **Provider-specific fixes** — DeepSeek thinking mode, Anthropic message quirks, orphaned tool call repair
+Yeek sits beside your existing tools. It does not replace Claude Code, Codex, or OpenCode; it gives you the control layer they do not ship with.
 
 ---
 
-## Plugin Marketplace
+## The Product
 
-Extend Yeek through its built-in plugin and skills platform.
+Yeek is not another chat UI. It is the control plane around your AI coding tools.
 
-- Browse and install plugins from multiple registries
-- Enable, disable, and manage installed plugins
-- Skills overview with health status and orphan cleanup
-- Bilingual UI — English and 中文
+| Pillar | What Yeek Does |
+|--------|----------------|
+| **Session Observatory** | Indexes local agent sessions into SQLite, makes them searchable, and exposes transcript, source, subagent, and Map views. |
+| **Model Gateway** | Runs a local proxy that bridges agent-facing API formats to provider-facing endpoints, with model remapping and live telemetry. |
+| **Plugin Ops** | Lists, installs, toggles, repairs, and removes plugins, skills, and agent extensions from marketplaces. |
+| **Safe Maintenance** | Plans destructive cleanup before deleting files, blocks unsafe paths, records actions, and avoids re-importing tombstoned sources. |
+
+The result is a single pane of glass for the messy, powerful reality of modern agent-driven development.
+
+---
+
+## Built For
+
+Yeek is designed for developers who have crossed the line from "trying agents" to **operating agents**.
+
+- You run multiple coding agents across real projects.
+- You need to search old runs faster than scrolling terminal history.
+- You care which model, tool call, branch, or subagent produced a result.
+- You want local session data to stay local.
+- You need cleanup controls that understand source files instead of deleting blindly.
+- You maintain plugins, skills, and model routes as part of your development environment.
+
+If your AI coding workflow has become infrastructure, Yeek gives it a control surface.
+
+---
+
+## Session Observatory
+
+Yeek automatically discovers local sessions from:
+
+- **Claude Code** transcripts under `~/.claude/projects`
+- **Codex** sessions under `~/.codex/sessions` and `~/.codex/archived_sessions`
+- **OpenCode** local session databases
+
+Then it normalizes them into one local database and gives you a real operating surface:
+
+- **Project-oriented browsing** with agent, model, status, branch, timing, and message counts.
+- **Full-text search** over indexed session records and message previews.
+- **Transcript view** for reading the conversation as it happened.
+- **Map view** for scanning user turns, assistant responses, tool calls, and subagent activity by chronology.
+- **Subagent drill-down** for Claude Code sidechains and delegated work.
+- **Source tracking** so every session can point back to the file or database it came from.
+- **Real-time sync** through native file watchers and manual rescan controls.
+
+When your agents generate hundreds of runs, Yeek makes the history usable again.
+
+---
+
+## Safe Cleanup
+
+Agent logs pile up quickly. Yeek treats deletion as an operation, not a blind `rm`.
+
+- **Soft delete** hides sessions without touching source files.
+- **Project cleanup** can hide whole project histories.
+- **Delete plans** show every backing source before destructive cleanup.
+- **Path validation** restricts physical deletion to known agent-owned locations.
+- **Tombstones** prevent deleted sources from being re-imported on the next scan.
+- **Batch delete jobs** report progress back to the UI.
+
+This is built for local trust: you can clean the noise without losing control.
+
+---
+
+## Model Gateway
+
+Yeek includes a local proxy manager for agent tools that expect one API shape while your providers expose another.
+
+Out of the box, the proxy layer supports:
+
+- **Local lifecycle control** from the app: start, stop, restart, status.
+- **Bridge configs** that map agent-facing endpoints to provider targets.
+- **Model remapping** such as `claude-sonnet` to a provider-specific model name.
+- **Provider API format config** for Anthropic-style and compatible endpoints.
+- **Metrics** for request count, errors, active connections, RPS, and latency.
+- **Logs and error events** exposed directly in the UI.
+- **Watchdog behavior** for unexpected proxy exits.
+
+The default config ships with DeepSeek and Zhipu Anthropic-compatible bridges, and the config model is editable from the app.
+
+Example:
+
+```toml
+[server]
+listen_addr = "127.0.0.1:8787"
+
+[bridges.claude_desktop_deepseek.agent]
+base_url = "/deepseek_anthropic"
+api_format = "anthropic_messages"
+
+[bridges.claude_desktop_deepseek.provider]
+name = "deepseek_anthropic"
+
+[bridges.claude_desktop_deepseek.models]
+"claude-sonnet" = "deepseek-v4-pro[1m]"
+"claude-haiku" = "deepseek-v4-flash"
+
+[providers.deepseek_anthropic]
+base_url = "https://api.deepseek.com/anthropic"
+api_format = "anthropic_messages"
+api_key_env = "DEEPSEEK_API_KEY"
+```
+
+Point compatible tools at `http://127.0.0.1:8787` and let Yeek manage the bridge.
+
+---
+
+## Plugin Ops
+
+Yeek understands agent extensions as operational inventory, not loose files.
+
+- **Plugin overview** with enabled state, install path, version, marketplace, and health.
+- **Skills and agents inventory** with descriptions, tool declarations, and health detail.
+- **Marketplace management** for adding, updating, and removing registries.
+- **Install from marketplace** with target metadata for agent ecosystems.
+- **Repair actions** for cleaning broken installs or reinstalling plugins.
+- **Config watchers** that refresh plugin state when Claude config files change.
+
+If agents are becoming part of your development stack, their plugins deserve real management.
+
+---
+
+## Desktop And API
+
+Yeek runs as a Tauri desktop app, but the same core operations are also exposed through an HTTP server binary.
+
+The HTTP layer includes routes for:
+
+- session browse, search, preview, detail, transcript, resume, and cleanup
+- plugin and marketplace management
+- proxy status, config, metrics, logs, and errors
+
+That makes Yeek useful both as a polished desktop tool and as a local automation surface.
 
 ---
 
 ## Installation
 
-### Homebrew (recommended)
+### Homebrew
 
 ```bash
 brew install --cask walnut1024/yeek/yeek
@@ -86,66 +210,46 @@ brew upgrade --cask yeek
 
 ### Direct Download
 
-Grab the latest `.dmg` from [Releases](https://github.com/walnut1024/yeek/releases/latest):
+Download the latest `.dmg` from [Releases](https://github.com/walnut1024/yeek/releases/latest).
 
-- `Yeek_*_aarch64.dmg` — drag to Applications
+For Apple Silicon, use:
 
-> **First launch**: Yeek is ad-hoc signed. Right-click → Open to bypass Gatekeeper.
+```text
+Yeek_*_aarch64.dmg
+```
+
+Yeek is currently ad-hoc signed. On first launch, right-click the app and choose **Open** to pass Gatekeeper.
 
 ---
 
 ## Quick Start
 
-Launch Yeek. It automatically discovers sessions from `~/.claude/`, `~/.codex/`, and `~/.opencode/`.
+1. Launch Yeek.
+2. Let it scan local agent data from `~/.claude`, `~/.codex`, and OpenCode data directories.
+3. Open **Sessions** to browse by project or search across runs.
+4. Select a session and inspect **Transcript**, **Map**, and **Sources**.
+5. Open **Marketplace** to manage plugins and skills.
+6. Open **Proxy** to configure and run the local model gateway.
 
-### Configure the Proxy
-
-Go to **Settings → Proxy** to enable providers and set API keys. Or place a `proxy.toml` next to the app:
-
-```toml
-[server]
-listen_addr = "127.0.0.1:8787"
-
-[providers.deepseek]
-base_url = "https://api.deepseek.com"
-api_format = "chat_completions"
-api_key_env = "DEEPSEEK_API_KEY"
-models = ["deepseek-v4-pro", "deepseek-v4-flash"]
-
-[providers.anthropic]
-base_url = "https://api.anthropic.com/v1"
-api_format = "anthropic_messages"
-api_key_env = "ANTHROPIC_API_KEY"
-models = ["claude-sonnet-4-20250514"]
-
-# Bridge: remap model names for your client
-[bridges.claude_desktop_deepseek.agent]
-base_url = "/deepseek_anthropic"
-api_format = "anthropic_messages"
-
-[bridges.claude_desktop_deepseek.provider]
-name = "deepseek_anthropic"
-
-[bridges.claude_desktop_deepseek.models]
-"claude-sonnet" = "deepseek-v4-pro"
-"claude-haiku" = "deepseek-v4-flash"
-```
-
-Point your AI coding tool at `http://127.0.0.1:8787/v1/responses`.
+No cloud account is required for session indexing. Your session database lives locally.
 
 ---
 
-## Building from Source
+## Build From Source
 
 ```bash
 git clone https://github.com/walnut1024/yeek.git
-cd yeek && npm install
+cd yeek
+npm install
 
-# Dev mode (HMR for both Rust and React)
-cargo tauri dev
+# Desktop dev mode
+npm run tauri:dev
 
-# Production build
-npm run build && cargo build --release
+# Frontend build
+npm run build
+
+# Desktop production build
+npm run tauri:build
 ```
 
 ---
@@ -153,13 +257,15 @@ npm run build && cargo build --release
 ## Tech Stack
 
 | Layer | Technology |
-|-------|-----------|
+|-------|------------|
 | Desktop | Tauri v2 |
-| Backend | Rust · Axum (HTTP + SSE) · rusqlite (SQLite + FTS5) · Tokio |
-| Proxy | Standalone Rust sidecar — Responses API ↔ Chat ↔ Anthropic |
-| Frontend | React 19 · TypeScript · Vite · Tailwind CSS v4 · shadcn/ui |
-| State | TanStack Query · localStorage |
-| i18n | react-i18next (English + 中文) |
+| Backend | Rust, Tokio, rusqlite, Axum |
+| Storage | SQLite with indexed session/message records |
+| Frontend | React 19, TypeScript, Vite, Tailwind CSS v4 |
+| Data Fetching | TanStack Query |
+| Visualization | D3-assisted session Map UI |
+| i18n | react-i18next, English and Chinese |
+| Distribution | Tauri bundling and updater artifacts |
 
 ---
 

@@ -133,7 +133,8 @@ pub(crate) fn do_browse_sessions(
     request: BrowseRequest,
 ) -> Result<SessionListResponse, AppError> {
     let db = state.db()?;
-    let agent = request.agent.filter(|a| ["claude_code", "codex", "opencode"].contains(&a.as_str()));
+    let agent =
+        request.agent.filter(|a| ["claude_code", "codex", "opencode"].contains(&a.as_str()));
     let params = BrowseParams {
         sort: request.sort.unwrap_or_else(|| "updated_at".to_string()),
         limit: request.limit.unwrap_or(50),
@@ -323,7 +324,11 @@ pub(crate) fn do_resume_session(
 /// Callers MUST ensure `command` is free of shell injection. Arguments within
 /// `command` should be individually quoted via [`shell_quote`] before assembly.
 /// The `cwd` parameter is automatically quoted.
-fn launch_terminal(command: &str, cwd: Option<&str>, preferred: Option<&str>) -> Result<(), String> {
+fn launch_terminal(
+    command: &str,
+    cwd: Option<&str>,
+    preferred: Option<&str>,
+) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         launch_terminal_macos(command, cwd, preferred)
@@ -343,7 +348,11 @@ fn launch_terminal(command: &str, cwd: Option<&str>, preferred: Option<&str>) ->
 // ---------------------------------------------------------------------------
 
 #[cfg(target_os = "macos")]
-fn launch_terminal_macos(command: &str, cwd: Option<&str>, preferred: Option<&str>) -> Result<(), String> {
+fn launch_terminal_macos(
+    command: &str,
+    cwd: Option<&str>,
+    preferred: Option<&str>,
+) -> Result<(), String> {
     // If user picked a specific terminal, try it first
     if let Some(name) = preferred {
         if !name.is_empty() && name != "Terminal.app" {
@@ -461,7 +470,11 @@ end tell"#
 // ---------------------------------------------------------------------------
 
 #[cfg(target_os = "linux")]
-fn launch_terminal_linux(command: &str, cwd: Option<&str>, preferred: Option<&str>) -> Result<(), String> {
+fn launch_terminal_linux(
+    command: &str,
+    cwd: Option<&str>,
+    preferred: Option<&str>,
+) -> Result<(), String> {
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
     let full_cmd = cwd
         .map(|d| format!("cd {} && {}", shell_quote(d), command))
@@ -526,7 +539,11 @@ fn which_exists(bin: &str) -> bool {
 // ---------------------------------------------------------------------------
 
 #[cfg(target_os = "windows")]
-fn launch_terminal_windows(command: &str, cwd: Option<&str>, preferred: Option<&str>) -> Result<(), String> {
+fn launch_terminal_windows(
+    command: &str,
+    cwd: Option<&str>,
+    preferred: Option<&str>,
+) -> Result<(), String> {
     let full_cmd = cwd
         .map(|d| format!("cd {}; {}", shell_quote(d), command))
         .unwrap_or_else(|| command.to_string());
@@ -709,11 +726,13 @@ pub(crate) fn do_get_delete_job(
     job_id: &str,
 ) -> Result<DeleteJobStatus, AppError> {
     let db = state.db()?;
-    let result: (i64, i64, String) = db.query_row(
-        "SELECT current_index, total_count, status FROM delete_queue WHERE id = ?1",
-        rusqlite::params![job_id],
-        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-    ).map_err(|_| AppError::Internal(format!("Delete job {} not found", job_id)))?;
+    let result: (i64, i64, String) = db
+        .query_row(
+            "SELECT current_index, total_count, status FROM delete_queue WHERE id = ?1",
+            rusqlite::params![job_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .map_err(|_| AppError::Internal(format!("Delete job {} not found", job_id)))?;
     Ok(DeleteJobStatus {
         job_id: job_id.to_string(),
         processed: result.0,
@@ -729,8 +748,8 @@ pub(crate) fn do_destructive_delete_batch(
     tracing::info!("do_destructive_delete_batch: {} ids", ids.len());
     let job_id = uuid::Uuid::new_v4().to_string();
     let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
-    let ids_json = serde_json::to_string(&ids)
-        .map_err(|e| AppError::Internal(format!("json: {}", e)))?;
+    let ids_json =
+        serde_json::to_string(&ids).map_err(|e| AppError::Internal(format!("json: {}", e)))?;
     let total = ids.len() as i64;
 
     // Insert checkpoint record
@@ -742,7 +761,9 @@ pub(crate) fn do_destructive_delete_batch(
             rusqlite::params![job_id, ids_json, total, now],
         )?;
         action_store::record_action(
-            &db, None, "destructive_delete_batch",
+            &db,
+            None,
+            "destructive_delete_batch",
             Some(&format!("job {}: {} sessions queued", job_id, ids.len())),
         )?;
     }
@@ -758,10 +779,12 @@ pub(crate) fn do_destructive_delete_batch(
             Ok(c) => c,
             Err(e) => {
                 emitter.emit_delete_progress(crate::app::events::DeleteProgressPayload {
-                    processed: 0, total,
+                    processed: 0,
+                    total,
                     current_session_id: String::new(),
                     status: "failed".into(),
-                    deleted_files: 0, failed_files: 0,
+                    deleted_files: 0,
+                    failed_files: 0,
                 });
                 tracing::error!("Delete job {}: failed to open DB: {}", jid, e);
                 return;
@@ -793,7 +816,15 @@ pub(crate) fn do_destructive_delete_batch(
             );
 
             // Emit progress
-            tracing::info!("Delete job {}: session {}/{} ({}) done, deleted={}, failed={}", jid, processed, total, sid, total_deleted, total_failed);
+            tracing::info!(
+                "Delete job {}: session {}/{} ({}) done, deleted={}, failed={}",
+                jid,
+                processed,
+                total,
+                sid,
+                total_deleted,
+                total_failed
+            );
             emitter.emit_delete_progress(crate::app::events::DeleteProgressPayload {
                 processed,
                 total,
@@ -812,8 +843,16 @@ pub(crate) fn do_destructive_delete_batch(
         );
 
         let _ = crate::store::actions::record_action(
-            &conn, None, "destructive_delete_batch_completed",
-            Some(&format!("job {}: {} sessions, deleted={}, failed={}", jid, ids.len(), total_deleted, total_failed)),
+            &conn,
+            None,
+            "destructive_delete_batch_completed",
+            Some(&format!(
+                "job {}: {} sessions, deleted={}, failed={}",
+                jid,
+                ids.len(),
+                total_deleted,
+                total_failed
+            )),
         );
 
         emitter.emit_delete_progress(crate::app::events::DeleteProgressPayload {
@@ -824,7 +863,12 @@ pub(crate) fn do_destructive_delete_batch(
             deleted_files: total_deleted,
             failed_files: total_failed,
         });
-        tracing::info!("Delete job {}: completed, deleted={}, failed={}", jid, total_deleted, total_failed);
+        tracing::info!(
+            "Delete job {}: completed, deleted={}, failed={}",
+            jid,
+            total_deleted,
+            total_failed
+        );
     });
 
     Ok(DeleteJobPayload { job_id })
@@ -837,7 +881,10 @@ pub(crate) fn resume_pending_delete_jobs(state: &AppState) {
 
     // Check for pending jobs
     let jobs: Vec<(String, String, i64, i64)> = {
-        let db = match state.db() { Ok(d) => d, Err(_) => return };
+        let db = match state.db() {
+            Ok(d) => d,
+            Err(_) => return,
+        };
         let mut stmt = match db.prepare(
             "SELECT id, session_ids, current_index, total_count FROM delete_queue WHERE status = 'running'"
         ) { Ok(s) => s, Err(_) => return };
@@ -865,8 +912,12 @@ pub(crate) fn resume_pending_delete_jobs(state: &AppState) {
             let _ = state.db().and_then(|db| {
                 db.execute(
                     "UPDATE delete_queue SET status = 'completed', updated_at = ?1 WHERE id = ?2",
-                    rusqlite::params![chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true), job_id],
-                ).map_err(|e| AppError::DbError(e.to_string()))
+                    rusqlite::params![
+                        chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+                        job_id
+                    ],
+                )
+                .map_err(|e| AppError::DbError(e.to_string()))
             });
             continue;
         }
@@ -908,7 +959,8 @@ pub(crate) fn resume_pending_delete_jobs(state: &AppState) {
                 );
 
                 emitter.emit_delete_progress(crate::app::events::DeleteProgressPayload {
-                    processed, total,
+                    processed,
+                    total,
                     current_session_id: sid.clone(),
                     status: "running".into(),
                     deleted_files: total_deleted,
@@ -923,7 +975,8 @@ pub(crate) fn resume_pending_delete_jobs(state: &AppState) {
             );
 
             emitter.emit_delete_progress(crate::app::events::DeleteProgressPayload {
-                processed: total, total,
+                processed: total,
+                total,
                 current_session_id: String::new(),
                 status: "completed".into(),
                 deleted_files: total_deleted,
@@ -997,12 +1050,237 @@ fn read_json_or_default(path: &std::path::Path) -> serde_json::Value {
     read_json(path).unwrap_or(serde_json::Value::Object(Default::default()))
 }
 
+const MARKETPLACE_STALE_AFTER_HOURS: i64 = 2;
+
+fn marketplace_sync_status(
+    local_head: Option<&str>,
+    remote_head: Option<&str>,
+    last_checked_at: Option<&str>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> String {
+    if last_checked_at.is_none() {
+        return "never_checked".into();
+    }
+
+    if let Some(last_checked_at) = last_checked_at {
+        if let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(last_checked_at) {
+            let age = now.signed_duration_since(parsed.with_timezone(&chrono::Utc));
+            if age > chrono::Duration::hours(MARKETPLACE_STALE_AFTER_HOURS) {
+                return "stale".into();
+            }
+        }
+    }
+
+    match (local_head, remote_head) {
+        (Some(local), Some(remote))
+            if !local.is_empty() && !remote.is_empty() && local != remote =>
+        {
+            "update_available".into()
+        },
+        (Some(_), Some(_)) => "current".into(),
+        (_, Some(_)) => "remote_known".into(),
+        _ => "unknown".into(),
+    }
+}
+
+fn installed_plugin_commit(entry: &serde_json::Value) -> Option<&str> {
+    entry
+        .get("gitCommitSha")
+        .and_then(|v| v.as_str())
+        .or_else(|| entry.get("version").and_then(|v| v.as_str()))
+}
+
+fn count_updates_available_for_marketplace(
+    registry: &serde_json::Value,
+    marketplace_name: &str,
+    remote_head: Option<&str>,
+) -> usize {
+    let Some(remote_head) = remote_head.filter(|h| !h.is_empty()) else {
+        return 0;
+    };
+
+    registry
+        .get("plugins")
+        .and_then(|v| v.as_object())
+        .map(|plugins| {
+            plugins
+                .iter()
+                .filter(|(key, _)| key.split('@').next_back() == Some(marketplace_name))
+                .filter(|(_, entries)| {
+                    entries
+                        .as_array()
+                        .and_then(|a| a.first())
+                        .and_then(installed_plugin_commit)
+                        .map(|commit| commit != remote_head)
+                        .unwrap_or(false)
+                })
+                .count()
+        })
+        .unwrap_or(0)
+}
+
+fn marketplace_updates_available(
+    registry: &serde_json::Value,
+    marketplace_name: &str,
+    remote_head: Option<&str>,
+    sync_status: &str,
+) -> usize {
+    if sync_status != "update_available" {
+        return 0;
+    }
+    count_updates_available_for_marketplace(registry, marketplace_name, remote_head)
+}
+
+fn git_output(args: &[&str], cwd: Option<&std::path::Path>) -> Result<String, AppError> {
+    let mut cmd = std::process::Command::new("git");
+    cmd.args(args);
+    if let Some(cwd) = cwd {
+        cmd.current_dir(cwd);
+    }
+    let out = cmd
+        .output()
+        .map_err(|e| AppError::Internal(format!("git {} failed: {}", args.join(" "), e)))?;
+    if !out.status.success() {
+        return Err(AppError::Internal(format!(
+            "git {} failed: {}",
+            args.join(" "),
+            String::from_utf8_lossy(&out.stderr)
+        )));
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+fn git_head(cwd: &std::path::Path, rev: &str) -> Option<String> {
+    git_output(&["rev-parse", "--short", rev], Some(cwd)).ok().filter(|s| !s.is_empty())
+}
+
+fn marketplace_clone_url(repo: &str) -> String {
+    let repo = repo.trim();
+    if repo.starts_with("http://")
+        || repo.starts_with("https://")
+        || repo.starts_with("git@")
+        || repo.starts_with("ssh://")
+    {
+        repo.to_string()
+    } else {
+        format!("https://github.com/{}.git", repo.trim_end_matches(".git"))
+    }
+}
+
+fn short_git_sha(sha: &str) -> String {
+    sha.chars().take(7).collect()
+}
+
+fn git_remote_head_from_repo(repo: &str) -> Result<String, AppError> {
+    let url = marketplace_clone_url(repo);
+    let output = git_output(&["ls-remote", &url, "HEAD"], None)?;
+    let sha = output.split_whitespace().next().ok_or_else(|| {
+        AppError::Internal(format!("Remote marketplace {} did not return HEAD", repo))
+    })?;
+    Ok(short_git_sha(sha))
+}
+
+fn ensure_marketplace_clone(val: &serde_json::Value) -> Result<(), AppError> {
+    let repo = val["source"]["repo"]
+        .as_str()
+        .ok_or_else(|| AppError::Validation("Marketplace source repo is missing".into()))?;
+    let install_location = val["installLocation"]
+        .as_str()
+        .ok_or_else(|| AppError::Validation("Marketplace installLocation is missing".into()))?;
+    let clone_dir = std::path::Path::new(install_location);
+
+    if clone_dir.exists() && clone_dir.join(".git").exists() {
+        return Ok(());
+    }
+
+    if clone_dir.exists() {
+        std::fs::remove_dir_all(clone_dir).map_err(|e| {
+            AppError::Internal(format!(
+                "Failed to remove broken marketplace clone {}: {}",
+                clone_dir.display(),
+                e
+            ))
+        })?;
+    }
+
+    if let Some(parent) = clone_dir.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| {
+            AppError::Internal(format!(
+                "Failed to create marketplace parent {}: {}",
+                parent.display(),
+                e
+            ))
+        })?;
+    }
+
+    let clone_url = marketplace_clone_url(repo);
+    let out = std::process::Command::new("git")
+        .args(["clone", &clone_url, &clone_dir.to_string_lossy()])
+        .output()
+        .map_err(|e| AppError::Internal(format!("git clone failed: {}", e)))?;
+    if !out.status.success() {
+        return Err(AppError::Internal(format!(
+            "git clone failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        )));
+    }
+
+    Ok(())
+}
+
+fn git_remote_head(cwd: &std::path::Path) -> Option<String> {
+    if let Ok(remote_ref) =
+        git_output(&["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], Some(cwd))
+    {
+        if let Some(head) = git_head(cwd, &remote_ref) {
+            return Some(head);
+        }
+    }
+    git_head(cwd, "origin/main").or_else(|| git_head(cwd, "origin/master"))
+}
+
+fn count_available_marketplace_plugins(clone_path: &std::path::Path) -> usize {
+    let plugins_dir = clone_path.join("plugins");
+    let skills_dir = clone_path.join("skills");
+
+    if plugins_dir.is_dir() {
+        return std::fs::read_dir(plugins_dir)
+            .map(|entries| entries.flatten().filter(|e| e.path().is_dir()).count())
+            .unwrap_or(0);
+    }
+
+    if skills_dir.is_dir() {
+        return std::fs::read_dir(skills_dir)
+            .map(|entries| entries.flatten().filter(|e| e.path().is_dir()).count())
+            .unwrap_or(0);
+    }
+
+    std::fs::read_dir(clone_path)
+        .map(|entries| {
+            entries
+                .flatten()
+                .filter(|e| {
+                    let path = e.path();
+                    path.is_dir() && path.join("SKILL.md").exists()
+                })
+                .count()
+        })
+        .unwrap_or(0)
+}
+
 fn scan_skills(plugin_path: &std::path::Path) -> Vec<plugin::SkillInfo> {
+    let mut skills = Vec::new();
+    let root_skill = plugin_path.join("SKILL.md");
+    if root_skill.exists() {
+        if let Some(info) = parse_frontmatter(&root_skill, "skill") {
+            skills.push(info);
+        }
+    }
+
     let skills_dir = plugin_path.join("skills");
     if !skills_dir.exists() {
-        return Vec::new();
+        return skills;
     }
-    let mut skills = Vec::new();
     if let Ok(entries) = std::fs::read_dir(&skills_dir) {
         for entry in entries.flatten() {
             let skill_md = entry.path().join("SKILL.md");
@@ -1041,10 +1319,49 @@ fn has_hooks(plugin_path: &std::path::Path) -> bool {
     hooks_file.exists() || hooks_dir.is_dir()
 }
 
+struct PluginContentInventory {
+    skills: Vec<plugin::SkillInfo>,
+    agents: Vec<plugin::SkillInfo>,
+    health: &'static str,
+    issues: Vec<String>,
+}
+
+fn has_plugin_manifest(plugin_path: &std::path::Path) -> bool {
+    plugin_path.join(".claude-plugin/plugin.json").exists()
+        || plugin_path.join(".codex-plugin/plugin.json").exists()
+}
+
+fn inspect_plugin_content(plugin_path: &std::path::Path) -> PluginContentInventory {
+    let has_manifest = has_plugin_manifest(plugin_path);
+    let skills = scan_skills(plugin_path);
+    let agents = scan_agents(plugin_path);
+    let has_hooks = has_hooks(plugin_path);
+    let mut issues = Vec::new();
+
+    let health = if has_manifest {
+        "ok"
+    } else if !skills.is_empty() || !agents.is_empty() {
+        issues.push("Missing plugin.json".into());
+        "partial"
+    } else if has_hooks {
+        issues.push("Hook-only plugin, no skills or agents".into());
+        "hook"
+    } else {
+        issues.push("No plugin, skill, agent, or hook content found".into());
+        "unsupported"
+    };
+
+    PluginContentInventory { skills, agents, health, issues }
+}
+
 /// Detect which agents a plugin directory targets based on its manifests and content.
 fn detect_agent_targets(path: &std::path::Path) -> Vec<String> {
     let mut targets = Vec::new();
-    if path.join(".claude-plugin/plugin.json").exists() || path.join("skills").is_dir() || path.join("agents").is_dir() {
+    if path.join(".claude-plugin/plugin.json").exists()
+        || path.join("skills").is_dir()
+        || path.join("SKILL.md").exists()
+        || path.join("agents").is_dir()
+    {
         targets.push("claude_code".into());
     }
     if path.join(".codex-plugin/plugin.json").exists() {
@@ -1052,11 +1369,10 @@ fn detect_agent_targets(path: &std::path::Path) -> Vec<String> {
     }
     // SKILL.md is cross-compatible, so if there's a skill, all agents can use it
     if path.join("SKILL.md").exists() || (path.join("skills").is_dir() && !targets.is_empty()) {
-        if !targets.contains(&"codex".into()) { targets.push("codex".into()); }
+        if !targets.contains(&"codex".into()) {
+            targets.push("codex".into());
+        }
         targets.push("opencode".into());
-    }
-    if targets.is_empty() {
-        targets.push("claude_code".into());
     }
     targets
 }
@@ -1176,25 +1492,9 @@ fn list_global_plugins() -> Result<plugin::SkillsOverview, AppError> {
             health_issues.push("Install path does not exist".into());
             (Vec::new(), Vec::new(), "broken")
         } else {
-            let has_manifest = path.join(".claude-plugin/plugin.json").exists()
-                || path.join(".codex-plugin/plugin.json").exists();
-            let scanned_skills = scan_skills(path);
-            let scanned_agents = scan_agents(path);
-
-            if !has_manifest && scanned_skills.is_empty() && scanned_agents.is_empty() {
-                if has_hooks(path) {
-                    health_issues.push("Hook-only plugin, no skills or agents".into());
-                    (scanned_skills, scanned_agents, "hook")
-                } else {
-                    health_issues.push("Missing plugin.json and no content".into());
-                    (scanned_skills, scanned_agents, "broken")
-                }
-            } else if !has_manifest {
-                health_issues.push("Missing plugin.json".into());
-                (scanned_skills, scanned_agents, "partial")
-            } else {
-                (scanned_skills, scanned_agents, "ok")
-            }
+            let inventory = inspect_plugin_content(path);
+            health_issues.extend(inventory.issues);
+            (inventory.skills, inventory.agents, inventory.health)
         };
 
         total_skills += skills.len();
@@ -1230,44 +1530,33 @@ fn list_global_plugins() -> Result<plugin::SkillsOverview, AppError> {
         if let Ok(mkt_entries) = std::fs::read_dir(&codex_dir) {
             for mkt_entry in mkt_entries.flatten() {
                 let mkt_path = mkt_entry.path();
-                if !mkt_path.is_dir() { continue; }
+                if !mkt_path.is_dir() {
+                    continue;
+                }
                 let mkt_name = mkt_entry.file_name().to_string_lossy().into_owned();
                 if let Ok(plugin_entries) = std::fs::read_dir(&mkt_path) {
                     for pl_entry in plugin_entries.flatten() {
                         let pl_path = pl_entry.path();
-                        if !pl_path.is_dir() { continue; }
+                        if !pl_path.is_dir() {
+                            continue;
+                        }
                         let pl_name = pl_entry.file_name().to_string_lossy().into_owned();
                         // Find the version directory (first subdirectory)
                         if let Ok(ver_entries) = std::fs::read_dir(&pl_path) {
-                            if let Some(ver_entry) = ver_entries.flatten().find(|e| e.path().is_dir()) {
+                            if let Some(ver_entry) =
+                                ver_entries.flatten().find(|e| e.path().is_dir())
+                            {
                                 let install_dir = ver_entry.path();
-                                let has_manifest = install_dir.join(".codex-plugin/plugin.json").exists()
-                                    || install_dir.join(".claude-plugin/plugin.json").exists();
-                                let scanned_skills = scan_skills(&install_dir);
-                                let scanned_agents = scan_agents(&install_dir);
-                                let mut issues = Vec::new();
-                                let health = if !has_manifest && scanned_skills.is_empty() && scanned_agents.is_empty() {
-                                    if has_hooks(&install_dir) {
-                                        issues.push("Hook-only plugin".into());
-                                        "hook"
-                                    } else {
-                                        issues.push("Missing plugin.json and no content".into());
-                                        "broken"
-                                    }
-                                } else if !has_manifest {
-                                    issues.push("Missing plugin.json".into());
-                                    "partial"
-                                } else {
-                                    "ok"
-                                };
+                                let inventory = inspect_plugin_content(&install_dir);
+                                let health = inventory.health;
                                 match health {
                                     "ok" => health_ok += 1,
                                     "partial" => health_partial += 1,
                                     "hook" => health_hook += 1,
                                     _ => health_broken += 1,
                                 }
-                                total_skills += scanned_skills.len();
-                                total_agents += scanned_agents.len();
+                                total_skills += inventory.skills.len();
+                                total_agents += inventory.agents.len();
                                 plugins.push(plugin::PluginInfo {
                                     key: format!("{}@{}", pl_name, mkt_name),
                                     name: pl_name,
@@ -1277,9 +1566,9 @@ fn list_global_plugins() -> Result<plugin::SkillsOverview, AppError> {
                                     install_path: install_dir.to_string_lossy().into_owned(),
                                     enabled: true,
                                     health: health.into(),
-                                    health_issues: issues,
-                                    skills: scanned_skills,
-                                    agents: scanned_agents,
+                                    health_issues: inventory.issues,
+                                    skills: inventory.skills,
+                                    agents: inventory.agents,
                                     installed_at: None,
                                     last_updated: None,
                                     agent: "codex".into(),
@@ -1293,17 +1582,20 @@ fn list_global_plugins() -> Result<plugin::SkillsOverview, AppError> {
     }
 
     // Scan OpenCode skills from ~/.config/opencode/skills/
-    let opencode_skills_dir = dirs::data_local_dir()
-        .unwrap_or_else(|| home.join(".local/share"))
-        .join("opencode/skills");
+    let opencode_skills_dir =
+        dirs::data_local_dir().unwrap_or_else(|| home.join(".local/share")).join("opencode/skills");
     if opencode_skills_dir.exists() {
         if let Ok(entries) = std::fs::read_dir(&opencode_skills_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if !path.is_dir() { continue; }
+                if !path.is_dir() {
+                    continue;
+                }
                 let name = entry.file_name().to_string_lossy().into_owned();
                 let skill_md = path.join("SKILL.md");
-                if !skill_md.exists() { continue; }
+                if !skill_md.exists() {
+                    continue;
+                }
                 let desc = parse_frontmatter(&skill_md, "skill")
                     .map(|s| s.description)
                     .unwrap_or_else(|| name.clone());
@@ -1472,7 +1764,9 @@ pub(crate) fn do_uninstall_plugin(key: String) -> Result<(), AppError> {
 
         let settings_path = claude_dir.join("settings.json");
         if let Ok(mut settings) = read_json(&settings_path) {
-            if let Some(enabled) = settings.get_mut("enabledPlugins").and_then(|v| v.as_object_mut()) {
+            if let Some(enabled) =
+                settings.get_mut("enabledPlugins").and_then(|v| v.as_object_mut())
+            {
                 enabled.remove(&key);
             }
             if let Ok(output) = serde_json::to_string_pretty(&settings) {
@@ -1483,7 +1777,8 @@ pub(crate) fn do_uninstall_plugin(key: String) -> Result<(), AppError> {
 
     // 2. Uninstall from Codex (remove from plugins cache and config.toml)
     if let Some(market_name) = parts.get(1).map(|s| *s) {
-        let codex_cache = home.join(format!(".codex/plugins/cache/{}/{}", market_name, plugin_name));
+        let codex_cache =
+            home.join(format!(".codex/plugins/cache/{}/{}", market_name, plugin_name));
         if codex_cache.exists() {
             let _ = std::fs::remove_dir_all(&codex_cache);
         }
@@ -1780,7 +2075,14 @@ pub(crate) fn do_reinstall_plugin(key: String) -> Result<plugin::FixPluginResult
 
     Ok(plugin::FixPluginResult {
         action: "reinstall".into(),
-        message: format!("Reinstalled {} from {} ({} → {}) [{}]", key, repo, git_sha, new_sha, targets.join(",")),
+        message: format!(
+            "Reinstalled {} from {} ({} → {}) [{}]",
+            key,
+            repo,
+            git_sha,
+            new_sha,
+            targets.join(",")
+        ),
     })
 }
 
@@ -1798,25 +2100,36 @@ pub(crate) fn do_list_marketplaces() -> Result<plugin::MarketplaceListResult, Ap
     let registry: serde_json::Value =
         read_json_or_default(&claude_dir.join("plugins/installed_plugins.json"));
 
-    // Count plugins per marketplace from registry
-    let mut plugin_counts: std::collections::HashMap<String, usize> =
-        std::collections::HashMap::new();
-    if let Some(plugins) = registry.get("plugins").and_then(|v| v.as_object()) {
-        for key in plugins.keys() {
-            let market_name = key.split('@').next_back().unwrap_or("");
-            if !market_name.is_empty() {
-                *plugin_counts.entry(market_name.to_string()).or_insert(0) += 1;
-            }
-        }
-    }
-
     let mut entries = Vec::new();
+    let now = chrono::Utc::now();
     if let Some(obj) = marketplaces.as_object() {
         for (name, val) in obj {
             let repo = val["source"]["repo"].as_str().unwrap_or("").to_string();
             let install_location = val["installLocation"].as_str().unwrap_or("").to_string();
             let last_updated = val["lastUpdated"].as_str().map(String::from);
-            let plugin_count = *plugin_counts.get(name).unwrap_or(&0);
+            let last_checked_at = val["lastCheckedAt"].as_str().map(String::from);
+            let local_head = val["localHead"]
+                .as_str()
+                .map(String::from)
+                .or_else(|| git_head(std::path::Path::new(&install_location), "HEAD"));
+            let remote_head = val["remoteHead"].as_str().map(String::from);
+            let sync_status = val["syncStatus"].as_str().map(String::from).unwrap_or_else(|| {
+                marketplace_sync_status(
+                    local_head.as_deref(),
+                    remote_head.as_deref(),
+                    last_checked_at.as_deref(),
+                    now,
+                )
+            });
+            let check_error = val["lastCheckError"].as_str().map(String::from);
+            let plugin_count =
+                count_available_marketplace_plugins(std::path::Path::new(&install_location));
+            let updates_available = marketplace_updates_available(
+                &registry,
+                name,
+                remote_head.as_deref(),
+                &sync_status,
+            );
 
             entries.push(plugin::MarketplaceEntry {
                 name: name.clone(),
@@ -1824,11 +2137,88 @@ pub(crate) fn do_list_marketplaces() -> Result<plugin::MarketplaceListResult, Ap
                 install_location,
                 last_updated,
                 plugin_count,
+                last_checked_at,
+                local_head,
+                remote_head,
+                sync_status,
+                check_error,
+                updates_available,
             });
         }
     }
 
     Ok(plugin::MarketplaceListResult { marketplaces: entries })
+}
+
+fn refresh_marketplace_upstream_state(
+    val: &mut serde_json::Value,
+    checked_at: &str,
+    now: chrono::DateTime<chrono::Utc>,
+) {
+    let repo = val["source"]["repo"].as_str().unwrap_or("").to_string();
+    let install_location = val["installLocation"].as_str().unwrap_or("").to_string();
+    let clone_dir = std::path::Path::new(&install_location);
+    let remote_result = git_remote_head_from_repo(&repo);
+
+    let fetch_result = if clone_dir.exists() && clone_dir.join(".git").exists() {
+        std::process::Command::new("git")
+            .args(["fetch", "origin", "--prune"])
+            .current_dir(clone_dir)
+            .output()
+            .map_err(|e| AppError::Internal(format!("git fetch failed: {}", e)))
+            .and_then(|out| {
+                if out.status.success() {
+                    Ok(())
+                } else {
+                    Err(AppError::Internal(format!(
+                        "git fetch failed: {}",
+                        String::from_utf8_lossy(&out.stderr)
+                    )))
+                }
+            })
+    } else {
+        Ok(())
+    };
+
+    match (remote_result, fetch_result) {
+        (Ok(remote_head_from_upstream), Ok(())) => {
+            let has_local_clone = clone_dir.exists() && clone_dir.join(".git").exists();
+            let local_head = has_local_clone.then(|| git_head(clone_dir, "HEAD")).flatten();
+            let remote_head = git_remote_head(clone_dir).unwrap_or(remote_head_from_upstream);
+            val["lastCheckedAt"] = serde_json::Value::String(checked_at.to_string());
+            val["localHead"] =
+                local_head.clone().map(serde_json::Value::String).unwrap_or(serde_json::Value::Null);
+            val["remoteHead"] = serde_json::Value::String(remote_head.clone());
+            val["syncStatus"] = serde_json::Value::String(if has_local_clone {
+                marketplace_sync_status(
+                    local_head.as_deref(),
+                    Some(&remote_head),
+                    Some(checked_at),
+                    now,
+                )
+            } else {
+                "clone_missing".into()
+            });
+            val["lastCheckError"] = if has_local_clone {
+                serde_json::Value::Null
+            } else {
+                serde_json::Value::String(
+                    "Remote upstream is reachable, but local marketplace clone is missing".into(),
+                )
+            };
+        },
+        (Err(e), _) => {
+            val["lastCheckedAt"] = serde_json::Value::String(checked_at.to_string());
+            val["syncStatus"] = serde_json::Value::String("check_failed".into());
+            val["lastCheckError"] = serde_json::Value::String(e.to_string());
+        },
+        (Ok(remote_head), Err(e)) => {
+            val["lastCheckedAt"] = serde_json::Value::String(checked_at.to_string());
+            val["remoteHead"] = serde_json::Value::String(remote_head);
+            val["syncStatus"] = serde_json::Value::String("fetch_failed".into());
+            val["lastCheckError"] = serde_json::Value::String(e.to_string());
+        },
+    }
 }
 
 pub(crate) fn do_add_marketplace(name: String, repo: String) -> Result<(), AppError> {
@@ -1839,7 +2229,7 @@ pub(crate) fn do_add_marketplace(name: String, repo: String) -> Result<(), AppEr
         .map_err(|e| AppError::Internal(format!("Failed to create marketplaces dir: {}", e)))?;
 
     // Clone repo
-    let clone_url = format!("https://github.com/{}.git", repo);
+    let clone_url = marketplace_clone_url(&repo);
     let dest = marketplaces_dir.join(&name);
     let out = std::process::Command::new("git")
         .args(["clone", &clone_url, &dest.to_string_lossy()])
@@ -1859,7 +2249,12 @@ pub(crate) fn do_add_marketplace(name: String, repo: String) -> Result<(), AppEr
     marketplaces[&name] = serde_json::json!({
         "source": { "source": "github", "repo": repo },
         "installLocation": dest.to_string_lossy(),
-        "lastUpdated": now
+        "lastUpdated": now,
+        "lastCheckedAt": now,
+        "localHead": git_head(&dest, "HEAD"),
+        "remoteHead": git_remote_head(&dest),
+        "syncStatus": "current",
+        "lastCheckError": null
     });
     let output = serde_json::to_string_pretty(&marketplaces)
         .map_err(|e| AppError::Internal(format!("Failed to serialize: {}", e)))?;
@@ -1878,119 +2273,19 @@ pub(crate) fn do_update_marketplace(name: String) -> Result<(), AppError> {
     let mkt = marketplaces
         .get_mut(&name)
         .ok_or_else(|| AppError::NotFound(format!("Marketplace '{}' not found", name)))?;
-    let clone_path_str = mkt["installLocation"].as_str().unwrap_or("");
-    let clone_dir = std::path::Path::new(clone_path_str);
 
-    // If clone exists but has no .git (broken clone), re-clone
-    if clone_dir.exists() && !clone_dir.join(".git").exists() {
-        let _ = std::fs::remove_dir_all(clone_dir);
+    let now = chrono::Utc::now();
+    let checked_at = now.to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    mkt["lastUpdated"] = serde_json::Value::String(checked_at.clone());
+    mkt["lastCheckedAt"] = serde_json::Value::String(checked_at.clone());
+    match ensure_marketplace_clone(mkt) {
+        Ok(()) => refresh_marketplace_upstream_state(mkt, &checked_at, now),
+        Err(e) => {
+            mkt["syncStatus"] = serde_json::Value::String("clone_failed".into());
+            mkt["lastCheckError"] = serde_json::Value::String(e.to_string());
+        },
     }
 
-    if !clone_dir.exists() {
-        let repo = mkt["source"]["repo"].as_str().unwrap_or("");
-        let clone_url = format!("https://github.com/{}.git", repo);
-        let out = std::process::Command::new("git")
-            .args(["clone", &clone_url, &clone_dir.to_string_lossy()])
-            .output()
-            .map_err(|e| AppError::Internal(format!("git clone failed: {}", e)))?;
-        if !out.status.success() {
-            return Err(AppError::Internal(format!(
-                "git clone failed: {}",
-                String::from_utf8_lossy(&out.stderr)
-            )));
-        }
-    } else {
-        let _ = std::process::Command::new("git")
-            .args(["fetch", "origin"])
-            .current_dir(clone_dir)
-            .output();
-        let out = std::process::Command::new("git")
-            .args(["pull", "--ff-only"])
-            .current_dir(clone_dir)
-            .output()
-            .map_err(|e| AppError::Internal(format!("git pull failed: {}", e)))?;
-        if !out.status.success() {
-            return Err(AppError::Internal(format!(
-                "git pull failed: {}",
-                String::from_utf8_lossy(&out.stderr)
-            )));
-        }
-    }
-
-    // Get new HEAD SHA
-    let new_sha = std::process::Command::new("git")
-        .args(["rev-parse", "--short", "HEAD"])
-        .current_dir(clone_dir)
-        .output()
-        .ok()
-        .and_then(|o| {
-            if o.status.success() {
-                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
-            } else {
-                None
-            }
-        })
-        .unwrap_or_else(|| "unknown".to_string());
-
-    // Sync installed plugins from this marketplace
-    let registry_path = claude_dir.join("plugins/installed_plugins.json");
-    if registry_path.exists() {
-        let registry: serde_json::Value = read_json(&registry_path)?;
-        if let Some(plugins) = registry.get("plugins").and_then(|v| v.as_object()) {
-            let keys_to_update: Vec<String> = plugins.keys()
-                .filter(|k| k.split('@').next_back() == Some(&name))
-                .cloned()
-                .collect();
-
-            for key in &keys_to_update {
-                if let Some(entry) = plugins.get(key).and_then(|v| v.as_array()).and_then(|a| a.first()) {
-                    let old_sha = entry["gitCommitSha"].as_str().unwrap_or("");
-                    let plugin_name = key.split('@').next().unwrap_or("");
-
-                    if old_sha != new_sha && !new_sha.is_empty() {
-                        // Find source in clone
-                        let candidates = [
-                            clone_dir.join(format!("plugins/{}", plugin_name)),
-                            clone_dir.join(format!("skills/{}", plugin_name)),
-                            clone_dir.join(format!("agents/{}", plugin_name)),
-                        ];
-                        let source_dir = candidates.iter().find(|p| p.exists() && p.is_dir());
-
-                        if let Some(source) = source_dir {
-                            let targets = detect_agent_targets(source);
-
-                            // Update Claude install
-                            if targets.contains(&"claude_code".to_string()) {
-                                if let Ok(install_path_str) = entry["installPath"].as_str().ok_or("") {
-                                    let old_install = std::path::Path::new(install_path_str);
-                                    if old_install.exists() {
-                                        let _ = std::fs::remove_dir_all(old_install);
-                                    }
-                                }
-                                let _ = install_to_claude(&home, source, &name, plugin_name, &new_sha);
-                            }
-
-                            // Update Codex install
-                            if targets.contains(&"codex".to_string()) {
-                                let _ = install_to_codex(&home, source, &name, plugin_name, &new_sha);
-                            }
-
-                            // Update OpenCode install
-                            if targets.contains(&"opencode".to_string()) {
-                                let _ = install_to_opencode(&home, source, plugin_name);
-                            }
-
-                            tracing::info!("Updated plugin {} from {} to {}", key, old_sha, new_sha);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // Update lastUpdated
-    let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
-    mkt["lastUpdated"] = serde_json::Value::String(now);
     let output = serde_json::to_string_pretty(&marketplaces)
         .map_err(|e| AppError::Internal(format!("Failed to serialize: {}", e)))?;
     std::fs::write(&path, output)
@@ -2130,6 +2425,10 @@ pub(crate) fn do_list_marketplace_plugins(
                     continue;
                 }
                 let name = entry.file_name().to_string_lossy().into_owned();
+                let targets = detect_agent_targets(&path);
+                if targets.is_empty() {
+                    continue;
+                }
                 let skills = scan_skills(&path);
                 let agents = scan_agents(&path);
                 let desc = skills
@@ -2145,7 +2444,7 @@ pub(crate) fn do_list_marketplace_plugins(
                     skill_count: skills.len(),
                     agent_count: agents.len(),
                     has_hooks: has_hooks(&path),
-                    agent_targets: detect_agent_targets(&path),
+                    agent_targets: targets,
                 });
             }
         }
@@ -2159,6 +2458,10 @@ pub(crate) fn do_list_marketplace_plugins(
                     continue;
                 }
                 let name = entry.file_name().to_string_lossy().into_owned();
+                let targets = detect_agent_targets(&path);
+                if targets.is_empty() {
+                    continue;
+                }
                 let desc = path
                     .join("SKILL.md")
                     .exists()
@@ -2173,7 +2476,7 @@ pub(crate) fn do_list_marketplace_plugins(
                     skill_count: 1,
                     agent_count: 0,
                     has_hooks: false,
-                    agent_targets: detect_agent_targets(&path),
+                    agent_targets: targets,
                 });
             }
         }
@@ -2195,6 +2498,10 @@ pub(crate) fn do_list_marketplace_plugins(
             if !path.join("SKILL.md").exists() {
                 continue;
             }
+            let targets = detect_agent_targets(&path);
+            if targets.is_empty() {
+                continue;
+            }
             let desc = parse_frontmatter(&path.join("SKILL.md"), "skill")
                 .map(|s| s.description)
                 .unwrap_or_else(|| name.clone());
@@ -2205,7 +2512,7 @@ pub(crate) fn do_list_marketplace_plugins(
                 skill_count: 1,
                 agent_count: 0,
                 has_hooks: false,
-                agent_targets: detect_agent_targets(&path),
+                agent_targets: targets,
             });
         }
     }
@@ -2257,40 +2564,39 @@ pub(crate) fn do_install_marketplace_plugin(
         .unwrap_or_else(|| "unknown".to_string());
 
     let targets = detect_agent_targets(&source);
+    if targets.is_empty() {
+        return Err(AppError::Validation(format!(
+            "'{}' is not an installable plugin or skill",
+            plugin_name
+        )));
+    }
     let mut errors = Vec::new();
 
     // Install to Claude Code
     if targets.contains(&"claude_code".to_string()) {
-        if let Err(e) = install_to_claude(
-            &home, &source, &marketplace_name, &plugin_name, &git_sha,
-        ) {
+        if let Err(e) = install_to_claude(&home, &source, &marketplace_name, &plugin_name, &git_sha)
+        {
             errors.push(format!("claude_code: {}", e));
         }
     }
 
     // Install to Codex
     if targets.contains(&"codex".to_string()) {
-        if let Err(e) = install_to_codex(
-            &home, &source, &marketplace_name, &plugin_name, &git_sha,
-        ) {
+        if let Err(e) = install_to_codex(&home, &source, &marketplace_name, &plugin_name, &git_sha)
+        {
             errors.push(format!("codex: {}", e));
         }
     }
 
     // Install to OpenCode
     if targets.contains(&"opencode".to_string()) {
-        if let Err(e) = install_to_opencode(
-            &home, &source, &plugin_name,
-        ) {
+        if let Err(e) = install_to_opencode(&home, &source, &plugin_name) {
             errors.push(format!("opencode: {}", e));
         }
     }
 
     if !errors.is_empty() {
-        return Err(AppError::Internal(format!(
-            "Install partially failed: {}",
-            errors.join("; ")
-        )));
+        return Err(AppError::Internal(format!("Install partially failed: {}", errors.join("; "))));
     }
 
     Ok(())
@@ -2402,9 +2708,8 @@ fn install_to_opencode(
     source: &std::path::Path,
     plugin_name: &str,
 ) -> Result<(), AppError> {
-    let opencode_skills_dir = dirs::data_local_dir()
-        .unwrap_or_else(|| home.join(".local/share"))
-        .join("opencode/skills");
+    let opencode_skills_dir =
+        dirs::data_local_dir().unwrap_or_else(|| home.join(".local/share")).join("opencode/skills");
     let install_path = opencode_skills_dir.join(plugin_name);
 
     // Remove old install if exists
@@ -2463,4 +2768,102 @@ pub(crate) fn do_get_proxy_error_events(
     state: &AppState,
 ) -> Result<Vec<crate::app::proxy::ProxyErrorEvent>, AppError> {
     state.proxy_manager.get_error_events()
+}
+
+#[cfg(test)]
+mod plugin_freshness_tests {
+    use super::*;
+
+    #[test]
+    fn marketplace_status_marks_stale_after_two_hours_without_successful_check() {
+        let now = chrono::DateTime::parse_from_rfc3339("2026-05-18T12:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let last_checked = Some("2026-05-18T09:59:59.000Z");
+
+        assert_eq!(
+            marketplace_sync_status(Some("abc123"), Some("abc123"), last_checked, now),
+            "stale"
+        );
+    }
+
+    #[test]
+    fn marketplace_status_reports_remote_update_when_heads_differ() {
+        let now = chrono::DateTime::parse_from_rfc3339("2026-05-18T12:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let last_checked = Some("2026-05-18T11:30:00.000Z");
+
+        assert_eq!(
+            marketplace_sync_status(Some("local1"), Some("remote2"), last_checked, now),
+            "update_available"
+        );
+    }
+
+    #[test]
+    fn counts_installed_plugins_behind_marketplace_head() {
+        let registry = serde_json::json!({
+            "plugins": {
+                "fresh@official": [{ "gitCommitSha": "head123", "version": "head123" }],
+                "stale@official": [{ "gitCommitSha": "old456", "version": "old456" }],
+                "other@community": [{ "gitCommitSha": "old456", "version": "old456" }]
+            }
+        });
+
+        assert_eq!(
+            count_updates_available_for_marketplace(&registry, "official", Some("head123")),
+            1
+        );
+    }
+
+    #[test]
+    fn clone_missing_marketplace_does_not_report_update_count() {
+        let registry = serde_json::json!({
+            "plugins": {
+                "stale@official": [{ "gitCommitSha": "old456", "version": "old456" }]
+            }
+        });
+
+        assert_eq!(
+            marketplace_updates_available(&registry, "official", Some("head123"), "clone_missing"),
+            0
+        );
+    }
+
+    #[test]
+    fn marketplace_clone_url_targets_github_for_owner_repo_sources() {
+        assert_eq!(
+            marketplace_clone_url("anthropics/claude-plugins-official"),
+            "https://github.com/anthropics/claude-plugins-official.git"
+        );
+    }
+
+    #[test]
+    fn marketplace_clone_url_preserves_absolute_urls() {
+        assert_eq!(
+            marketplace_clone_url("https://github.com/openai/codex-plugin-cc.git"),
+            "https://github.com/openai/codex-plugin-cc.git"
+        );
+    }
+
+    #[test]
+    fn readme_only_directory_has_no_agent_targets() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("README.md"), "docs only").unwrap();
+
+        assert!(detect_agent_targets(dir.path()).is_empty());
+    }
+
+    #[test]
+    fn readme_only_directory_is_classified_as_unsupported_content() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("README.md"), "docs only").unwrap();
+
+        let inventory = inspect_plugin_content(dir.path());
+
+        assert_eq!(inventory.health, "unsupported");
+        assert_eq!(inventory.skills.len(), 0);
+        assert_eq!(inventory.agents.len(), 0);
+        assert_eq!(inventory.issues, vec!["No plugin, skill, agent, or hook content found"]);
+    }
 }

@@ -337,6 +337,12 @@ export interface MarketplaceEntry {
   install_location: string;
   last_updated?: string;
   plugin_count: number;
+  last_checked_at?: string;
+  local_head?: string;
+  remote_head?: string;
+  sync_status: string;
+  check_error?: string;
+  updates_available: number;
 }
 
 export interface MarketplaceListResult {

@@ -49,9 +49,7 @@ pub fn run() {
             }
 
             // Updater plugin — automatic in-app updates from GitHub Releases
-            app.handle().plugin(
-                tauri_plugin_updater::Builder::new().build(),
-            )?;
+            app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
             // Process plugin — relaunch after update install
             app.handle().plugin(tauri_plugin_process::init())?;
 
@@ -113,9 +111,7 @@ pub fn run() {
             // OpenCode data directory watcher
             let opencode_data_dir = dirs::data_local_dir()
                 .unwrap_or_else(|| {
-                    dirs::home_dir()
-                        .expect("No home directory")
-                        .join("Library/Application Support")
+                    dirs::home_dir().expect("No home directory").join("Library/Application Support")
                 })
                 .join("opencode");
 
@@ -144,14 +140,9 @@ pub fn run() {
             app::proxy::ProxyManager::initialize(&proxy_manager);
 
             app.manage(
-                AppState::new(
-                    conn,
-                    db_path.clone(),
-                    emitter.clone(),
-                    proxy_manager,
-                )
-                .with_watchers(watchers)
-                .with_config_watcher(config_watcher),
+                AppState::new(conn, db_path.clone(), emitter.clone(), proxy_manager)
+                    .with_watchers(watchers)
+                    .with_config_watcher(config_watcher),
             );
 
             // Heavy data migrations on background thread (non-blocking)
@@ -178,11 +169,8 @@ pub fn run() {
             let quitting_tray = quitting.clone();
             let show = MenuItemBuilder::with_id("show", "Show Yeek").build(&handle)?;
             let quit = MenuItemBuilder::with_id("quit", "Quit Yeek").build(&handle)?;
-            let tray_menu = MenuBuilder::new(&handle)
-                .item(&show)
-                .separator()
-                .item(&quit)
-                .build()?;
+            let tray_menu =
+                MenuBuilder::new(&handle).item(&show).separator().item(&quit).build()?;
             let _tray = TrayIconBuilder::new()
                 .icon(app.default_window_icon().cloned().unwrap())
                 .menu(&tray_menu)
@@ -192,12 +180,12 @@ pub fn run() {
                             w.show().ok();
                             w.set_focus().ok();
                         }
-                    }
+                    },
                     "quit" => {
                         quitting_tray.store(true, Ordering::SeqCst);
                         std::process::exit(0);
-                    }
-                    _ => {}
+                    },
+                    _ => {},
                 })
                 .on_tray_icon_event(|tray, event| {
                     if let tauri::tray::TrayIconEvent::DoubleClick { .. } = event {

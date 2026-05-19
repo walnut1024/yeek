@@ -174,8 +174,10 @@ pub fn add_marketplace(name: String, repo: String) -> Result<(), AppError> {
 }
 
 #[tauri::command]
-pub fn update_marketplace(name: String) -> Result<(), AppError> {
-    do_update_marketplace(name)
+pub async fn update_marketplace(name: String) -> Result<(), AppError> {
+    tokio::task::spawn_blocking(move || do_update_marketplace(name))
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?
 }
 
 #[tauri::command]
@@ -239,9 +241,7 @@ pub fn get_proxy_logs(state: State<'_, AppState>, lines: usize) -> Result<String
 }
 
 #[tauri::command]
-pub fn get_proxy_metrics(
-    state: State<'_, AppState>,
-) -> Result<ProxyMetrics, AppError> {
+pub fn get_proxy_metrics(state: State<'_, AppState>) -> Result<ProxyMetrics, AppError> {
     do_get_proxy_metrics(&state)
 }
 

@@ -66,6 +66,12 @@ pub struct MarketplaceEntry {
     pub install_location: String,
     pub last_updated: Option<String>,
     pub plugin_count: usize,
+    pub last_checked_at: Option<String>,
+    pub local_head: Option<String>,
+    pub remote_head: Option<String>,
+    pub sync_status: String,
+    pub check_error: Option<String>,
+    pub updates_available: usize,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

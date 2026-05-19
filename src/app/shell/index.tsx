@@ -95,7 +95,7 @@ export function AppShell() {
               {section === "sessions" && (
                 <SessionsPage selectedId={selectedId} onSelect={setSelectedId} agentFilter={agentFilter} />
               )}
-              {section === "marketplace" && <MarketplacePage />}
+              {section === "marketplace" && <MarketplacePage agentFilter={mktAgent} />}
               {section === "settings" && <SettingsPage />}
               {section === "proxy" && <ProxyPage />}
             </Suspense>

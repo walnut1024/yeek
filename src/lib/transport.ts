@@ -400,6 +400,11 @@ function buildPreviewResponse(name: string, args?: TransportArgs): unknown {
             install_location: "/Users/demo/.yeek/marketplaces/official",
             last_updated: "2026-05-13T09:20:00.000Z",
             plugin_count: 6,
+            last_checked_at: "2026-05-18T03:20:00.000Z",
+            local_head: "abc123",
+            remote_head: "def456",
+            sync_status: "update_available",
+            updates_available: 1,
           },
         ],
       };

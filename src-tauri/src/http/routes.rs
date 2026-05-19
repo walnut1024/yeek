@@ -72,10 +72,10 @@ fn cors_layer() -> CorsLayer {
     let origins = vec![
         "http://localhost:1420".parse().expect("invalid Vite dev URL"), // Vite dev
         "http://127.0.0.1:1420".parse().expect("invalid Vite dev URL"),
-        "http://localhost:17321".parse().expect("invalid self URL"),    // self
+        "http://localhost:17321".parse().expect("invalid self URL"), // self
         "http://127.0.0.1:17321".parse().expect("invalid self URL"),
-        "tauri://localhost".parse().unwrap(),                           // Tauri
-        "yeek://localhost".parse().unwrap(),                            // Electron production
+        "tauri://localhost".parse().unwrap(), // Tauri
+        "yeek://localhost".parse().unwrap(),  // Electron production
     ];
     CorsLayer::new()
         .allow_origin(AllowOrigin::list(origins))
@@ -135,7 +135,12 @@ async fn browse_sessions(
     let result = tokio::task::spawn_blocking(move || {
         do_browse_sessions(
             &state.app_state,
-            BrowseRequest { sort: query.sort, limit: query.limit, offset: query.offset, agent: query.agent },
+            BrowseRequest {
+                sort: query.sort,
+                limit: query.limit,
+                offset: query.offset,
+                agent: query.agent,
+            },
         )
     })
     .await
@@ -212,9 +217,11 @@ async fn destructive_delete_batch(
     State(state): State<HttpRuntimeState>,
     Json(body): Json<DestructiveDeleteBatchRequest>,
 ) -> Result<Json<DeleteJobPayload>, AppError> {
-    let result = tokio::task::spawn_blocking(move || do_destructive_delete_batch(&state.app_state, body.ids))
-        .await
-        .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
+    let result = tokio::task::spawn_blocking(move || {
+        do_destructive_delete_batch(&state.app_state, body.ids)
+    })
+    .await
+    .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
     Ok(Json(result))
 }
 
@@ -264,9 +271,11 @@ async fn subagent_messages(
 }
 
 async fn resume_session(Json(body): Json<ResumeRequest>) -> Result<Json<()>, AppError> {
-    tokio::task::spawn_blocking(move || do_resume_session(body.session_id, body.agent, body.cwd, body.terminal))
-        .await
-        .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
+    tokio::task::spawn_blocking(move || {
+        do_resume_session(body.session_id, body.agent, body.cwd, body.terminal)
+    })
+    .await
+    .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
     Ok(Json(()))
 }
 
@@ -399,9 +408,9 @@ use crate::app::proxy::{ProxyConfig, ProxyMetrics, ProxyStatus};
 async fn proxy_status(
     State(state): State<HttpRuntimeState>,
 ) -> Result<Json<ProxyStatus>, AppError> {
-    let result =
-        tokio::task::spawn_blocking(move || do_proxy_status(&state.app_state)).await
-            .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
+    let result = tokio::task::spawn_blocking(move || do_proxy_status(&state.app_state))
+        .await
+        .unwrap_or_else(|e| Err(AppError::Internal(e.to_string())))?;
     Ok(Json(result))
 }
 
