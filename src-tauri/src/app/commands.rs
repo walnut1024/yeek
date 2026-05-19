@@ -409,10 +409,7 @@ fn launch_with_open(command: &str, app_name: &str, cwd: Option<&str>) -> Result<
         "Ghostty" => {
             std::process::Command::new("open")
                 .args(["-na", "Ghostty", "--args"])
-                .arg("-e")
-                .arg(&shell)
-                .arg("-c")
-                .arg(&full_cmd)
+                .args(ghostty_launch_args(command, cwd, &shell))
                 .spawn()
                 .map_err(|e| format!("Failed to launch Ghostty: {e}"))?;
         },
@@ -434,14 +431,67 @@ end tell"#
                 .map_err(|e| format!("Failed to launch iTerm: {e}"))?;
         },
         _ => {
+            let shell_args = unix_shell_command_args(&full_cmd, &shell);
             std::process::Command::new("open")
-                .args(["-na", app_name, "--args", "-e", &shell, "-c", &full_cmd])
+                .args(["-na", app_name, "--args", "-e"])
+                .args(shell_args)
                 .spawn()
                 .map_err(|e| format!("Failed to launch {}: {e}", app_name))?;
         },
     }
 
     Ok(())
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+fn ghostty_launch_args(command: &str, cwd: Option<&str>, shell: &str) -> Vec<String> {
+    let mut args = Vec::new();
+    if let Some(dir) = cwd {
+        args.push(format!("--working-directory={}", dir));
+    }
+
+    args.push(format!(
+        "--initial-command=shell:{}",
+        ghostty_initial_command(command, shell)
+    ));
+    args
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+fn ghostty_initial_command(command: &str, shell: &str) -> String {
+    let args = unix_shell_command_args(command, shell);
+    format!(
+        "exec {}",
+        args.iter()
+            .map(|arg| shell_quote(arg))
+            .collect::<Vec<_>>()
+            .join(" ")
+    )
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+fn unix_shell_command_args(command: &str, shell: &str) -> Vec<String> {
+    match std::path::Path::new(shell)
+        .file_name()
+        .and_then(|name| name.to_str())
+    {
+        Some("bash" | "zsh") => vec![shell.to_string(), "-lic".to_string(), command.to_string()],
+        Some("fish") => vec![
+            shell.to_string(),
+            "-l".to_string(),
+            "-i".to_string(),
+            "-c".to_string(),
+            command.to_string(),
+        ],
+        _ => vec![
+            "/bin/sh".to_string(),
+            "-c".to_string(),
+            format!(
+                "export PATH=\"$PATH:/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.npm-global/bin\"; exec {}",
+                command
+            ),
+        ],
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -480,23 +530,65 @@ fn launch_terminal_linux(
         .map(|d| format!("cd {} && {}", shell_quote(d), command))
         .unwrap_or_else(|| command.to_string());
 
-    let terminals: &[(&str, &[&str])] = &[
-        ("ghostty", &["-e", &shell, "-c", &full_cmd]),
-        ("wezterm", &["start", "--", &shell, "-c", &full_cmd]),
-        ("kitty", &["-e", &shell, "-c", &full_cmd]),
-        ("alacritty", &["-e", &shell, "-c", &full_cmd]),
-        ("gnome-terminal", &["--", &shell, "-c", &full_cmd]),
-        ("konsole", &["-e", &shell, "-c", &full_cmd]),
-        ("xfce4-terminal", &["-e", &format!("{} -c {}", shell, shell_quote(&full_cmd))]),
-    ];
+    let shell_args = unix_shell_command_args(&full_cmd, &shell);
+    let shell_command = shell_args
+        .iter()
+        .map(|arg| shell_quote(arg))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let terminals: Vec<(&str, Vec<String>)> = Vec::from([
+        (
+            "wezterm",
+            Vec::from(["start".to_string(), "--".to_string()])
+                .into_iter()
+                .chain(shell_args.clone())
+                .collect(),
+        ),
+        (
+            "kitty",
+            Vec::from(["-e".to_string()])
+                .into_iter()
+                .chain(shell_args.clone())
+                .collect(),
+        ),
+        (
+            "alacritty",
+            Vec::from(["-e".to_string()])
+                .into_iter()
+                .chain(shell_args.clone())
+                .collect(),
+        ),
+        (
+            "gnome-terminal",
+            Vec::from(["--".to_string()])
+                .into_iter()
+                .chain(shell_args.clone())
+                .collect(),
+        ),
+        (
+            "konsole",
+            Vec::from(["-e".to_string()])
+                .into_iter()
+                .chain(shell_args.clone())
+                .collect(),
+        ),
+        ("xfce4-terminal", vec!["-e".to_string(), shell_command]),
+    ]);
+    let xterm_args: Vec<String> = Vec::from(["-e".to_string()])
+        .into_iter()
+        .chain(shell_args.clone())
+        .collect();
 
     // If user picked a specific terminal, try it first
     if let Some(name) = preferred {
         if !name.is_empty() {
-            for (bin, args) in terminals {
+            if name == "ghostty" && which_exists("ghostty") {
+                return launch_ghostty_linux(command, cwd, &shell);
+            }
+            for (bin, args) in &terminals {
                 if *bin == name && which_exists(bin) {
                     return std::process::Command::new(bin)
-                        .args(args.iter().map(|s| s.as_str()))
+                        .args(args)
                         .spawn()
                         .map_err(|e| format!("Failed to launch {}: {e}", bin));
                 }
@@ -505,10 +597,14 @@ fn launch_terminal_linux(
     }
 
     // Fallback: priority-based discovery
-    for (bin, args) in terminals {
+    if which_exists("ghostty") {
+        return launch_ghostty_linux(command, cwd, &shell);
+    }
+
+    for (bin, args) in &terminals {
         if which_exists(bin) {
             return std::process::Command::new(bin)
-                .args(args.iter().map(|s| s.as_str()))
+                .args(args)
                 .spawn()
                 .map_err(|e| format!("Failed to launch {}: {e}", bin));
         }
@@ -517,12 +613,22 @@ fn launch_terminal_linux(
     // Fallback: xterm
     if which_exists("xterm") {
         return std::process::Command::new("xterm")
-            .args(["-e", &shell, "-c", &full_cmd])
+            .args(&xterm_args)
             .spawn()
             .map_err(|e| format!("Failed to launch xterm: {e}"));
     }
 
     Err("No terminal emulator found. Install ghostty, wezterm, kitty, alacritty, gnome-terminal, konsole, xfce4-terminal, or xterm.".to_string())
+}
+
+#[cfg(target_os = "linux")]
+fn launch_ghostty_linux(command: &str, cwd: Option<&str>, shell: &str) -> Result<(), String> {
+    std::process::Command::new("ghostty")
+        .args(ghostty_launch_args(command, cwd, shell))
+        .spawn()
+        .map_err(|e| format!("Failed to launch ghostty: {e}"))?;
+
+    Ok(())
 }
 
 #[cfg(target_os = "linux")]
@@ -544,21 +650,23 @@ fn launch_terminal_windows(
     cwd: Option<&str>,
     preferred: Option<&str>,
 ) -> Result<(), String> {
-    let full_cmd = cwd
-        .map(|d| format!("cd {}; {}", shell_quote(d), command))
-        .unwrap_or_else(|| command.to_string());
+    let powershell_cmd = powershell_resume_command(command, cwd);
+    let cmd_cmd = cmd_resume_command(command, cwd);
 
     let candidates: &[(&str, &[&str])] = &[
-        ("pwsh.exe", &["-NoExit", "-Command", &full_cmd]),
-        ("powershell.exe", &["-NoExit", "-Command", &full_cmd]),
+        ("pwsh.exe", &["-NoExit", "-Command", &powershell_cmd]),
+        ("powershell.exe", &["-NoExit", "-Command", &powershell_cmd]),
     ];
 
     // If user picked a specific shell, try it first
     if let Some(name) = preferred {
         if !name.is_empty() {
+            if name == "wt.exe" && where_exists("wt.exe") {
+                return launch_windows_terminal(&powershell_cmd, cwd);
+            }
             for (bin, args) in candidates {
                 if *bin == name && where_exists(bin) {
-                    let mut start_args = vec!["/C", "start", bin];
+                    let mut start_args = vec!["/C", "start", "", bin];
                     for a in args {
                         start_args.push(a.as_str());
                     }
@@ -574,7 +682,7 @@ fn launch_terminal_windows(
     // Fallback: priority-based discovery
     for (bin, args) in candidates {
         if where_exists(bin) {
-            let mut start_args = vec!["/C", "start", bin];
+            let mut start_args = vec!["/C", "start", "", bin];
             for a in args {
                 start_args.push(a.as_str());
             }
@@ -587,27 +695,51 @@ fn launch_terminal_windows(
 
     // Fallback: Windows Terminal
     if where_exists("wt.exe") {
-        let mut wt_args = vec!["-d"];
-        if let Some(d) = cwd {
-            wt_args.push(d);
-        } else {
-            wt_args.push(".");
-        }
-        wt_args.push("pwsh.exe");
-        wt_args.push("-NoExit");
-        wt_args.push("-Command");
-        wt_args.push(&full_cmd);
-        return std::process::Command::new("wt")
-            .args(&wt_args)
-            .spawn()
-            .map_err(|e| format!("Failed to launch Windows Terminal: {e}"));
+        return launch_windows_terminal(&powershell_cmd, cwd);
     }
 
     // Last resort: cmd
     std::process::Command::new("cmd")
-        .args(["/C", "start", "cmd", "/K", &full_cmd])
+        .args(["/C", "start", "", "cmd", "/K", &cmd_cmd])
         .spawn()
         .map_err(|e| format!("Failed to launch cmd: {e}"))
+}
+
+#[cfg(target_os = "windows")]
+fn powershell_resume_command(command: &str, cwd: Option<&str>) -> String {
+    cwd.map(|d| format!("Set-Location -LiteralPath {}; {}", powershell_quote(d), command))
+        .unwrap_or_else(|| command.to_string())
+}
+
+#[cfg(target_os = "windows")]
+fn powershell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "''"))
+}
+
+#[cfg(target_os = "windows")]
+fn cmd_resume_command(command: &str, cwd: Option<&str>) -> String {
+    cwd.map(|d| format!("cd /d {} && {}", shell_quote(d), command))
+        .unwrap_or_else(|| command.to_string())
+}
+
+#[cfg(target_os = "windows")]
+fn launch_windows_terminal(command: &str, cwd: Option<&str>) -> Result<(), String> {
+    let mut wt_args = vec!["-d"];
+    if let Some(d) = cwd {
+        wt_args.push(d);
+    } else {
+        wt_args.push(".");
+    }
+    wt_args.push("pwsh.exe");
+    wt_args.push("-NoExit");
+    wt_args.push("-Command");
+    wt_args.push(command);
+    std::process::Command::new("wt")
+        .args(&wt_args)
+        .spawn()
+        .map_err(|e| format!("Failed to launch Windows Terminal: {e}"))?;
+
+    Ok(())
 }
 
 #[cfg(target_os = "windows")]
@@ -2865,5 +2997,121 @@ mod plugin_freshness_tests {
         assert_eq!(inventory.skills.len(), 0);
         assert_eq!(inventory.agents.len(), 0);
         assert_eq!(inventory.issues, vec!["No plugin, skill, agent, or hook content found"]);
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn ghostty_uses_initial_command_with_working_directory() {
+        let args = ghostty_launch_args(
+            "claude --resume 'a340bf99-5508-48be-b116-80783accc430'",
+            Some("/Users/hipnusleo/Documents/Projects/apps/yeek"),
+            "/bin/zsh",
+        );
+
+        assert_eq!(
+            args[0],
+            "--working-directory=/Users/hipnusleo/Documents/Projects/apps/yeek"
+        );
+        assert!(args[1].starts_with("--initial-command=shell:exec '/bin/zsh' '-lic' "));
+        assert!(args[1].contains("claude --resume"));
+        assert!(args.iter().all(|arg| !arg.starts_with("--command=")));
+        assert!(args.iter().all(|arg| arg != "-c"));
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn ghostty_initial_command_quotes_embedded_single_quotes_for_zsh() {
+        let args = ghostty_launch_args(
+            "claude --resume 'a340bf99-5508-48be-b116-80783accc430'",
+            Some("/Users/hipnusleo/Documents/Projects/apps/yeek test"),
+            "/opt/homebrew's/bin/zsh",
+        );
+
+        assert_eq!(
+            args[0],
+            "--working-directory=/Users/hipnusleo/Documents/Projects/apps/yeek test"
+        );
+        assert!(
+            args[1].contains("'claude --resume '\\''a340bf99-5508-48be-b116-80783accc430'\\'''")
+        );
+        assert!(args[1].contains("'/opt/homebrew'\\''s/bin/zsh'"));
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn ghostty_initial_command_uses_fish_supported_flags() {
+        let args = ghostty_launch_args(
+            "codex resume 'a340bf99-5508-48be-b116-80783accc430'",
+            None,
+            "/opt/homebrew/bin/fish",
+        );
+
+        assert_eq!(args.len(), 1);
+        assert!(args[0].starts_with(
+            "--initial-command=shell:exec '/opt/homebrew/bin/fish' '-l' '-i' '-c' "
+        ));
+        assert!(args[0].contains("codex resume"));
+        assert!(!args[0].contains(" -lic "));
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn ghostty_initial_command_falls_back_for_unknown_shells() {
+        let args = ghostty_launch_args(
+            "claude --resume 'a340bf99-5508-48be-b116-80783accc430'",
+            None,
+            "/bin/tcsh",
+        );
+
+        assert_eq!(args.len(), 1);
+        assert!(args[0].contains("export PATH=\"$PATH:/opt/homebrew/bin:/usr/local/bin:"));
+        assert!(args[0].contains("exec claude --resume"));
+        assert!(!args[0].contains(" -lic "));
+        assert!(!args[0].contains("'/bin/tcsh'"));
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn non_ghostty_unix_terminals_share_shell_argument_selection() {
+        let zsh_args = unix_shell_command_args("claude --resume 'session-id'", "/bin/zsh");
+        assert_eq!(
+            zsh_args,
+            vec!["/bin/zsh", "-lic", "claude --resume 'session-id'"]
+        );
+
+        let fish_args = unix_shell_command_args("codex resume 'session-id'", "/opt/homebrew/bin/fish");
+        assert_eq!(
+            fish_args,
+            vec!["/opt/homebrew/bin/fish", "-l", "-i", "-c", "codex resume 'session-id'"]
+        );
+
+        let fallback_args = unix_shell_command_args("claude --resume 'session-id'", "/bin/tcsh");
+        assert_eq!(fallback_args[0], "/bin/sh");
+        assert_eq!(fallback_args[1], "-c");
+        assert!(fallback_args[2].contains("exec claude --resume"));
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_powershell_resume_command_uses_literal_path() {
+        let command = r#"claude --resume "a340bf99-5508-48be-b116-80783accc430""#;
+        let full_cmd = powershell_resume_command(command, Some(r#"C:\Users\leo's app\yeek"#));
+
+        assert_eq!(
+            full_cmd,
+            r#"Set-Location -LiteralPath 'C:\Users\leo''s app\yeek'; claude --resume "a340bf99-5508-48be-b116-80783accc430""#
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_cmd_resume_command_uses_cmd_separator() {
+        let command = r#"codex resume "a340bf99-5508-48be-b116-80783accc430""#;
+        let full_cmd = cmd_resume_command(command, Some(r#"C:\Users\leo\yeek"#));
+
+        assert_eq!(
+            full_cmd,
+            r#"cd /d "C:\Users\leo\yeek" && codex resume "a340bf99-5508-48be-b116-80783accc430""#
+        );
     }
 }
