@@ -7,7 +7,7 @@
 
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::process::Command;
@@ -154,6 +154,132 @@ pub struct ProxyManager {
     lock: Mutex<()>,
 }
 
+fn resolve_provider_env_vars(config: &ProxyConfig) -> BTreeMap<String, String> {
+    let names = provider_api_key_env_names(config);
+    let mut resolved = BTreeMap::new();
+    let mut missing = Vec::new();
+
+    for name in names {
+        if !is_valid_env_var_name(&name) {
+            tracing::warn!(env_name = %name, "ignoring invalid provider api_key_env name");
+            continue;
+        }
+        match std::env::var(&name) {
+            Ok(value) if !value.is_empty() => {
+                resolved.insert(name, value);
+            }
+            _ => missing.push(name),
+        }
+    }
+
+    for (name, value) in load_provider_env_from_shell(&missing) {
+        resolved.entry(name).or_insert(value);
+    }
+
+    resolved
+}
+
+fn provider_api_key_env_names(config: &ProxyConfig) -> Vec<String> {
+    config
+        .providers
+        .values()
+        .filter_map(|provider| provider.api_key_env.as_ref())
+        .filter(|name| !name.is_empty())
+        .cloned()
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
+}
+
+fn is_valid_env_var_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    (first == '_' || first.is_ascii_alphabetic())
+        && chars.all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
+}
+
+#[cfg(not(target_os = "windows"))]
+fn load_provider_env_from_shell(names: &[String]) -> BTreeMap<String, String> {
+    if names.is_empty() {
+        return BTreeMap::new();
+    }
+
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+    let command = "printf '__YEEK_ENV_START__\\n'; env; printf '__YEEK_ENV_END__\\n'";
+    let args = shell_env_command_args(&shell, command);
+    let Some((program, rest)) = args.split_first() else {
+        return BTreeMap::new();
+    };
+
+    let output = match Command::new(program).args(rest).output() {
+        Ok(output) => output,
+        Err(error) => {
+            tracing::warn!(shell = %shell, error = %error, "failed to read provider env from shell");
+            return BTreeMap::new();
+        }
+    };
+    if !output.status.success() {
+        tracing::warn!(shell = %shell, status = %output.status, "provider env shell command failed");
+        return BTreeMap::new();
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    parse_marked_env_output(&stdout, names)
+}
+
+#[cfg(target_os = "windows")]
+fn load_provider_env_from_shell(_names: &[String]) -> BTreeMap<String, String> {
+    BTreeMap::new()
+}
+
+#[cfg(not(target_os = "windows"))]
+fn shell_env_command_args(shell: &str, command: &str) -> Vec<String> {
+    match std::path::Path::new(shell)
+        .file_name()
+        .and_then(|name| name.to_str())
+    {
+        Some("bash" | "zsh") => vec![shell.to_string(), "-lic".to_string(), command.to_string()],
+        Some("fish") => vec![
+            shell.to_string(),
+            "-l".to_string(),
+            "-i".to_string(),
+            "-c".to_string(),
+            command.to_string(),
+        ],
+        _ => vec!["/bin/sh".to_string(), "-lc".to_string(), command.to_string()],
+    }
+}
+
+fn parse_marked_env_output(output: &str, names: &[String]) -> BTreeMap<String, String> {
+    let wanted: BTreeSet<&str> = names.iter().map(String::as_str).collect();
+    let mut in_env = false;
+    let mut values = BTreeMap::new();
+
+    for line in output.lines() {
+        match line {
+            "__YEEK_ENV_START__" => {
+                in_env = true;
+                continue;
+            }
+            "__YEEK_ENV_END__" => break,
+            _ => {}
+        }
+        if !in_env {
+            continue;
+        }
+        let Some((name, value)) = line.split_once('=') else {
+            continue;
+        };
+        if wanted.contains(name) && !value.is_empty() {
+            values.insert(name.to_string(), value.to_string());
+        }
+    }
+
+    values
+}
+
 impl ProxyManager {
     pub fn with_db(db: Arc<Mutex<Connection>>) -> Self {
         let log_dir = std::env::temp_dir().join("yeek");
@@ -275,11 +401,15 @@ impl ProxyManager {
             .map_err(|e| AppError::Internal(format!("proxy log file: {}", e)))?;
 
         let bin = self.find_binary()?;
-        let mut child = Command::new(&bin)
+        let provider_env = resolve_provider_env_vars(&config);
+        let mut command = Command::new(&bin);
+        command
             .arg(&temp_toml)
             .env("RUST_LOG", "info")
+            .envs(provider_env)
             .stdout(log_file)
-            .stderr(stderr_file)
+            .stderr(stderr_file);
+        let mut child = command
             .spawn()
             .map_err(|e| AppError::Internal(format!("failed to spawn proxy ({}): {}", bin.display(), e)))?;
 
@@ -549,5 +679,69 @@ impl ProxyManager {
             if c.exists() { return Ok(c); }
         }
         Err(AppError::NotFound("vendor-proxy binary not found. Build with `cargo build -p vendor-proxy` or set YEEK_PROXY_BIN".into()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn provider_api_key_env_names_are_unique_and_non_empty() {
+        let mut config = ProxyConfig::default();
+        config.providers.insert("duplicate".into(), ProviderConfig {
+            base_url: "https://example.com".into(),
+            api_format: "anthropic_messages".into(),
+            api_key_env: Some("DEEPSEEK_API_KEY".into()),
+        });
+        config.providers.insert("empty".into(), ProviderConfig {
+            base_url: "https://example.com".into(),
+            api_format: "anthropic_messages".into(),
+            api_key_env: Some(String::new()),
+        });
+
+        let names = provider_api_key_env_names(&config);
+
+        assert_eq!(names, vec!["DEEPSEEK_API_KEY", "ZHIPU_API_KEY"]);
+    }
+
+    #[test]
+    fn env_var_name_validation_rejects_shell_syntax() {
+        assert!(is_valid_env_var_name("DEEPSEEK_API_KEY"));
+        assert!(is_valid_env_var_name("_YEEK_KEY_1"));
+        assert!(!is_valid_env_var_name(""));
+        assert!(!is_valid_env_var_name("1DEEPSEEK_API_KEY"));
+        assert!(!is_valid_env_var_name("DEEPSEEK-API-KEY"));
+        assert!(!is_valid_env_var_name("DEEPSEEK_API_KEY;echo leaked"));
+    }
+
+    #[test]
+    fn parses_marked_env_output_without_shell_noise() {
+        let names = vec!["DEEPSEEK_API_KEY".to_string(), "ZHIPU_API_KEY".to_string()];
+        let values = parse_marked_env_output(
+            "shell startup noise\n__YEEK_ENV_START__\nDEEPSEEK_API_KEY=deepseek-secret\nEMPTY=\nZHIPU_API_KEY=zhipu-secret\n__YEEK_ENV_END__\ntrailing\n",
+            &names,
+        );
+
+        assert_eq!(values.get("DEEPSEEK_API_KEY").map(String::as_str), Some("deepseek-secret"));
+        assert_eq!(values.get("ZHIPU_API_KEY").map(String::as_str), Some("zhipu-secret"));
+        assert_eq!(values.len(), 2);
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn shell_env_command_args_use_supported_shell_flags() {
+        assert_eq!(
+            shell_env_command_args("/bin/zsh", "env"),
+            vec!["/bin/zsh", "-lic", "env"]
+        );
+        assert_eq!(
+            shell_env_command_args("/opt/homebrew/bin/fish", "env"),
+            vec!["/opt/homebrew/bin/fish", "-l", "-i", "-c", "env"]
+        );
+        assert_eq!(
+            shell_env_command_args("/bin/tcsh", "env"),
+            vec!["/bin/sh", "-lc", "env"]
+        );
     }
 }
