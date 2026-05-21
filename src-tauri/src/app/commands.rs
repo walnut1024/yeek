@@ -450,10 +450,7 @@ fn ghostty_launch_args(command: &str, cwd: Option<&str>, shell: &str) -> Vec<Str
         args.push(format!("--working-directory={}", dir));
     }
 
-    args.push(format!(
-        "--initial-command=shell:{}",
-        ghostty_initial_command(command, shell)
-    ));
+    args.push(format!("--initial-command={}", ghostty_initial_command(command, shell)));
     args
 }
 
@@ -3012,7 +3009,8 @@ mod plugin_freshness_tests {
             args[0],
             "--working-directory=/Users/hipnusleo/Documents/Projects/apps/yeek"
         );
-        assert!(args[1].starts_with("--initial-command=shell:exec '/bin/zsh' '-lic' "));
+        assert!(args[1].starts_with("--initial-command=exec '/bin/zsh' '-lic' "));
+        assert!(!args[1].starts_with("--initial-command=shell:"));
         assert!(args[1].contains("claude --resume"));
         assert!(args.iter().all(|arg| !arg.starts_with("--command=")));
         assert!(args.iter().all(|arg| arg != "-c"));
@@ -3048,8 +3046,9 @@ mod plugin_freshness_tests {
 
         assert_eq!(args.len(), 1);
         assert!(args[0].starts_with(
-            "--initial-command=shell:exec '/opt/homebrew/bin/fish' '-l' '-i' '-c' "
+            "--initial-command=exec '/opt/homebrew/bin/fish' '-l' '-i' '-c' "
         ));
+        assert!(!args[0].starts_with("--initial-command=shell:"));
         assert!(args[0].contains("codex resume"));
         assert!(!args[0].contains(" -lic "));
     }
