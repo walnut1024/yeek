@@ -62,7 +62,7 @@ function NodeCard({
       onClick={() => onClick(node.id)}
       className={`group relative z-20 w-full rounded-lg border px-2.5 py-1.5 text-left transition-colors ${
         node.isMainPath ? "" : "border-dashed opacity-60"
-      }`}
+      } ${node.type === "thinking" ? "border-dashed opacity-70" : ""}`}
       style={{
         background: bg,
         borderColor: border,
@@ -98,6 +98,7 @@ const NODE_STYLES: Record<string, { bg: string; border: string; text: string }> 
   toolResult: { bg: "color-mix(in srgb, #78716c 7%, var(--card))", border: "rgba(120,113,108,0.15)", text: "#78716c" },
   subagent: { bg: "color-mix(in srgb, #c77dba 10%, var(--card))", border: "rgba(199,125,186,0.25)", text: "#8b3a7d" },
   meta: { bg: "var(--card)", border: "rgba(120,113,108,0.2)", text: "#78716c" },
+  thinking: { bg: "color-mix(in srgb, #8b5cf6 6%, var(--card))", border: "rgba(139,92,246,0.2)", text: "#7c3aed" },
 };
 
 // ── Turn edges (SVG overlay) ─────────────────────────────────────
@@ -552,7 +553,7 @@ export default function SessionRelationshipGraph({
 
       <div
         className={`grid min-h-0 flex-1 gap-2 ${
-          selectedId && transcript ? "lg:grid-cols-[minmax(0,1fr)_clamp(320px,32vw,430px)]" : ""
+          selectedId && transcript ? "lg:grid-cols-[minmax(0,1fr)_clamp(400px,38vw,1200px)]" : ""
         }`}
       >
         {/* Swimlane container */}

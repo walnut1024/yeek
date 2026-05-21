@@ -558,7 +558,7 @@ pub(crate) fn query_messages(
             parent_id,
             role: role.clone(),
             kind: "message".to_string(),
-            content_preview: truncate_to_chars(&preview, 500).to_string(),
+            content_preview: truncate_to_chars(&preview, 50_000).to_string(),
             timestamp: ms_to_rfc3339(msg.time_created),
             is_sidechain,
             entry_type: String::new(),
@@ -592,7 +592,7 @@ pub(crate) fn query_messages(
                         parent_id: None,
                         role: role.clone(),
                         kind: "thinking".to_string(),
-                        content_preview: truncate_to_chars(thinking, 500).to_string(),
+                        content_preview: truncate_to_chars(thinking, 50_000).to_string(),
                         timestamp: ms_to_rfc3339(part.time_created),
                         is_sidechain,
                         entry_type: "reasoning".to_string(),
@@ -626,7 +626,7 @@ pub(crate) fn query_messages(
                                 .unwrap_or("");
                             (
                                 "tool_result".to_string(),
-                                truncate_to_chars(output, 500).to_string(),
+                                truncate_to_chars(output, 50_000).to_string(),
                             )
                         }
                         "error" => {
@@ -638,7 +638,7 @@ pub(crate) fn query_messages(
                                 .unwrap_or("Tool error");
                             (
                                 "tool_result".to_string(),
-                                truncate_to_chars(error, 500).to_string(),
+                                truncate_to_chars(error, 50_000).to_string(),
                             )
                         }
                         _ => {

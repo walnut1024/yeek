@@ -5,7 +5,7 @@ import type { MessageRecord } from "@/lib/api";
 export interface MapNode {
   id: string;
   label: string;
-  type: "user" | "assistant" | "toolUse" | "toolResult" | "subagent" | "meta";
+  type: "user" | "assistant" | "toolUse" | "toolResult" | "subagent" | "meta" | "thinking";
   toolName?: string;
   model?: string;
   isMainPath: boolean;
@@ -93,6 +93,9 @@ function classifyMessage(
     return { type: "user", label: truncate(msg.content_preview, 55) };
   }
   if (msg.role === "assistant" && msg.kind === "message") {
+    if (msg.entry_type === "reasoning") {
+      return { type: "thinking", label: truncate(msg.content_preview || "", 55) || "(thinking…)" };
+    }
     const label = msg.content_preview
       ? truncate(msg.content_preview, 55)
       : "(thinking…)";

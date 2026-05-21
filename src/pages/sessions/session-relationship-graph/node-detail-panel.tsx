@@ -4,7 +4,8 @@ import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { X, Clock3, Boxes } from "lucide-react";
+import { X, Clock3, Boxes, Copy, CircleCheck } from "lucide-react";
+import { useState, useCallback } from "react";
 
 interface NodeDetailPanelProps {
   nodeId: string;
@@ -93,7 +94,10 @@ export default function NodeDetailPanel({
         </section>
 
         <section className="rounded-md border border-border bg-card p-2">
-          <p className="zed-kicker">{t("graph.previewTitle")}</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="zed-kicker">{t("graph.previewTitle")}</p>
+            <CopyPreviewButton text={msg.content_preview || ""} />
+          </div>
           <p className="mt-1.5 whitespace-pre-wrap break-words text-[12px] leading-[1.5] text-foreground">
             {msg.content_preview || t("graph.nodeEmpty")}
           </p>
@@ -115,6 +119,27 @@ export default function NodeDetailPanel({
         )}
       </div>
     </aside>
+  );
+}
+
+function CopyPreviewButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }, [text]);
+  if (!text) return null;
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="text-muted-foreground transition-colors hover:text-foreground"
+      aria-label="Copy preview"
+    >
+      {copied ? <CircleCheck size={13} className="text-primary" /> : <Copy size={13} />}
+    </button>
   );
 }
 

@@ -35,7 +35,7 @@ const AIBubble = React.memo(function AIBubble({
           </span>
         )}
       </div>
-      <div className="max-h-[520px] max-w-[72ch] overflow-y-auto custom-scrollbar pr-1 text-[14px] leading-[1.6] text-foreground">
+      <div className="max-h-[800px] overflow-y-auto custom-scrollbar pr-1 text-[14px] leading-[1.6] text-foreground">
         <Markdown
           remarkPlugins={[remarkGfm]}
           components={{

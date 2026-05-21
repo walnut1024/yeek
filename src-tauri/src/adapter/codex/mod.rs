@@ -219,7 +219,7 @@ pub(crate) fn parse_session(
                             parent_id: None,
                             role: "human".to_string(),
                             kind: "message".to_string(),
-                            content_preview: truncate_to_chars(msg, 2000).to_string(),
+                            content_preview: truncate_to_chars(msg, 50_000).to_string(),
                             timestamp: timestamp.clone(),
                             is_sidechain: false,
                             entry_type: "user".to_string(),
@@ -246,7 +246,7 @@ pub(crate) fn parse_session(
                                 parent_id: None,
                                 role: "assistant".to_string(),
                                 kind: "message".to_string(),
-                                content_preview: truncate_to_chars(msg, 2000).to_string(),
+                                content_preview: truncate_to_chars(msg, 50_000).to_string(),
                                 timestamp: timestamp.clone(),
                                 is_sidechain: false,
                                 entry_type: "assistant".to_string(),
@@ -291,7 +291,7 @@ pub(crate) fn parse_session(
                             parent_id: None,
                             role: "assistant".to_string(),
                             kind: "tool_result".to_string(),
-                            content_preview: truncate_to_chars(&content, 2000).to_string(),
+                            content_preview: truncate_to_chars(&content, 50_000).to_string(),
                             timestamp: timestamp.clone(),
                             is_sidechain: false,
                             entry_type: "tool_result".to_string(),
@@ -346,7 +346,7 @@ pub(crate) fn parse_session(
                             parent_id: None,
                             role: "assistant".to_string(),
                             kind: "message".to_string(),
-                            content_preview: truncate_to_chars(&text, 2000).to_string(),
+                            content_preview: truncate_to_chars(&text, 50_000).to_string(),
                             timestamp: timestamp.clone(),
                             is_sidechain: false,
                             entry_type: "assistant".to_string(),
@@ -376,7 +376,7 @@ pub(crate) fn parse_session(
                             content_preview: if arguments.is_empty() {
                                 format!("Tool: {}", tool_name)
                             } else {
-                                format!("Tool: {}\n{}", tool_name, truncate_to_chars(arguments, 2000))
+                                format!("Tool: {}\n{}", tool_name, truncate_to_chars(arguments, 50_000))
                             },
                             timestamp: timestamp.clone(),
                             is_sidechain: false,
@@ -404,7 +404,7 @@ pub(crate) fn parse_session(
                             parent_id: None,
                             role: "human".to_string(),
                             kind: "tool_result".to_string(),
-                            content_preview: truncate_to_chars(output, 2000).to_string(),
+                            content_preview: truncate_to_chars(output, 50_000).to_string(),
                             timestamp: timestamp.clone(),
                             is_sidechain: false,
                             entry_type: "tool_result".to_string(),
@@ -443,7 +443,7 @@ pub(crate) fn parse_session(
                             parent_id: None,
                             role: "assistant".to_string(),
                             kind: "message".to_string(),
-                            content_preview: truncate_to_chars(&text, 2000).to_string(),
+                            content_preview: truncate_to_chars(&text, 50_000).to_string(),
                             timestamp: timestamp.clone(),
                             is_sidechain: false,
                             entry_type: "reasoning".to_string(),
@@ -646,6 +646,10 @@ fn index_single_source(
     let is_update = existing_fingerprints.contains_key(&source.path);
 
     let (record, messages) = parse_session(&source.path, None)?;
+
+    if is_update {
+        conn.execute("DELETE FROM messages WHERE session_id = ?", rusqlite::params![record.id])?;
+    }
 
     sessions::upsert_session(conn, &record)?;
     for msg in &messages {
