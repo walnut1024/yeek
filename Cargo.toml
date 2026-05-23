@@ -1,5 +1,5 @@
 [workspace]
-members = ["src-tauri", "vendor_proxy"]
+members = ["src-tauri", "llm-proxy"]
 resolver = "2"
 
 [workspace.dependencies]

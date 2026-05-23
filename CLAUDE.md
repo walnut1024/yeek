@@ -7,15 +7,15 @@ Local-first Tauri v2 desktop app for browsing and managing agent coding sessions
 - **Backend**: Rust (Tauri v2, Axum HTTP + SSE, rusqlite bundled, SQLite + FTS5)
 - **Frontend**: React 19 + TypeScript + Vite + Tailwind CSS v4 + shadcn/ui (Base UI)
 - **Data**: TanStack Query for async state, localStorage for UI preferences
-- **Proxy**: vendor_proxy — OpenAI Responses API → multi-provider LLM proxy (DeepSeek, Anthropic, OpenAI, Zhipu, Ollama)
+- **Proxy**: llm-proxy (submodule) — OpenAI Responses API → multi-provider LLM proxy (DeepSeek, Anthropic, OpenAI, Zhipu, Ollama)
 
 ## Commands
 
 - `cargo tauri dev` — start dev server (launch once, HMR handles rest)
 - `npm run build` — frontend typecheck + build
-- `cargo build` — Rust build (workspace: yeek + vendor_proxy)
+- `cargo build` — Rust build (workspace: yeek + llm-proxy)
 - `cargo check` — fast Rust typecheck
-- `cargo test -p vendor-proxy` — run vendor_proxy tests
+- `cargo test -p llm-proxy` — run llm-proxy tests
 
 ## Release
 
@@ -42,7 +42,7 @@ src-tauri/src/
     opencode/            — OpenCode session adapter
   app/
     commands.rs          — Tauri IPC command handlers
-    proxy/               — VendorProxy lifecycle: spawn, kill, watchdog
+    proxy/               — llm-proxy lifecycle: spawn, kill, watchdog
   bin/                   — Binary entry points (yeek-server)
   domain/                — Core session/source/delete types
   http/                  — Axum HTTP API (REST + SSE)
@@ -50,7 +50,7 @@ src-tauri/src/
   store/                 — SQLite persistence
   sync/                  — File watchers, background scanner, startup sync
   tauri_bridge/          — Tauri IPC → service layer adapters
-vendor_proxy/src/        — Standalone LLM proxy binary
+llm-proxy/src/           — Standalone LLM proxy binary (git submodule → github.com/walnut1024/llm-proxy)
   adapters/              — Provider adapters (Chat Completions, Anthropic)
   bridge/                — Responses ↔ Chat bidirectional conversion
   stream/                — SSE pipeline: Anthropic SSE → Chat SSE → Responses SSE

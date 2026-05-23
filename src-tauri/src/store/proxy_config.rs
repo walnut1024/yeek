@@ -2,7 +2,7 @@
 //!
 //! The `proxy_config` table holds a single row (id = 1) with the full
 //! proxy config serialized as JSON. This is the authoritative source
-//! when vendor_proxy is managed from the GUI. Standalone CLI mode uses
+//! when llm-proxy is managed from the GUI. Standalone CLI mode uses
 //! the TOML file instead.
 
 use rusqlite::Connection;

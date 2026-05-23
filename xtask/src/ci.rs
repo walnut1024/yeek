@@ -37,7 +37,7 @@ pub fn e2e() -> Result<()> {
         eprintln!("Skipping e2e: DEEPSEEK_API_KEY not set");
         return Ok(());
     }
-    cmd!(sh, "cargo test -p vendor-proxy -- e2e").run()?;
+    cmd!(sh, "cargo test -p llm-proxy -- e2e").run()?;
     Ok(())
 }
 

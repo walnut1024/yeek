@@ -160,7 +160,7 @@
   "dashboard.statMessages": "消息",
   "dashboard.statMessagesSub": "全部会话",
   "dashboard.proxyRuntime": "代理运行时",
-  "dashboard.proxySub": "vendor-proxy",
+  "dashboard.proxySub": "llm-proxy",
   "dashboard.metricUptime": "运行时间",
   "dashboard.metricRPS": "每秒请求",
   "dashboard.metricLatency": "延迟",

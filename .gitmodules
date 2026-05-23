@@ -1,0 +1,3 @@
+[submodule "llm-proxy"]
+	path = llm-proxy
+	url = https://github.com/walnut1024/llm-proxy.git

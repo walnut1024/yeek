@@ -1,4 +1,4 @@
-//! vendor_proxy lifecycle management: spawn, kill, health-check, config read/write.
+//! llm-proxy lifecycle management: spawn, kill, health-check, config read/write.
 //!
 //! Monitoring:
 //! - **Watchdog**: background thread detects unexpected process exit and auto-restarts.
@@ -667,7 +667,7 @@ impl ProxyManager {
         }
         if let Ok(exe) = std::env::current_exe() {
             if let Some(dir) = exe.parent() {
-                for name in &["vendor-proxy", "vendor_proxy"] {
+                for name in &["llm-proxy", "vendor-proxy"] {
                     let c = dir.join(name);
                     if c.exists() { return Ok(c); }
                 }
@@ -675,10 +675,10 @@ impl ProxyManager {
         }
         for profile in &["debug", "release"] {
             let c = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("../target").join(profile).join("vendor-proxy");
+                .join("../target").join(profile).join("llm-proxy");
             if c.exists() { return Ok(c); }
         }
-        Err(AppError::NotFound("vendor-proxy binary not found. Build with `cargo build -p vendor-proxy` or set YEEK_PROXY_BIN".into()))
+        Err(AppError::NotFound("llm-proxy binary not found. Build with `cargo build -p llm-proxy` or set YEEK_PROXY_BIN".into()))
     }
 }
 

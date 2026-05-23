@@ -170,7 +170,7 @@
   "dashboard.statMessages": "Messages",
   "dashboard.statMessagesSub": "Across all sessions",
   "dashboard.proxyRuntime": "Proxy Runtime",
-  "dashboard.proxySub": "vendor-proxy",
+  "dashboard.proxySub": "llm-proxy",
   "dashboard.metricUptime": "Uptime",
   "dashboard.metricRPS": "RPS",
   "dashboard.metricLatency": "Latency",
