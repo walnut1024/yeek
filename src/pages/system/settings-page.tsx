@@ -6,6 +6,7 @@ import { getActionLog, releaseAndResync } from "@/lib/api";
 import { useLocalStorage } from "@/lib/hooks";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { currentTerminalPlatform, terminalOptionsForPlatform } from "./terminal-options";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,29 +19,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { formatRelativeTime } from "@/lib/formatters";
 
-const TERMINAL_OPTIONS = [
-  "Ghostty",
-  "iTerm",
-  "Warp",
-  "WezTerm",
-  "kitty",
-  "Alacritty",
-  "Terminal.app",
-  "cmux",
-  "ghostty",
-  "gnome-terminal",
-  "konsole",
-  "xfce4-terminal",
-  "pwsh.exe",
-  "powershell.exe",
-  "wt.exe",
-];
-
 export default function SettingsPage() {
   const queryClient = useQueryClient();
   const { t, i18n } = useTranslation();
   const [scanProgress, setScanProgress] = useState<{ processed: number; total: number } | null>(null);
   const [defaultTerminal, setDefaultTerminal] = useLocalStorage<string>("default-terminal", "");
+  const terminalOptions = terminalOptionsForPlatform(currentTerminalPlatform());
+  const selectedTerminal = defaultTerminal === "iTerm" ? "iTerm2" : defaultTerminal;
 
   const { data: actionLog } = useQuery({
     queryKey: ["action-log"],
@@ -104,14 +89,14 @@ export default function SettingsPage() {
                   <span className="sr-only">{t("settings.defaultTerminal")}</span>
                   <select
                     title={t("settings.defaultTerminal")}
-                    value={defaultTerminal}
+                    value={selectedTerminal}
                     onChange={(e) => setDefaultTerminal(e.target.value)}
                     className="zed-input"
                   >
                     <option value="">{t("settings.terminalAuto")}</option>
-                    {TERMINAL_OPTIONS.map((name) => (
-                      <option key={name} value={name}>
-                        {name}
+                    {terminalOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
                       </option>
                     ))}
                   </select>

@@ -32,6 +32,12 @@ fn test_session(id: &str, title: &str) -> SessionRecord {
     }
 }
 
+fn test_session_with_agent(id: &str, title: &str, agent: &str) -> SessionRecord {
+    let mut session = test_session(id, title);
+    session.agent = agent.to_string();
+    session
+}
+
 #[test]
 fn test_schema_initialization() {
     let conn = setup_db();
@@ -86,8 +92,31 @@ fn test_search_sessions() {
     sessions::upsert_session(&conn, &test_session("s-alpha", "Alpha Project")).expect("upsert");
     sessions::upsert_session(&conn, &test_session("s-beta", "Beta Research")).expect("upsert");
 
-    let params = SearchParams { query: "Alpha".to_string(), limit: 10, offset: 0 };
+    let params = SearchParams { query: "Alpha".to_string(), limit: 10, offset: 0, agent: None };
     let result = sessions::search_sessions(&conn, &params).expect("search");
     assert_eq!(result.sessions.len(), 1);
     assert_eq!(result.sessions[0].id, "s-alpha");
+}
+
+#[test]
+fn test_search_sessions_filters_by_agent() {
+    let conn = setup_db();
+    sessions::upsert_session(
+        &conn,
+        &test_session_with_agent("s-claude", "Shared Project", "claude_code"),
+    )
+    .expect("upsert claude");
+    sessions::upsert_session(&conn, &test_session_with_agent("s-codex", "Shared Project", "codex"))
+        .expect("upsert codex");
+
+    let params = SearchParams {
+        query: "Shared".to_string(),
+        limit: 10,
+        offset: 0,
+        agent: Some("codex".to_string()),
+    };
+    let result = sessions::search_sessions(&conn, &params).expect("search");
+
+    assert_eq!(result.sessions.len(), 1);
+    assert_eq!(result.sessions[0].id, "s-codex");
 }

@@ -65,7 +65,7 @@ const ROUTES: Record<string, RouteMapping> = {
   get_proxy_error_events: { method: "GET", path: "/api/proxy/errors" },
 };
 
-function commandToRoute(
+export function commandToRoute(
   name: string,
   args?: Record<string, unknown>,
 ): { method: string; path: string; body?: Record<string, unknown> } {
@@ -84,27 +84,29 @@ function commandToRoute(
     }
   }
 
+  const routeArgs = normalizeHttpArgs(args);
+
   // For GET requests, add remaining args as query params
   let body: Record<string, unknown> | undefined;
-  if (route.method === "GET" && args) {
+  if (route.method === "GET" && routeArgs) {
     const pathParams = new Set(
       (route.path.match(/\{(\w+)\}/g) || []).map((p) => p.slice(1, -1)),
     );
-    const queryParams = Object.entries(args).filter(
+    const queryParams = Object.entries(routeArgs).filter(
       ([k]) => !pathParams.has(k),
     );
     if (queryParams.length > 0) {
       const qs = queryParams
-        .map(([k, v]) => `${camelToSnake(k)}=${encodeURIComponent(String(v))}`)
+        .map(([k, v]) => `${httpQueryKey(name, k)}=${encodeURIComponent(String(v))}`)
         .join("&");
       path += `?${qs}`;
     }
-  } else if (args) {
+  } else if (routeArgs) {
     // For POST/DELETE, extract body from args that aren't path params
     const pathParams = new Set(
       (route.path.match(/\{(\w+)\}/g) || []).map((p) => p.slice(1, -1)),
     );
-    const bodyEntries = Object.entries(args).filter(
+    const bodyEntries = Object.entries(routeArgs).filter(
       ([k]) => !pathParams.has(k),
     );
     if (bodyEntries.length > 0) {
@@ -115,6 +117,18 @@ function commandToRoute(
   }
 
   return { method: route.method, path, body };
+}
+
+function normalizeHttpArgs(args?: Record<string, unknown>): Record<string, unknown> | undefined {
+  if (!args || !("request" in args)) return args;
+  const request = args.request;
+  if (!request || typeof request !== "object" || Array.isArray(request)) return args;
+  return request as Record<string, unknown>;
+}
+
+function httpQueryKey(command: string, key: string): string {
+  if (command === "search_sessions" && key === "query") return "q";
+  return camelToSnake(key);
 }
 
 function camelToSnake(s: string): string {
@@ -279,6 +293,7 @@ const PREVIEW_SOURCES = [
 ];
 
 function buildPreviewResponse(name: string, args?: TransportArgs): unknown {
+  const previewArgs = normalizeHttpArgs(args);
   switch (name) {
     case "get_system_status":
       return {
@@ -294,19 +309,22 @@ function buildPreviewResponse(name: string, args?: TransportArgs): unknown {
         status: "ok",
       };
     case "browse_sessions": {
-      const agent = typeof args?.agent === "string" ? args.agent : undefined;
+      const agent = typeof previewArgs?.agent === "string" ? previewArgs.agent : undefined;
       const sessions = agent
         ? PREVIEW_SESSIONS.filter((session) => session.agent === agent)
         : PREVIEW_SESSIONS;
       return { sessions, total: sessions.length, has_more: false };
     }
     case "search_sessions": {
-      const query = String(args?.query ?? "").toLowerCase();
-      const sessions = PREVIEW_SESSIONS.filter((session) =>
-        !query
-          || session.title?.toLowerCase().includes(query)
-          || session.project_path?.toLowerCase().includes(query),
-      );
+      const query = String(previewArgs?.query ?? "").toLowerCase();
+      const agent = typeof previewArgs?.agent === "string" ? previewArgs.agent : undefined;
+      const sessions = PREVIEW_SESSIONS
+        .filter((session) => !agent || session.agent === agent)
+        .filter((session) =>
+          !query
+            || session.title?.toLowerCase().includes(query)
+            || session.project_path?.toLowerCase().includes(query),
+        );
       return { sessions, total: sessions.length, has_more: false };
     }
     case "get_session_preview": {
@@ -511,7 +529,7 @@ class HttpTransport implements Transport {
   }
 }
 
-const isTauri = !!window.__TAURI_INTERNALS__;
+const isTauri = typeof window !== "undefined" && !!window.__TAURI_INTERNALS__;
 
 let transport: Transport = isTauri
   ? new TauriTransport()

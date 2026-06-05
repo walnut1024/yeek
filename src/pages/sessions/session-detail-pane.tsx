@@ -10,6 +10,7 @@ import { Copy, CircleCheck, Play, FolderTree, Rows3, GitBranch, Network } from "
 import { formatTime, formatRelativeTime } from "@/lib/formatters";
 import { getSessionTranscript } from "@/lib/api";
 import SourcesTab from "./sources-tab";
+import { formatResumeError } from "./resume-error";
 
 const TranscriptView = lazy(() => import("./transcript-view"));
 const SessionRelationshipGraph = lazy(() => import("./session-relationship-graph/session-relationship-graph"));
@@ -26,6 +27,7 @@ export default function SessionDetailPane({
   );
   const [defaultTerminal] = useLocalStorage<string>("default-terminal", "");
   const [fullscreen, setFullscreen] = useState(false);
+  const [resumeError, setResumeError] = useState<string | null>(null);
 
   const { data: preview, isLoading: previewLoading } = useQuery({
     queryKey: ["session-preview", sessionId],
@@ -84,10 +86,12 @@ export default function SessionDetailPane({
                     size="sm"
                     className="ml-auto h-7 shrink-0 rounded-md px-2.5 text-[12px]"
                     onClick={async () => {
+                      setResumeError(null);
                       try {
                         await resumeSession(record.id, record.agent, record.project_path, defaultTerminal || null);
                       } catch (e) {
                         console.error("Failed to resume session:", e);
+                        setResumeError(formatResumeError(e));
                       }
                     }}
                   >
@@ -95,6 +99,11 @@ export default function SessionDetailPane({
                     {t("detail.resume")}
                   </Button>
                 </div>
+                {resumeError && (
+                  <p className="mt-1.5 max-w-full truncate rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1 text-[12px] text-destructive">
+                    {t("detail.resumeFailed", { message: resumeError })}
+                  </p>
+                )}
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
                   <MetaPill
                     label={t("detail.model")}

@@ -155,6 +155,7 @@ pub struct SearchRequest {
     pub query: String,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
+    pub agent: Option<String>,
 }
 
 /// Full-text search across all sessions.
@@ -170,6 +171,7 @@ pub(crate) fn do_search_sessions(
         query: request.query,
         limit: request.limit.unwrap_or(50),
         offset: request.offset.unwrap_or(0),
+        agent: request.agent.filter(|a| ["claude_code", "codex", "opencode"].contains(&a.as_str())),
     };
 
     let result = sessions::search_sessions(&db, &params)?;
@@ -355,26 +357,48 @@ fn launch_terminal_macos(
 ) -> Result<(), String> {
     // If user picked a specific terminal, try it first
     if let Some(name) = preferred {
-        if !name.is_empty() && name != "Terminal.app" {
-            if is_app_running(name) || app_exists(name) {
-                return launch_with_open(command, name, cwd);
+        let app_name = macos_terminal_app_name(name);
+        if !app_name.is_empty() && app_name != "Terminal.app" {
+            if is_app_running(app_name) || app_exists(app_name) {
+                return launch_with_open(command, app_name, cwd);
             }
         }
-        if name == "Terminal.app" {
+        if app_name == "Terminal.app" {
             return launch_terminal_app(command, cwd);
         }
     }
 
     // Fallback: priority-based discovery
-    let terminals = ["Ghostty", "iTerm", "Warp", "WezTerm", "kitty", "Alacritty"];
+    let terminals = [
+        "Ghostty",
+        "iTerm2",
+        "Terminal.app",
+        "cmux",
+        "Warp",
+        "WezTerm",
+        "kitty",
+        "Alacritty",
+    ];
 
     for &name in &terminals {
-        if is_app_running(name) || app_exists(name) {
-            return launch_with_open(command, name, cwd);
+        let app_name = macos_terminal_app_name(name);
+        if app_name == "Terminal.app" {
+            return launch_terminal_app(command, cwd);
+        }
+        if is_app_running(app_name) || app_exists(app_name) {
+            return launch_with_open(command, app_name, cwd);
         }
     }
 
     launch_terminal_app(command, cwd)
+}
+
+#[cfg(target_os = "macos")]
+fn macos_terminal_app_name(name: &str) -> &str {
+    match name {
+        "iTerm2" => "iTerm",
+        other => other,
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -406,34 +430,22 @@ fn launch_with_open(command: &str, app_name: &str, cwd: Option<&str>) -> Result<
         .unwrap_or_else(|| command.to_string());
 
     match app_name {
-        "Ghostty" => {
+        "Ghostty" | "cmux" => {
             std::process::Command::new("open")
-                .args(["-na", "Ghostty", "--args"])
-                .args(ghostty_launch_args(command, cwd, &shell))
+                .args(macos_open_new_app_args(app_name))
+                .args(ghostty_launch_args_macos(command, cwd))
                 .spawn()
-                .map_err(|e| format!("Failed to launch Ghostty: {e}"))?;
+                .map_err(|e| format!("Failed to launch {app_name}: {e}"))?;
         },
         "iTerm" => {
-            let escaped = full_cmd.replace('\\', "\\\\").replace('"', "\\\"");
-            let script = format!(
-                r#"tell application "iTerm"
-    activate
-    create window with default profile
-    tell current session of current window
-        write text "{escaped}"
-    end tell
-end tell"#
-            );
-            std::process::Command::new("osascript")
-                .arg("-e")
-                .arg(&script)
-                .spawn()
-                .map_err(|e| format!("Failed to launch iTerm: {e}"))?;
+            let script = iterm_resume_applescript(&full_cmd);
+            run_osascript(&script, "iTerm")?;
         },
         _ => {
             let shell_args = unix_shell_command_args(&full_cmd, &shell);
             std::process::Command::new("open")
-                .args(["-na", app_name, "--args", "-e"])
+                .args(macos_open_app_args(app_name))
+                .arg("-e")
                 .args(shell_args)
                 .spawn()
                 .map_err(|e| format!("Failed to launch {}: {e}", app_name))?;
@@ -443,27 +455,82 @@ end tell"#
     Ok(())
 }
 
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(target_os = "macos")]
+fn macos_open_app_args(app_name: &str) -> Vec<&str> {
+    vec!["-a", app_name, "--args"]
+}
+
+#[cfg(target_os = "macos")]
+fn macos_open_new_app_args(app_name: &str) -> Vec<&str> {
+    vec!["-n", "-a", app_name, "--args"]
+}
+
+#[cfg(target_os = "macos")]
+fn applescript_escape(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+#[cfg(target_os = "macos")]
+fn run_osascript(script: &str, app_name: &str) -> Result<(), String> {
+    let output = std::process::Command::new("osascript")
+        .arg("-e")
+        .arg(script)
+        .output()
+        .map_err(|e| format!("Failed to launch {app_name}: {e}"))?;
+
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    if stderr.is_empty() {
+        Err(format!("Failed to launch {app_name}: osascript exited with {}", output.status))
+    } else {
+        Err(format!("Failed to launch {app_name}: {stderr}"))
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn iterm_resume_applescript(full_cmd: &str) -> String {
+    let escaped = applescript_escape(full_cmd);
+    format!(
+        r#"tell application "iTerm"
+    activate
+    if (count of windows) = 0 then
+        create window with default profile
+    else
+        tell current window
+            create tab with default profile
+        end tell
+    end if
+    tell current session of current window
+        write text "{escaped}"
+    end tell
+end tell"#
+    )
+}
+
+#[cfg(target_os = "macos")]
+fn ghostty_launch_args_macos(command: &str, cwd: Option<&str>) -> Vec<String> {
+    let mut args = Vec::new();
+    if let Some(dir) = cwd {
+        args.push(format!("--working-directory={}", dir));
+    }
+
+    args.push(format!("--initial-command=shell:{}", command));
+    args
+}
+
+#[cfg(target_os = "linux")]
 fn ghostty_launch_args(command: &str, cwd: Option<&str>, shell: &str) -> Vec<String> {
     let mut args = Vec::new();
     if let Some(dir) = cwd {
         args.push(format!("--working-directory={}", dir));
     }
 
-    args.push(format!("--initial-command={}", ghostty_initial_command(command, shell)));
+    args.push("-e".to_string());
+    args.extend(unix_shell_command_args(command, shell));
     args
-}
-
-#[cfg(any(target_os = "macos", target_os = "linux"))]
-fn ghostty_initial_command(command: &str, shell: &str) -> String {
-    let args = unix_shell_command_args(command, shell);
-    format!(
-        "exec {}",
-        args.iter()
-            .map(|arg| shell_quote(arg))
-            .collect::<Vec<_>>()
-            .join(" ")
-    )
 }
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
@@ -660,6 +727,12 @@ fn launch_terminal_windows(
         if !name.is_empty() {
             if name == "wt.exe" && where_exists("wt.exe") {
                 return launch_windows_terminal(&powershell_cmd, cwd);
+            }
+            if name == "cmd.exe" {
+                return std::process::Command::new("cmd")
+                    .args(["/C", "start", "", "cmd", "/K", &cmd_cmd])
+                    .spawn()
+                    .map_err(|e| format!("Failed to launch cmd: {e}"));
             }
             for (bin, args) in candidates {
                 if *bin == name && where_exists(bin) {
@@ -2996,77 +3069,112 @@ mod plugin_freshness_tests {
         assert_eq!(inventory.issues, vec!["No plugin, skill, agent, or hook content found"]);
     }
 
-    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[cfg(target_os = "macos")]
     #[test]
-    fn ghostty_uses_initial_command_with_working_directory() {
-        let args = ghostty_launch_args(
+    fn ghostty_macos_uses_shell_initial_command_with_working_directory() {
+        let args = ghostty_launch_args_macos(
             "claude --resume 'a340bf99-5508-48be-b116-80783accc430'",
             Some("/Users/hipnusleo/Documents/Projects/apps/yeek"),
-            "/bin/zsh",
         );
 
         assert_eq!(
             args[0],
             "--working-directory=/Users/hipnusleo/Documents/Projects/apps/yeek"
         );
-        assert!(args[1].starts_with("--initial-command=exec '/bin/zsh' '-lic' "));
-        assert!(!args[1].starts_with("--initial-command=shell:"));
-        assert!(args[1].contains("claude --resume"));
+        assert_eq!(
+            args[1],
+            "--initial-command=shell:claude --resume 'a340bf99-5508-48be-b116-80783accc430'"
+        );
         assert!(args.iter().all(|arg| !arg.starts_with("--command=")));
-        assert!(args.iter().all(|arg| arg != "-c"));
+        assert!(args.iter().all(|arg| arg != "-e"));
     }
 
-    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[cfg(target_os = "macos")]
     #[test]
-    fn ghostty_initial_command_quotes_embedded_single_quotes_for_zsh() {
-        let args = ghostty_launch_args(
+    fn ghostty_macos_initial_command_does_not_wrap_exec() {
+        let args = ghostty_launch_args_macos(
             "claude --resume 'a340bf99-5508-48be-b116-80783accc430'",
             Some("/Users/hipnusleo/Documents/Projects/apps/yeek test"),
-            "/opt/homebrew's/bin/zsh",
         );
 
         assert_eq!(
             args[0],
             "--working-directory=/Users/hipnusleo/Documents/Projects/apps/yeek test"
         );
-        assert!(
-            args[1].contains("'claude --resume '\\''a340bf99-5508-48be-b116-80783accc430'\\'''")
+        assert_eq!(
+            args[1],
+            "--initial-command=shell:claude --resume 'a340bf99-5508-48be-b116-80783accc430'"
         );
-        assert!(args[1].contains("'/opt/homebrew'\\''s/bin/zsh'"));
+        assert!(!args[1].contains("exec"));
     }
 
-    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[cfg(target_os = "linux")]
     #[test]
-    fn ghostty_initial_command_uses_fish_supported_flags() {
+    fn ghostty_linux_uses_fish_supported_flags() {
         let args = ghostty_launch_args(
             "codex resume 'a340bf99-5508-48be-b116-80783accc430'",
             None,
             "/opt/homebrew/bin/fish",
         );
 
-        assert_eq!(args.len(), 1);
-        assert!(args[0].starts_with(
-            "--initial-command=exec '/opt/homebrew/bin/fish' '-l' '-i' '-c' "
-        ));
-        assert!(!args[0].starts_with("--initial-command=shell:"));
-        assert!(args[0].contains("codex resume"));
-        assert!(!args[0].contains(" -lic "));
+        assert_eq!(
+            args,
+            vec![
+                "-e",
+                "/opt/homebrew/bin/fish",
+                "-l",
+                "-i",
+                "-c",
+                "codex resume 'a340bf99-5508-48be-b116-80783accc430'"
+            ]
+        );
     }
 
-    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[cfg(target_os = "linux")]
     #[test]
-    fn ghostty_initial_command_falls_back_for_unknown_shells() {
+    fn ghostty_linux_falls_back_for_unknown_shells() {
         let args = ghostty_launch_args(
             "claude --resume 'a340bf99-5508-48be-b116-80783accc430'",
             None,
             "/bin/tcsh",
         );
 
-        assert_eq!(args.len(), 1);
-        assert!(args[0].contains("export PATH=\"$PATH:/opt/homebrew/bin:/usr/local/bin:"));
-        assert!(args[0].contains("exec claude --resume"));
-        assert!(!args[0].contains(" -lic "));
-        assert!(!args[0].contains("'/bin/tcsh'"));
+        assert_eq!(args.len(), 4);
+        assert_eq!(args[0], "-e");
+        assert_eq!(args[1], "/bin/sh");
+        assert_eq!(args[2], "-c");
+        assert!(args[3].contains("export PATH=\"$PATH:/opt/homebrew/bin:/usr/local/bin:"));
+        assert!(args[3].contains("exec claude --resume"));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_open_args_reuse_running_app_instance_for_standard_apps() {
+        assert_eq!(macos_open_app_args("Warp"), vec!["-a", "Warp", "--args"]);
+        assert!(!macos_open_app_args("Warp").contains(&"-n"));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_open_new_app_args_force_new_instance_for_ghostty_argument_delivery() {
+        assert_eq!(
+            macos_open_new_app_args("Ghostty"),
+            vec!["-n", "-a", "Ghostty", "--args"]
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn iterm_applescript_reuses_running_app_with_new_tab() {
+        let script = iterm_resume_applescript(
+            "cd '/Users/hipnusleo/Documents/Projects/apps/yeek' && codex resume 'a340bf99-5508-48be-b116-80783accc430'",
+        );
+
+        assert!(script.contains(r#"tell application "iTerm""#));
+        assert!(script.contains("if (count of windows) = 0 then"));
+        assert!(script.contains("create window with default profile"));
+        assert!(script.contains("create tab with default profile"));
+        assert!(script.contains(r#"write text "cd '/Users/hipnusleo/Documents/Projects/apps/yeek' && codex resume 'a340bf99-5508-48be-b116-80783accc430'""#));
     }
 
     #[cfg(any(target_os = "macos", target_os = "linux"))]
@@ -3088,6 +3196,14 @@ mod plugin_freshness_tests {
         assert_eq!(fallback_args[0], "/bin/sh");
         assert_eq!(fallback_args[1], "-c");
         assert!(fallback_args[2].contains("exec claude --resume"));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_terminal_display_names_map_to_app_names() {
+        assert_eq!(macos_terminal_app_name("iTerm2"), "iTerm");
+        assert_eq!(macos_terminal_app_name("cmux"), "cmux");
+        assert_eq!(macos_terminal_app_name("Terminal.app"), "Terminal.app");
     }
 
     #[cfg(target_os = "windows")]

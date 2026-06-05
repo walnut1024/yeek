@@ -20,6 +20,8 @@ declare global {
 
 class NoopEventTransport implements EventTransport {
   async on<T = unknown>(_event: string, _handler: EventHandler<T>): Promise<UnlistenFn> {
+    void _event;
+    void _handler;
     return () => {};
   }
 }

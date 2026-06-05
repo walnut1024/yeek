@@ -246,7 +246,7 @@ function TurnEdges({
 
     setSize({ width: rowRect.width, height: rowRect.height });
     setPaths(nextPaths);
-  }, [row]);
+  }, [row, turn.assistants, turn.subagents, turn.tools, turn.user]);
 
   useLayoutEffect(() => {
     if (!row) return;

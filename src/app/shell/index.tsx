@@ -114,46 +114,34 @@ function DeletePlanTable({
   sessions: SessionRecord[];
 }) {
   const { t } = useTranslation();
-  const [plans, setPlans] = useState<Map<string, SourceDeletePlan[]>>(new Map());
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    const ids = Array.from(sessionIds);
-    setLoading(true);
-    Promise.all(ids.map((id) => getDeletePlan(id)))
-      .then((results) => {
-        if (cancelled) return;
-        const map = new Map<string, SourceDeletePlan[]>();
-        results.forEach((plan) => {
-          if (plan.sources.length > 0) {
-            map.set(plan.session_id, plan.sources);
-          }
-        });
-        setPlans(map);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setPlans(new Map());
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+  const ids = useMemo(() => Array.from(sessionIds).sort(), [sessionIds]);
+  const plansQuery = useQuery({
+    queryKey: ["delete-plan-table", ids],
+    queryFn: async () => {
+      const results = await Promise.all(ids.map((id) => getDeletePlan(id)));
+      const map = new Map<string, SourceDeletePlan[]>();
+      results.forEach((plan) => {
+        if (plan.sources.length > 0) {
+          map.set(plan.session_id, plan.sources);
+        }
       });
-    return () => { cancelled = true; };
-  }, [sessionIds]);
+      return map;
+    },
+    enabled: ids.length > 0,
+  });
 
   const allFiles = useMemo(() => {
     const files: { path: string; sessionId: string; sessionTitle: string }[] = [];
     const titleMap = new Map(sessions.map((s) => [s.id, s.title || s.id.slice(0, 12)]));
-    plans.forEach((sources, sessionId) => {
+    plansQuery.data?.forEach((sources, sessionId) => {
       for (const s of sources) {
         files.push({ path: s.target_path, sessionId, sessionTitle: titleMap.get(sessionId) || sessionId.slice(0, 8) });
       }
     });
     return files;
-  }, [plans, sessions]);
+  }, [plansQuery.data, sessions]);
 
-  if (loading) {
+  if (plansQuery.isLoading || plansQuery.isFetching) {
     return (
       <div className="flex items-center justify-center rounded-md border border-border bg-secondary/40 px-3 py-6">
         <span className="text-[14px] text-muted-foreground">{t("manage.loadingPlan")}</span>
@@ -205,10 +193,10 @@ function SessionsPage({
     { x: number; y: number; sessionId: string; projectPath?: string } | null
   >(null);
   const ctxRef = useRef<HTMLDivElement>(null);
-  const [deleteMode, _setDeleteMode] = useState<"soft" | "destructive">("soft");
+  const [deleteMode] = useState<"soft" | "destructive">("soft");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [_deleteProgress, setDeleteProgress] = useState<{ processed: number; total: number } | null>(null);
-  const [_deleteError, setDeleteError] = useState<string | null>(null);
+  const [, setDeleteProgress] = useState<{ processed: number; total: number } | null>(null);
+  const [, setDeleteError] = useState<string | null>(null);
   const { t } = useTranslation();
 
   const isSearching = search.trim().length > 0;
@@ -228,11 +216,12 @@ function SessionsPage({
   });
 
   const searchQuery = useQuery({
-    queryKey: ["sessions", "search", { query: search }],
+    queryKey: ["sessions", "search", { query: search, agent: agentFilter }],
     queryFn: () =>
       searchSessions({
         query: search,
         limit: SESSION_PAGE_SIZE,
+        agent: agentFilter,
       }),
     enabled: isSearching,
     refetchInterval: 30_000,

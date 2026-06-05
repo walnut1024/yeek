@@ -85,6 +85,7 @@
   "detail.updated": "更新时间",
   "detail.copy": "复制",
   "detail.resume": "恢复",
+  "detail.resumeFailed": "恢复失败：{{message}}",
   "detail.delete": "删除",
   "detail.sessionLabel": "会话",
   "detail.sessionLabelWithColon": "会话：",

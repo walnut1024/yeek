@@ -29,11 +29,12 @@ pub struct SearchParams {
     pub query: String,
     pub limit: i64,
     pub offset: i64,
+    pub agent: Option<String>,
 }
 
 impl Default for SearchParams {
     fn default() -> Self {
-        Self { query: String::new(), limit: 50, offset: 0 }
+        Self { query: String::new(), limit: 50, offset: 0, agent: None }
     }
 }
 
@@ -146,10 +147,18 @@ pub fn search_sessions(
         .collect::<Vec<_>>()
         .join(" OR ");
 
-    let where_sql = "(s.title LIKE ?1 OR s.project_path LIKE ?1 OR s.id IN (SELECT fts.session_id FROM messages_fts fts WHERE messages_fts MATCH ?2)) AND s.parent_session_id IS NULL";
+    let mut where_parts = vec![
+        "(s.title LIKE ? OR s.project_path LIKE ? OR s.id IN (SELECT fts.session_id FROM messages_fts fts WHERE messages_fts MATCH ?))".to_string(),
+        "s.parent_session_id IS NULL".to_string(),
+    ];
+    let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> =
+        vec![Box::new(like_pattern.clone()), Box::new(like_pattern), Box::new(fts_query)];
 
-    let param_values: Vec<Box<dyn rusqlite::types::ToSql>> =
-        vec![Box::new(like_pattern), Box::new(fts_query)];
+    if let Some(ref agent) = params.agent {
+        where_parts.push("s.agent = ?".to_string());
+        param_values.push(Box::new(agent.clone()));
+    }
+    let where_sql = where_parts.join(" AND ");
 
     let count_sql = format!("SELECT COUNT(DISTINCT s.id) FROM sessions s WHERE {}", where_sql);
     let total: i64 = conn
@@ -161,7 +170,7 @@ pub fn search_sessions(
         .unwrap_or(0);
 
     let query_sql = format!(
-        "SELECT DISTINCT s.* FROM sessions s WHERE {} ORDER BY s.updated_at DESC LIMIT ?3 OFFSET ?4",
+        "SELECT DISTINCT s.* FROM sessions s WHERE {} ORDER BY s.updated_at DESC LIMIT ? OFFSET ?",
         where_sql
     );
     let mut all_params = param_values;

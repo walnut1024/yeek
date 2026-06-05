@@ -91,6 +91,7 @@
   "detail.updated": "Updated",
   "detail.copy": "Copy",
   "detail.resume": "Resume",
+  "detail.resumeFailed": "Resume failed: {{message}}",
   "detail.delete": "Delete",
   "detail.sessionLabel": "Session",
   "detail.sessionLabelWithColon": "Session:",

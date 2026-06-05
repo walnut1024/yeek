@@ -155,7 +155,12 @@ async fn search_sessions(
     let result = tokio::task::spawn_blocking(move || {
         do_search_sessions(
             &state.app_state,
-            SearchRequest { query: query.q, limit: query.limit, offset: query.offset },
+            SearchRequest {
+                query: query.q,
+                limit: query.limit,
+                offset: query.offset,
+                agent: query.agent,
+            },
         )
     })
     .await
