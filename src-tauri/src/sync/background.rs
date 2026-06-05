@@ -114,7 +114,6 @@ fn run_scan(
     let opencode_result = opencode::index_sources(&conn, &opencode_sources, |delta| {
         emitter.emit_sync_progress(SyncProgressPayload { processed: processed + delta, total });
     })?;
-    processed += opencode_sources.len() as i64;
 
     let indexed = claude_result.indexed + codex_result.indexed + opencode_result.indexed;
     let updated = claude_result.updated + codex_result.updated + opencode_result.updated;

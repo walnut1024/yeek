@@ -2010,7 +2010,7 @@ pub(crate) fn do_uninstall_plugin(key: String) -> Result<(), AppError> {
 
 /// Remove a TOML section (header line + following key=value lines until next section).
 fn remove_toml_section(content: &str, section_header: &str) -> String {
-    let mut lines: Vec<String> = content.lines().map(String::from).collect();
+    let lines: Vec<String> = content.lines().map(String::from).collect();
     let mut result = Vec::new();
     let mut skipping = false;
 

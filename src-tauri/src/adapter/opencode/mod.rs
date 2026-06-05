@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use chrono::{DateTime, Utc};
+use chrono::DateTime;
 use rusqlite::params;
 use serde_json::Value;
 

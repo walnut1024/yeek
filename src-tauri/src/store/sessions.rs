@@ -246,31 +246,6 @@ pub fn upsert_session(
     Ok(())
 }
 
-pub(crate) fn set_session_field(
-    conn: &rusqlite::Connection,
-    ids: &[String],
-    field: &str,
-    value: &str,
-) -> Result<(), AppError> {
-    let placeholders: Vec<String> =
-        ids.iter().enumerate().map(|(i, _)| format!("?{}", i + 2)).collect();
-    let sql = format!(
-        "UPDATE sessions SET {} = ?1, updated_at = ?0 WHERE id IN ({})",
-        field,
-        placeholders.join(", ")
-    );
-
-    let now = Utc::now().to_rfc3339();
-    let mut params_vec: Vec<Box<dyn rusqlite::types::ToSql>> =
-        vec![Box::new(now), Box::new(value.to_string())];
-    for id in ids {
-        params_vec.push(Box::new(id.clone()));
-    }
-
-    conn.execute(&sql, rusqlite::params_from_iter(params_vec.iter().map(|p| p.as_ref())))?;
-    Ok(())
-}
-
 /// Soft-delete one or more sessions by ID.
 ///
 /// Sets `delete_mode = SoftDeleted` and records `deleted_at`.
